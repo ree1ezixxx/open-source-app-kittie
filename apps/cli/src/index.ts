@@ -61,9 +61,9 @@ function printHeader() {
 
 function usage() {
   console.log(`Usage:
-  kittie search [query]   Search apps
-  kittie trends           Top growth movers
-  kittie detail <id>      App detail`);
+  pluto search [query]   Search apps
+  pluto trends           Top growth movers
+  pluto detail <id>      App detail`);
 }
 
 async function main() {

@@ -9,6 +9,7 @@ From repo root (after `pnpm db:migrate`):
 ```bash
 pnpm ingest:seed      # Pull top charts → upsert apps → write today's snapshots
 pnpm ingest:snapshot  # Refresh metrics for all tracked apps
+pnpm ingest:reviews   # Paginate store reviews into the reviews table
 ```
 
 ## Sources (P0)

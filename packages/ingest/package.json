@@ -15,7 +15,9 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "seed": "tsx src/jobs/seed.ts",
-    "snapshot": "tsx src/jobs/snapshot.ts"
+    "snapshot": "tsx src/jobs/snapshot.ts",
+    "reviews": "tsx src/jobs/review-sync.ts",
+    "score": "tsx src/jobs/score.ts"
   },
   "dependencies": {
     "@kittie/core": "workspace:*",

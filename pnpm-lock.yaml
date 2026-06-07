@@ -123,6 +123,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@kittie/intelligence':
+        specifier: workspace:*
+        version: link:../intelligence
       '@kittie/types':
         specifier: workspace:*
         version: link:../types
