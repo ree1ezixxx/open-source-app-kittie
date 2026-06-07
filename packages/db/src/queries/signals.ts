@@ -66,6 +66,11 @@ async function findPriorSnapshot(
   return best;
 }
 
+export async function countApps(db: Db): Promise<number> {
+  const [row] = await db.select({ value: count() }).from(apps);
+  return row?.value ?? 0;
+}
+
 export async function countAppsInCategory(
   db: Db,
   category: string | null,

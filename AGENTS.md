@@ -8,6 +8,15 @@ Surface profitable, fast-moving apps across iOS and Android: revenue estimates, 
 
 Not a commercial product (for now). Ship fast: **days, not months**.
 
+## Communication
+
+- **Concise and direct.** Lead with the answer or decision. No preamble, no recap of what the user just said.
+- **Short by default.** A few sentences or bullets beat a essay. Expand only when the user asks or the task genuinely needs it.
+- **No filler.** Cut throat-clearing ("Great question", "Let me break this down"), hedge stacks, and repeated explanations of the same point.
+- **Don't overcomplicate.** Prefer the simplest correct approach. Skip theory, analogies, and option menus unless a real fork needs a decision.
+- **Punctual.** State what changed or what to do next. Skip "What changed" diff narration — the user can see the diff.
+- **Clear over clever.** Plain language. One idea per sentence.
+
 ## Read First
 
 | File | When |

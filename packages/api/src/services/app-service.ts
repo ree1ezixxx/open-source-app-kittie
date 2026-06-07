@@ -8,6 +8,14 @@ import type {
   Review,
 } from "@kittie/types";
 import { MOCK_APPS, type RawAppFixture } from "../mock/fixtures.js";
+import {
+  dbHasApps,
+  getAppByIdFromDb,
+  getAppHistoricalsFromDb,
+  getAppReviewsFromDb,
+  searchAppsFromDb,
+} from "./db-app-service.js";
+import { matchesSearch, paginateApps, sortApps, type ScoredAppRow } from "./filter-sort.js";
 
 function toListItem(fixture: RawAppFixture): AppListItem {
   return scoreApp(
@@ -47,135 +55,46 @@ function toDetail(fixture: RawAppFixture): AppDetail {
   };
 }
 
-function matchesSearch(item: AppListItem, params: AppSearchParams): boolean {
-  if (params.search) {
-    const q = params.search.toLowerCase();
-    const hay = `${item.title} ${item.developer}`.toLowerCase();
-    if (!hay.includes(q)) return false;
-  }
-
-  if (params.categories) {
-    const cats = params.categories.split(",").map((c) => c.trim().toLowerCase());
-    if (!item.category || !cats.includes(item.category.toLowerCase())) return false;
-  }
-
-  if (params.excludedCategories && item.category) {
-    const excluded = params.excludedCategories.split(",").map((c) => c.trim().toLowerCase());
-    if (excluded.includes(item.category.toLowerCase())) return false;
-  }
-
-  if (params.source && item.store !== params.source) return false;
-  if (params.excludedSource && item.store === params.excludedSource) return false;
-
-  if (params.minDownloads != null && (item.downloadsEstimate30d ?? 0) < params.minDownloads) return false;
-  if (params.maxDownloads != null && (item.downloadsEstimate30d ?? 0) > params.maxDownloads) return false;
-  if (params.minRevenue != null && (item.revenueEstimate30d ?? 0) < params.minRevenue) return false;
-  if (params.maxRevenue != null && (item.revenueEstimate30d ?? 0) > params.maxRevenue) return false;
-  if (params.minRating != null && (item.rating ?? 0) < params.minRating) return false;
-  if (params.maxRating != null && (item.rating ?? 0) > params.maxRating) return false;
-  if (params.minReviews != null && item.reviewCount < params.minReviews) return false;
-  if (params.maxReviews != null && item.reviewCount > params.maxReviews) return false;
-
-  if (params.minGrowth != null && (item.growthScore ?? 0) < params.minGrowth) return false;
-  if (params.maxGrowth != null && (item.growthScore ?? 0) > params.maxGrowth) return false;
-
-  if (params.growthType === "positive" && (item.growthScore ?? 0) <= 0) return false;
-  if (params.growthType === "negative" && (item.growthScore ?? 0) >= 50) return false;
-
-  const fixture = MOCK_APPS.find((a) => a.id === item.id);
-  if (!fixture) return false;
-
-  if (params.hasMetaAds === true && fixture.metaAds.length === 0) return false;
-  if (params.hasMetaAds === false && fixture.metaAds.length > 0) return false;
-  if (params.hasAppleAds === true && fixture.appleSearchAds.length === 0) return false;
-  if (params.hasAppleAds === false && fixture.appleSearchAds.length > 0) return false;
-  if (params.hasCreators === true && fixture.creators.length === 0) return false;
-  if (params.hasCreators === false && fixture.creators.length > 0) return false;
-  if (params.hasEmails === true && !fixture.supportEmail) return false;
-  if (params.hasWebsite === true && !fixture.websiteUrl) return false;
-
-  if (params.developer) {
-    if (!item.developer.toLowerCase().includes(params.developer.toLowerCase())) return false;
-  }
-
-  if (params.priceType === "free" && fixture.price != null && fixture.price > 0) return false;
-  if (params.priceType === "paid" && (fixture.price == null || fixture.price <= 0)) return false;
-
-  return true;
-}
-
-function sortValue(item: AppListItem, sortBy: AppSearchParams["sortBy"]): number | string {
-  switch (sortBy) {
-    case "growth":
-    case "trending":
-      return item.growthScore ?? 0;
-    case "rating":
-      return item.rating ?? 0;
-    case "reviews":
-      return item.reviewCount;
-    case "downloads":
-      return item.downloadsEstimate30d ?? 0;
-    case "revenue":
-      return item.revenueEstimate30d ?? 0;
-    case "updated":
-      return item.updatedAt ? new Date(item.updatedAt).getTime() : 0;
-    case "released":
-    case "newest":
-      return item.releasedAt ? new Date(item.releasedAt).getTime() : 0;
-    default:
-      return item.growthScore ?? 0;
-  }
-}
-
-function sortApps(items: AppListItem[], params: AppSearchParams): AppListItem[] {
-  const sortBy = params.sortBy ?? "growth";
-  const order = params.sortOrder ?? (sortBy === "growth" || sortBy === "trending" ? "desc" : "desc");
-  const dir = order === "asc" ? 1 : -1;
-
-  return [...items].sort((a, b) => {
-    const av = sortValue(a, sortBy);
-    const bv = sortValue(b, sortBy);
-    if (typeof av === "string" && typeof bv === "string") return av.localeCompare(bv) * dir;
-    return ((av as number) - (bv as number)) * dir;
-  });
-}
-
-export function searchApps(params: AppSearchParams): PaginatedResponse<AppListItem> {
-  const limit = params.limit ?? 20;
-  const all = sortApps(
-    MOCK_APPS.map(toListItem).filter((item) => matchesSearch(item, params)),
-    params,
-  );
-
-  let start = 0;
-  if (params.cursor) {
-    const idx = all.findIndex((a) => a.id === params.cursor);
-    start = idx >= 0 ? idx + 1 : 0;
-  }
-
-  const page = all.slice(start, start + limit);
-  const nextCursor = start + limit < all.length ? (page.at(-1)?.id ?? null) : null;
-
-  return {
-    data: page,
-    pagination: {
-      nextCursor,
-      totalCount: all.length,
+function mockRows(): ScoredAppRow[] {
+  return MOCK_APPS.map((fixture) => ({
+    item: toListItem(fixture),
+    meta: {
+      hasMetaAds: fixture.metaAds.length > 0,
+      hasAppleAds: fixture.appleSearchAds.length > 0,
+      hasCreators: fixture.creators.length > 0,
+      hasEmail: Boolean(fixture.supportEmail),
+      hasWebsite: Boolean(fixture.websiteUrl),
+      price: fixture.price,
     },
-  };
+  }));
 }
 
-export function getAppById(id: string): AppDetail | null {
+function searchAppsMock(params: AppSearchParams): PaginatedResponse<AppListItem> {
+  const filtered = mockRows().filter((row) => matchesSearch(row, params));
+  const sorted = sortApps(filtered, params);
+  const { data, nextCursor, totalCount } = paginateApps(sorted, params);
+  return { data, pagination: { nextCursor, totalCount } };
+}
+
+export async function searchApps(params: AppSearchParams): Promise<PaginatedResponse<AppListItem>> {
+  if (await dbHasApps()) return searchAppsFromDb(params);
+  return searchAppsMock(params);
+}
+
+export async function getAppById(id: string): Promise<AppDetail | null> {
+  if (await dbHasApps()) return getAppByIdFromDb(id);
   const fixture = MOCK_APPS.find((a) => a.id === id);
   return fixture ? toDetail(fixture) : null;
 }
 
-export function getAppHistoricals(id: string): AppHistoricalPoint[] | null {
+export async function getAppHistoricals(id: string): Promise<AppHistoricalPoint[] | null> {
+  if (await dbHasApps()) return getAppHistoricalsFromDb(id);
   const fixture = MOCK_APPS.find((a) => a.id === id);
   return fixture ? fixture.historicals : null;
 }
 
-export function getAppReviews(id: string): Review[] {
+export async function getAppReviews(id: string): Promise<Review[]> {
+  if (await dbHasApps()) return getAppReviewsFromDb(id);
   const fixture = MOCK_APPS.find((a) => a.id === id);
   return fixture?.reviews ?? [];
 }

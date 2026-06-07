@@ -7,19 +7,24 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "types": "./src/index.ts",
+      "import": "./src/index.ts",
+      "default": "./dist/index.js"
     }
   },
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "seed": "tsx src/jobs/seed.ts",
-    "snapshot": "tsx src/jobs/snapshot.ts"
+    "snapshot": "tsx src/jobs/snapshot.ts",
+    "reviews": "tsx src/jobs/review-sync.ts",
+    "score": "tsx src/jobs/score.ts",
+    "keywords": "tsx src/jobs/keyword-sync.ts"
   },
   "dependencies": {
     "@kittie/core": "workspace:*",
     "@kittie/db": "workspace:*",
+    "@kittie/intelligence": "workspace:*",
     "@kittie/types": "workspace:*",
     "drizzle-orm": "^0.44.2",
     "google-play-scraper": "^10.1.2"

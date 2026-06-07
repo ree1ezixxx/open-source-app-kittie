@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "bin": {
-    "kittie": "./dist/index.js"
+    "pluto": "./dist/index.js"
   },
   "scripts": {
     "build": "tsc",

@@ -15,7 +15,7 @@ reviewsRouter.post("/", async (c) => {
   const parsed = reviewRequestSchema.safeParse(body);
   if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
 
-  const reviews = getAppReviews(parsed.data.appId).slice(0, parsed.data.limit);
+  const reviews = (await getAppReviews(parsed.data.appId)).slice(0, parsed.data.limit);
   return c.json({
     data: reviews,
     meta: { source: "cache", stale: reviews.length === 0 },
