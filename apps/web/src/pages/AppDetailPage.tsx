@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import type { AppDetail } from "@kittie/types";
-import { getApp } from "../lib/api";
+import type { AppDetail, Review } from "@kittie/types";
+import { getApp, getReviews } from "../lib/api";
 import type { Theme } from "../lib/theme";
 import { categoryColor, pillStyle } from "../lib/palette";
 import { formatCompact, formatMoney, formatRating, formatDate } from "../lib/format";
@@ -41,6 +41,7 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
   const { id } = useParams();
   const navigate = useNavigate();
   const [app, setApp] = useState<AppDetail | null>(null);
+  const [reviews, setReviews] = useState<Review[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<number | null>(null);
@@ -56,10 +57,15 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
     setError(null);
     setApp(null);
     setLightbox(null);
+    setReviews(null);
     getApp(decodeURIComponent(id), ac.signal)
       .then((d) => !ac.signal.aborted && setApp(d))
       .catch((e) => !ac.signal.aborted && setError(e instanceof Error ? e.message : "Failed to load"))
       .finally(() => !ac.signal.aborted && setLoading(false));
+    // Reviews are a secondary load — never block or error the page on them.
+    getReviews(decodeURIComponent(id), ac.signal)
+      .then((r) => !ac.signal.aborted && setReviews(r))
+      .catch(() => !ac.signal.aborted && setReviews([]));
     return () => ac.abort();
   }, [id]);
 
@@ -217,6 +223,37 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
                 <HistoryChart points={app.historicals} metric="reviewCount" label="Total reviews" />
               </div>
             </div>
+
+            {/* recent reviews — up to 50, US, newest first */}
+            {reviews && reviews.length > 0 && (
+              <section className="reviews">
+                <div className="section-head">
+                  <div className="section-label" style={{ margin: 0 }}>Recent reviews</div>
+                  <span className="section-count">{reviews.length} shown · US</span>
+                </div>
+                <div className="review-list">
+                  {[...reviews]
+                    .sort((a, b) => +new Date(b.reviewedAt) - +new Date(a.reviewedAt))
+                    .map((r) => (
+                      <article key={r.id} className="review">
+                        <div className="review-head">
+                          <span className="review-stars" aria-label={`${r.rating} out of 5`}>
+                            {Array.from({ length: 5 }).map((_, i) => (
+                              <span key={i} className={i < r.rating ? "on" : "off"}>
+                                <IconStar />
+                              </span>
+                            ))}
+                          </span>
+                          <span className="review-date">{formatDate(r.reviewedAt)}</span>
+                        </div>
+                        {r.title && <div className="review-title">{r.title}</div>}
+                        <p className="review-body">{r.body}</p>
+                        {r.author && <div className="review-author">{r.author}</div>}
+                      </article>
+                    ))}
+                </div>
+              </section>
+            )}
 
             {/* about + details two-column */}
             <div className="detail-cols">

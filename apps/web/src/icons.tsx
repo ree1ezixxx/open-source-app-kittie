@@ -93,3 +93,30 @@ export const IconUsers = (p: P) => (
 export const IconCoin = (p: P) => (
   <svg {...base(p)}><ellipse cx="12" cy="6" rx="8" ry="3" /><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6" /><path d="M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" /></svg>
 );
+export const IconGlobe = (p: P) => (
+  <svg {...base(p)}><circle cx="12" cy="12" r="9" /><path d="M3 12h18" /><path d="M12 3c2.5 2.4 3.9 5.6 4 9-.1 3.4-1.5 6.6-4 9-2.5-2.4-3.9-5.6-4-9 .1-3.4 1.5-6.6 4-9z" /></svg>
+);
+export const IconMessage = (p: P) => (
+  <svg {...base(p)}><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9.6 9.6 0 0 1-4-1L3 20l1.1-3.3a8.4 8.4 0 0 1-1.1-4.2 8.4 8.4 0 0 1 9-8.4 8.4 8.4 0 0 1 9 7.4z" /></svg>
+);
+export const IconBulb = (p: P) => (
+  <svg {...base(p)}><path d="M9.5 18h5" /><path d="M10 21h4" /><path d="M12 3a6 6 0 0 0-3.6 10.8c.6.4 1 1.1 1.1 1.9V16h5v-.3c.1-.8.5-1.5 1.1-1.9A6 6 0 0 0 12 3z" /></svg>
+);
+export const IconKey = (p: P) => (
+  <svg {...base(p)}><circle cx="7.5" cy="15.5" r="4.5" /><path d="M10.5 12.5 20 3" /><path d="M16 7l3 3" /><path d="M13.5 9.5l2.5 2.5" /></svg>
+);
+export const IconTerminal = (p: P) => (
+  <svg {...base(p)}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M7 9l3 3-3 3" /><path d="M13 15h4" /></svg>
+);
+export const IconBook = (p: P) => (
+  <svg {...base(p)}><path d="M4 5a2 2 0 0 1 2-2h11a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H6a2 2 0 0 0-2 2z" /><path d="M4 19a2 2 0 0 1 2-2h12" /></svg>
+);
+export const IconHeart = (p: P) => (
+  <svg {...base(p)}><path d="M12 20s-7-4.4-9.2-8.6C1.3 8.5 2.6 5 6 5c2 0 3.2 1.2 4 2.3C10.8 6.2 12 5 14 5c3.4 0 4.7 3.5 3.2 6.4C19 15.6 12 20 12 20z" /></svg>
+);
+export const IconPlus = (p: P) => (
+  <svg {...base(p)}><path d="M12 5v14M5 12h14" /></svg>
+);
+export const IconFilter = (p: P) => (
+  <svg {...base(p)}><path d="M3 5h18l-7 8v6l-4-2v-4z" /></svg>
+);

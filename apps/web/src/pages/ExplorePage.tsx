@@ -37,6 +37,8 @@ export function ExplorePage({
   const category = sp.get("category") || "";
   const sortBy = (sp.get("sort") as AppSortField | null) || "revenue";
   const sortOrder = (sp.get("order") as SortOrder | null) || "desc";
+  const minRevenue = sp.get("minrev") ? Number(sp.get("minrev")) : undefined;
+  const maxRating = sp.get("maxrating") ? Number(sp.get("maxrating")) : undefined;
   const growthPeriod = (sp.get("period") as GrowthPeriod | null) || "7d";
   const qParam = sp.get("q") || "";
 
@@ -101,10 +103,12 @@ export function ExplorePage({
       categories: category || undefined,
       sortBy: effectiveSort,
       sortOrder,
+      minRevenue,
+      maxRating,
       growthPeriod,
       growthType: view === "rising" ? "positive" : undefined,
     }),
-    [qParam, source, category, effectiveSort, sortOrder, growthPeriod, view],
+    [qParam, source, category, effectiveSort, sortOrder, minRevenue, maxRating, growthPeriod, view],
   );
 
   const { apps, total, loading, loadingMore, error, hasMore, loadMore, refresh } = useApps(params);
@@ -178,6 +182,25 @@ export function ExplorePage({
           update((p) => {
             p.delete("view");
             p.set("sort", s);
+          })
+        }
+        minRevenue={minRevenue}
+        onMinRevenue={(v) =>
+          update((p) => (v != null ? p.set("minrev", String(v)) : p.delete("minrev")))
+        }
+        maxRating={maxRating}
+        onMaxRating={(v) =>
+          update((p) => (v != null ? p.set("maxrating", String(v)) : p.delete("maxrating")))
+        }
+        onLowHangingFruit={() =>
+          update((p) => {
+            p.delete("view");
+            // $25k floor on the current (compressed) seed estimates; bump to 50_000
+            // once real revenue data lands — see Topbar tooltip.
+            p.set("minrev", "25000");
+            p.set("maxrating", "3.5");
+            p.set("sort", "rating");
+            p.set("order", "asc");
           })
         }
         growthPeriod={growthPeriod}

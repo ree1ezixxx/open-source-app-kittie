@@ -24,6 +24,25 @@ const SORTS: { value: AppSortField; label: string }[] = [
 
 const PERIODS: GrowthPeriod[] = ["7d", "14d", "30d", "60d", "90d"];
 
+// Revenue floors (monthly $) — the "is this worth cloning?" demand gate.
+const REVENUE_FLOORS: { value: number; label: string }[] = [
+  { value: 10_000, label: "$10k/mo" },
+  { value: 25_000, label: "$25k/mo" },
+  { value: 50_000, label: "$50k/mo" },
+  { value: 100_000, label: "$100k/mo" },
+  { value: 250_000, label: "$250k/mo" },
+  { value: 500_000, label: "$500k/mo" },
+];
+
+// Rating ceilings — surface the under-served, beatable apps.
+const RATING_CEILINGS: { value: number; label: string }[] = [
+  { value: 2.0, label: "≤ 2.0★" },
+  { value: 2.5, label: "≤ 2.5★" },
+  { value: 3.0, label: "≤ 3.0★" },
+  { value: 3.5, label: "≤ 3.5★" },
+  { value: 4.0, label: "≤ 4.0★" },
+];
+
 export function Topbar({
   title,
   subtitle,
@@ -41,6 +60,11 @@ export function Topbar({
   onCategory,
   sortBy,
   onSortBy,
+  minRevenue,
+  onMinRevenue,
+  maxRating,
+  onMaxRating,
+  onLowHangingFruit,
   growthPeriod,
   onGrowthPeriod,
   onRefresh,
@@ -62,6 +86,11 @@ export function Topbar({
   onCategory: (c: string) => void;
   sortBy: AppSortField;
   onSortBy: (s: AppSortField) => void;
+  minRevenue: number | undefined;
+  onMinRevenue: (v: number | undefined) => void;
+  maxRating: number | undefined;
+  onMaxRating: (v: number | undefined) => void;
+  onLowHangingFruit: () => void;
   growthPeriod: GrowthPeriod;
   onGrowthPeriod: (p: GrowthPeriod) => void;
   onRefresh: () => void;
@@ -106,6 +135,14 @@ export function Topbar({
       </div>
 
       <div className="toolbar">
+        <button
+          className="btn btn-accent"
+          onClick={onLowHangingFruit}
+          title="High revenue, low rating — worst-rated first. The clone-it sift. (≥ $25k/mo on seed data; target is $50k once real revenue lands.)"
+        >
+          🍒 Low-hanging fruit
+        </button>
+
         <div className="segmented">
           <button className={source === undefined ? "on" : ""} onClick={() => onSource(undefined)}>
             All
@@ -129,6 +166,32 @@ export function Topbar({
         </div>
 
         <div className="toolbar-divider" />
+
+        <div className="select">
+          <select
+            value={minRevenue ?? ""}
+            onChange={(e) => onMinRevenue(e.target.value ? Number(e.target.value) : undefined)}
+          >
+            <option value="">Revenue: any</option>
+            {REVENUE_FLOORS.map((r) => (
+              <option key={r.value} value={r.value}>{`Revenue ≥ ${r.label}`}</option>
+            ))}
+          </select>
+          <IconChevron />
+        </div>
+
+        <div className="select">
+          <select
+            value={maxRating ?? ""}
+            onChange={(e) => onMaxRating(e.target.value ? Number(e.target.value) : undefined)}
+          >
+            <option value="">Rating: any</option>
+            {RATING_CEILINGS.map((r) => (
+              <option key={r.value} value={r.value}>{`Rating ${r.label}`}</option>
+            ))}
+          </select>
+          <IconChevron />
+        </div>
 
         <div className="select">
           <select value={sortBy} onChange={(e) => onSortBy(e.target.value as AppSortField)}>
