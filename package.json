@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "build": "pnpm -r build",
-    "typecheck": "pnpm -r typecheck",
+    "typecheck": "pnpm -r build && pnpm -r typecheck",
     "dev:api": "pnpm --filter @kittie/api dev",
     "dev:web": "pnpm --filter @kittie/web dev",
     "dev:mcp": "pnpm --filter @kittie/mcp dev",
