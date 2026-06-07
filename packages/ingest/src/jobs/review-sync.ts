@@ -20,7 +20,7 @@ export async function runReviewSync(): Promise<void> {
   loadEnv();
   const db = createDb();
 
-  const perApp = envInt("REVIEW_SYNC_PER_APP", 25);
+  const perApp = envInt("REVIEW_SYNC_PER_APP", 50);
   const appLimit = envInt("REVIEW_SYNC_APP_LIMIT", 0);
   const googleDelayMs = envInt("REVIEW_SYNC_GOOGLE_DELAY_MS", 150);
 

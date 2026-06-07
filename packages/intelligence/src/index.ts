@@ -8,7 +8,7 @@ export {
   estimateDownloads,
   rankDecay,
 } from "./revenue.js";
-export { computeKeywordDifficulty } from "./keyword.js";
+export { computeKeywordDifficulty, computeOpportunityScore } from "./keyword.js";
 export { signalsFromContext } from "./signals.js";
 export type {
   AppSignals,
