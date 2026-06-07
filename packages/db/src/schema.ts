@@ -153,6 +153,8 @@ export const keywords = sqliteTable(
     difficulty: integer("difficulty"),
     trafficScore: integer("traffic_score"),
     competingAppCount: integer("competing_app_count"),
+    /** JSON: top search results at last sync (title, icon, reviews, rank). */
+    topResults: text("top_results"),
     computedAt: integer("computed_at", { mode: "timestamp" }).notNull(),
   },
   (t) => [

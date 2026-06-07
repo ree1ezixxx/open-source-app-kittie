@@ -5,15 +5,15 @@ import { batchKeywordDifficulty, getKeywordDifficulty } from "../services/keywor
 
 export const keywordsRouter = new Hono();
 
-keywordsRouter.get("/difficulty", (c) => {
+keywordsRouter.get("/difficulty", async (c) => {
   const keyword = c.req.query("keyword");
   const country = c.req.query("country") ?? "US";
   const store = (c.req.query("store") ?? "apple") as Store;
 
   if (!keyword) return c.json({ error: "keyword is required" }, 400);
 
-  const result = getKeywordDifficulty(keyword, country, store);
-  return c.json({ data: result });
+  const result = await getKeywordDifficulty(keyword, country, store);
+  return c.json({ data: result, meta: { source: "store-search" } });
 });
 
 const batchSchema = z.object({
@@ -34,6 +34,6 @@ keywordsRouter.post("/difficulty", async (c) => {
   const parsed = batchSchema.safeParse(body);
   if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
 
-  const data = batchKeywordDifficulty(parsed.data.keywords);
-  return c.json({ data });
+  const data = await batchKeywordDifficulty(parsed.data.keywords);
+  return c.json({ data, meta: { source: "store-search" } });
 });
