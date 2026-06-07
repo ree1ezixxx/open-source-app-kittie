@@ -4,10 +4,6 @@
   "scripts": {
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
-    "dev:api": "pnpm --filter @kittie/api dev",
-    "dev:web": "pnpm --filter @kittie/web dev",
-    "dev:mcp": "pnpm --filter @kittie/mcp dev",
-    "pluto": "pnpm --filter @kittie/cli dev",
     "db:generate": "pnpm --filter @kittie/db generate",
     "db:migrate": "pnpm --filter @kittie/db migrate",
     "db:studio": "pnpm --filter @kittie/db studio",
