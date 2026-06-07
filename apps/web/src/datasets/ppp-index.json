@@ -1,0 +1,1617 @@
+{
+  "meta": {
+    "note": "Approximate World Bank ICP price-level ratios + rough mid-2024 FX. Static, for the offline Pricing Calculator. Replace with fresh ICP data when available.",
+    "usBase": "United States pli=1.00 is the reference. usdEquivalent = baseUSD*pli; localPrice = usdEquivalent*fx.",
+    "count": 201
+  },
+  "countries": [
+    {
+      "country": "Afghanistan",
+      "code": "AF",
+      "currency": "AFN",
+      "symbol": "؋",
+      "pli": 0.3,
+      "fx": 71
+    },
+    {
+      "country": "Albania",
+      "code": "AL",
+      "currency": "ALL",
+      "symbol": "L",
+      "pli": 0.48,
+      "fx": 92
+    },
+    {
+      "country": "Algeria",
+      "code": "DZ",
+      "currency": "DZD",
+      "symbol": "د.ج",
+      "pli": 0.4,
+      "fx": 134
+    },
+    {
+      "country": "Andorra",
+      "code": "AD",
+      "currency": "EUR",
+      "symbol": "€",
+      "pli": 0.95,
+      "fx": 0.92
+    },
+    {
+      "country": "Angola",
+      "code": "AO",
+      "currency": "AOA",
+      "symbol": "Kz",
+      "pli": 0.4,
+      "fx": 840
+    },
+    {
+      "country": "Antigua & Barbuda",
+      "code": "AG",
+      "currency": "XCD",
+      "symbol": "EC$",
+      "pli": 0.7,
+      "fx": 2.7
+    },
+    {
+      "country": "Argentina",
+      "code": "AR",
+      "currency": "ARS",
+      "symbol": "AR$",
+      "pli": 0.4,
+      "fx": 920
+    },
+    {
+      "country": "Armenia",
+      "code": "AM",
+      "currency": "AMD",
+      "symbol": "֏",
+      "pli": 0.45,
+      "fx": 388
+    },
+    {
+      "country": "Aruba",
+      "code": "AW",
+      "currency": "AWG",
+      "symbol": "ƒ",
+      "pli": 0.78,
+      "fx": 1.8
+    },
+    {
+      "country": "Australia",
+      "code": "AU",
+      "currency": "AUD",
+      "symbol": "A$",
+      "pli": 1,
+      "fx": 1.52
+    },
+    {
+      "country": "Austria",
+      "code": "AT",
+      "currency": "EUR",
+      "symbol": "€",
+      "pli": 0.97,
+      "fx": 0.92
+    },
+    {
+      "country": "Azerbaijan",
+      "code": "AZ",
+      "currency": "AZN",
+      "symbol": "₼",
+      "pli": 0.45,
+      "fx": 1.7
+    },
+    {
+      "country": "Bahamas",
+      "code": "BS",
+      "currency": "BSD",
+      "symbol": "B$",
+      "pli": 0.85,
+      "fx": 1
+    },
+    {
+      "country": "Bahrain",
+      "code": "BH",
+      "currency": "BHD",
+      "symbol": ".د.ب",
+      "pli": 0.66,
+      "fx": 0.38
+    },
+    {
+      "country": "Bangladesh",
+      "code": "BD",
+      "currency": "BDT",
+      "symbol": "৳",
+      "pli": 0.32,
+      "fx": 117
+    },
+    {
+      "country": "Barbados",
+      "code": "BB",
+      "currency": "BBD",
+      "symbol": "Bds$",
+      "pli": 0.78,
+      "fx": 2
+    },
+    {
+      "country": "Belarus",
+      "code": "BY",
+      "currency": "BYN",
+      "symbol": "Br",
+      "pli": 0.45,
+      "fx": 3.25
+    },
+    {
+      "country": "Belgium",
+      "code": "BE",
+      "currency": "EUR",
+      "symbol": "€",
+      "pli": 0.97,
+      "fx": 0.92
+    },
+    {
+      "country": "Belize",
+      "code": "BZ",
+      "currency": "BZD",
+      "symbol": "BZ$",
+      "pli": 0.6,
+      "fx": 2
+    },
+    {
+      "country": "Benin",
+      "code": "BJ",
+      "currency": "XOF",
+      "symbol": "CFA",
+      "pli": 0.42,
+      "fx": 605
+    },
+    {
+      "country": "Bermuda",
+      "code": "BM",
+      "currency": "BMD",
+      "symbol": "$",
+      "pli": 1.1,
+      "fx": 1
+    },
+    {
+      "country": "Bhutan",
+      "code": "BT",
+      "currency": "BTN",
+      "symbol": "Nu.",
+      "pli": 0.32,
+      "fx": 83.3
+    },
+    {
+      "country": "Bolivia",
+      "code": "BO",
+      "currency": "BOB",
+      "symbol": "Bs",
+      "pli": 0.4,
+      "fx": 6.9
+    },
+    {
+      "country": "Bosnia & Herzegovina",
+      "code": "BA",
+      "currency": "BAM",
+      "symbol": "KM",
+      "pli": 0.5,
+      "fx": 1.8
+    },
+    {
+      "country": "Botswana",
+      "code": "BW",
+      "currency": "BWP",
+      "symbol": "P",
+      "pli": 0.45,
+      "fx": 13.6
+    },
+    {
+      "country": "Brazil",
+      "code": "BR",
+      "currency": "BRL",
+      "symbol": "R$",
+      "pli": 0.45,
+      "fx": 5.1
+    },
+    {
+      "country": "Brunei",
+      "code": "BN",
+      "currency": "BND",
+      "symbol": "B$",
+      "pli": 0.72,
+      "fx": 1.35
+    },
+    {
+      "country": "Bulgaria",
+      "code": "BG",
+      "currency": "BGN",
+      "symbol": "лв",
+      "pli": 0.5,
+      "fx": 1.8
+    },
+    {
+      "country": "Burkina Faso",
+      "code": "BF",
+      "currency": "XOF",
+      "symbol": "CFA",
+      "pli": 0.4,
+      "fx": 605
+    },
+    {
+      "country": "Burundi",
+      "code": "BI",
+      "currency": "BIF",
+      "symbol": "FBu",
+      "pli": 0.34,
+      "fx": 2870
+    },
+    {
+      "country": "Cambodia",
+      "code": "KH",
+      "currency": "KHR",
+      "symbol": "៛",
+      "pli": 0.38,
+      "fx": 4080
+    },
+    {
+      "country": "Cameroon",
+      "code": "CM",
+      "currency": "XAF",
+      "symbol": "FCFA",
+      "pli": 0.42,
+      "fx": 605
+    },
+    {
+      "country": "Canada",
+      "code": "CA",
+      "currency": "CAD",
+      "symbol": "CA$",
+      "pli": 0.96,
+      "fx": 1.37
+    },
+    {
+      "country": "Cape Verde",
+      "code": "CV",
+      "currency": "CVE",
+      "symbol": "$",
+      "pli": 0.5,
+      "fx": 101
+    },
+    {
+      "country": "Cayman Islands",
+      "code": "KY",
+      "currency": "KYD",
+      "symbol": "$",
+      "pli": 1.05,
+      "fx": 0.83
+    },
+    {
+      "country": "Central African Republic",
+      "code": "CF",
+      "currency": "XAF",
+      "symbol": "FCFA",
+      "pli": 0.38,
+      "fx": 605
+    },
+    {
+      "country": "Chad",
+      "code": "TD",
+      "currency": "XAF",
+      "symbol": "FCFA",
+      "pli": 0.38,
+      "fx": 605
+    },
+    {
+      "country": "Chile",
+      "code": "CL",
+      "currency": "CLP",
+      "symbol": "CLP$",
+      "pli": 0.55,
+      "fx": 940
+    },
+    {
+      "country": "China",
+      "code": "CN",
+      "currency": "CNY",
+      "symbol": "¥",
+      "pli": 0.6,
+      "fx": 7.2
+    },
+    {
+      "country": "Colombia",
+      "code": "CO",
+      "currency": "COP",
+      "symbol": "COL$",
+      "pli": 0.4,
+      "fx": 3950
+    },
+    {
+      "country": "Comoros",
+      "code": "KM",
+      "currency": "KMF",
+      "symbol": "CF",
+      "pli": 0.4,
+      "fx": 452
+    },
+    {
+      "country": "Costa Rica",
+      "code": "CR",
+      "currency": "CRC",
+      "symbol": "₡",
+      "pli": 0.6,
+      "fx": 515
+    },
+    {
+      "country": "Côte d’Ivoire",
+      "code": "CI",
+      "currency": "XOF",
+      "symbol": "CFA",
+      "pli": 0.45,
+      "fx": 605
+    },
+    {
+      "country": "Croatia",
+      "code": "HR",
+      "currency": "EUR",
+      "symbol": "€",
+      "pli": 0.65,
+      "fx": 0.92
+    },
+    {
+      "country": "Cuba",
+      "code": "CU",
+      "currency": "CUP",
+      "symbol": "₱",
+      "pli": 0.45,
+      "fx": 120
+    },
+    {
+      "country": "Cyprus",
+      "code": "CY",
+      "currency": "EUR",
+      "symbol": "€",
+      "pli": 0.82,
+      "fx": 0.92
+    },
+    {
+      "country": "Czechia",
+      "code": "CZ",
+      "currency": "CZK",
+      "symbol": "Kč",
+      "pli": 0.65,
+      "fx": 23
+    },
+    {
+      "country": "Democratic Republic of the Congo",
+      "code": "CD",
+      "currency": "CDF",
+      "symbol": "FC",
+      "pli": 0.36,
+      "fx": 2750
+    },
+    {
+      "country": "Denmark",
+      "code": "DK",
+      "currency": "DKK",
+      "symbol": "kr",
+      "pli": 1.08,
+      "fx": 6.9
+    },
+    {
+      "country": "Djibouti",
+      "code": "DJ",
+      "currency": "DJF",
+      "symbol": "Fdj",
+      "pli": 0.45,
+      "fx": 178
+    },
+    {
+      "country": "Dominica",
+      "code": "DM",
+      "currency": "XCD",
+      "symbol": "EC$",
+      "pli": 0.6,
+      "fx": 2.7
+    },
+    {
+      "country": "Dominican Republic",
+      "code": "DO",
+      "currency": "DOP",
+      "symbol": "RD$",
+      "pli": 0.5,
+      "fx": 59
+    },
+    {
+      "country": "Ecuador",
+      "code": "EC",
+      "currency": "USD",
+      "symbol": "$",
+      "pli": 0.52,
+      "fx": 1
+    },
+    {
+      "country": "Egypt",
+      "code": "EG",
+      "currency": "EGP",
+      "symbol": "E£",
+      "pli": 0.32,
+      "fx": 48
+    },
+    {
+      "country": "El Salvador",
+      "code": "SV",
+      "currency": "USD",
+      "symbol": "$",
+      "pli": 0.46,
+      "fx": 1
+    },
+    {
+      "country": "Equatorial Guinea",
+      "code": "GQ",
+      "currency": "XAF",
+      "symbol": "FCFA",
+      "pli": 0.45,
+      "fx": 605
+    },
+    {
+      "country": "Eritrea",
+      "code": "ER",
+      "currency": "ERN",
+      "symbol": "Nfk",
+      "pli": 0.36,
+      "fx": 15
+    },
+    {
+      "country": "Estonia",
+      "code": "EE",
+      "currency": "EUR",
+      "symbol": "€",
+      "pli": 0.74,
+      "fx": 0.92
+    },
+    {
+      "country": "Eswatini",
+      "code": "SZ",
+      "currency": "SZL",
+      "symbol": "E",
+      "pli": 0.45,
+      "fx": 18.5
+    },
+    {
+      "country": "Ethiopia",
+      "code": "ET",
+      "currency": "ETB",
+      "symbol": "Br",
+      "pli": 0.35,
+      "fx": 57
+    },
+    {
+      "country": "Fiji",
+      "code": "FJ",
+      "currency": "FJD",
+      "symbol": "FJ$",
+      "pli": 0.6,
+      "fx": 2.25
+    },
+    {
+      "country": "Finland",
+      "code": "FI",
+      "currency": "EUR",
+      "symbol": "€",
+      "pli": 1,
+      "fx": 0.92
+    },
+    {
+      "country": "France",
+      "code": "FR",
+      "currency": "EUR",
+      "symbol": "€",
+      "pli": 0.95,
+      "fx": 0.92
+    },
+    {
+      "country": "Gabon",
+      "code": "GA",
+      "currency": "XAF",
+      "symbol": "FCFA",
+      "pli": 0.5,
+      "fx": 605
+    },
+    {
+      "country": "Gambia",
+      "code": "GM",
+      "currency": "GMD",
+      "symbol": "D",
+      "pli": 0.38,
+      "fx": 68
+    },
+    {
+      "country": "Georgia",
+      "code": "GE",
+      "currency": "GEL",
+      "symbol": "₾",
+      "pli": 0.45,
+      "fx": 2.7
+    },
+    {
+      "country": "Germany",
+      "code": "DE",
+      "currency": "EUR",
+      "symbol": "€",
+      "pli": 0.96,
+      "fx": 0.92
+    },
+    {
+      "country": "Ghana",
+      "code": "GH",
+      "currency": "GHS",
+      "symbol": "₵",
+      "pli": 0.38,
+      "fx": 14.8
+    },
+    {
+      "country": "Gibraltar",
+      "code": "GI",
+      "currency": "GIP",
+      "symbol": "£",
+      "pli": 0.95,
+      "fx": 0.79
+    },
+    {
+      "country": "Greece",
+      "code": "GR",
+      "currency": "EUR",
+      "symbol": "€",
+      "pli": 0.72,
+      "fx": 0.92
+    },
+    {
+      "country": "Greenland",
+      "code": "GL",
+      "currency": "DKK",
+      "symbol": "kr",
+      "pli": 1,
+      "fx": 6.9
+    },
+    {
+      "country": "Grenada",
+      "code": "GD",
+      "currency": "XCD",
+      "symbol": "EC$",
+      "pli": 0.65,
+      "fx": 2.7
+    },
+    {
+      "country": "Guatemala",
+      "code": "GT",
+      "currency": "GTQ",
+      "symbol": "Q",
+      "pli": 0.43,
+      "fx": 7.8
+    },
+    {
+      "country": "Guinea",
+      "code": "GN",
+      "currency": "GNF",
+      "symbol": "FG",
+      "pli": 0.36,
+      "fx": 8600
+    },
+    {
+      "country": "Guyana",
+      "code": "GY",
+      "currency": "GYD",
+      "symbol": "G$",
+      "pli": 0.5,
+      "fx": 209
+    },
+    {
+      "country": "Haiti",
+      "code": "HT",
+      "currency": "HTG",
+      "symbol": "G",
+      "pli": 0.42,
+      "fx": 132
+    },
+    {
+      "country": "Honduras",
+      "code": "HN",
+      "currency": "HNL",
+      "symbol": "L",
+      "pli": 0.45,
+      "fx": 24.7
+    },
+    {
+      "country": "Hong Kong",
+      "code": "HK",
+      "currency": "HKD",
+      "symbol": "HK$",
+      "pli": 0.92,
+      "fx": 7.81
+    },
+    {
+      "country": "Hungary",
+      "code": "HU",
+      "currency": "HUF",
+      "symbol": "Ft",
+      "pli": 0.58,
+      "fx": 360
+    },
+    {
+      "country": "Iceland",
+      "code": "IS",
+      "currency": "ISK",
+      "symbol": "kr",
+      "pli": 1.15,
+      "fx": 138
+    },
+    {
+      "country": "India",
+      "code": "IN",
+      "currency": "INR",
+      "symbol": "₹",
+      "pli": 0.27,
+      "fx": 83.3
+    },
+    {
+      "country": "Indonesia",
+      "code": "ID",
+      "currency": "IDR",
+      "symbol": "Rp",
+      "pli": 0.4,
+      "fx": 15800
+    },
+    {
+      "country": "Iran",
+      "code": "IR",
+      "currency": "IRR",
+      "symbol": "﷼",
+      "pli": 0.35,
+      "fx": 42000
+    },
+    {
+      "country": "Iraq",
+      "code": "IQ",
+      "currency": "IQD",
+      "symbol": "ع.د",
+      "pli": 0.45,
+      "fx": 1310
+    },
+    {
+      "country": "Ireland",
+      "code": "IE",
+      "currency": "EUR",
+      "symbol": "€",
+      "pli": 1.05,
+      "fx": 0.92
+    },
+    {
+      "country": "Israel",
+      "code": "IL",
+      "currency": "ILS",
+      "symbol": "₪",
+      "pli": 1,
+      "fx": 3.7
+    },
+    {
+      "country": "Italy",
+      "code": "IT",
+      "currency": "EUR",
+      "symbol": "€",
+      "pli": 0.86,
+      "fx": 0.92
+    },
+    {
+      "country": "Jamaica",
+      "code": "JM",
+      "currency": "JMD",
+      "symbol": "J$",
+      "pli": 0.55,
+      "fx": 156
+    },
+    {
+      "country": "Japan",
+      "code": "JP",
+      "currency": "JPY",
+      "symbol": "¥",
+      "pli": 0.88,
+      "fx": 152
+    },
+    {
+      "country": "Jordan",
+      "code": "JO",
+      "currency": "JOD",
+      "symbol": "د.ا",
+      "pli": 0.6,
+      "fx": 0.71
+    },
+    {
+      "country": "Kazakhstan",
+      "code": "KZ",
+      "currency": "KZT",
+      "symbol": "₸",
+      "pli": 0.45,
+      "fx": 470
+    },
+    {
+      "country": "Kenya",
+      "code": "KE",
+      "currency": "KES",
+      "symbol": "KSh",
+      "pli": 0.4,
+      "fx": 130
+    },
+    {
+      "country": "Kiribati",
+      "code": "KI",
+      "currency": "AUD",
+      "symbol": "A$",
+      "pli": 0.55,
+      "fx": 1.52
+    },
+    {
+      "country": "Kosovo",
+      "code": "XK",
+      "currency": "EUR",
+      "symbol": "€",
+      "pli": 0.5,
+      "fx": 0.92
+    },
+    {
+      "country": "Kuwait",
+      "code": "KW",
+      "currency": "KWD",
+      "symbol": "د.ك",
+      "pli": 0.68,
+      "fx": 0.31
+    },
+    {
+      "country": "Kyrgyzstan",
+      "code": "KG",
+      "currency": "KGS",
+      "symbol": "сом",
+      "pli": 0.38,
+      "fx": 88
+    },
+    {
+      "country": "Laos",
+      "code": "LA",
+      "currency": "LAK",
+      "symbol": "₭",
+      "pli": 0.36,
+      "fx": 21500
+    },
+    {
+      "country": "Latvia",
+      "code": "LV",
+      "currency": "EUR",
+      "symbol": "€",
+      "pli": 0.7,
+      "fx": 0.92
+    },
+    {
+      "country": "Lebanon",
+      "code": "LB",
+      "currency": "LBP",
+      "symbol": "ل.ل",
+      "pli": 0.45,
+      "fx": 89500
+    },
+    {
+      "country": "Lesotho",
+      "code": "LS",
+      "currency": "LSL",
+      "symbol": "L",
+      "pli": 0.42,
+      "fx": 18.5
+    },
+    {
+      "country": "Liberia",
+      "code": "LR",
+      "currency": "LRD",
+      "symbol": "L$",
+      "pli": 0.4,
+      "fx": 193
+    },
+    {
+      "country": "Libya",
+      "code": "LY",
+      "currency": "LYD",
+      "symbol": "ل.د",
+      "pli": 0.42,
+      "fx": 4.85
+    },
+    {
+      "country": "Liechtenstein",
+      "code": "LI",
+      "currency": "CHF",
+      "symbol": "CHF",
+      "pli": 1.25,
+      "fx": 0.88
+    },
+    {
+      "country": "Lithuania",
+      "code": "LT",
+      "currency": "EUR",
+      "symbol": "€",
+      "pli": 0.68,
+      "fx": 0.92
+    },
+    {
+      "country": "Luxembourg",
+      "code": "LU",
+      "currency": "EUR",
+      "symbol": "€",
+      "pli": 1.1,
+      "fx": 0.92
+    },
+    {
+      "country": "Macau",
+      "code": "MO",
+      "currency": "MOP",
+      "symbol": "MOP$",
+      "pli": 0.85,
+      "fx": 8.05
+    },
+    {
+      "country": "Madagascar",
+      "code": "MG",
+      "currency": "MGA",
+      "symbol": "Ar",
+      "pli": 0.35,
+      "fx": 4500
+    },
+    {
+      "country": "Malawi",
+      "code": "MW",
+      "currency": "MWK",
+      "symbol": "MK",
+      "pli": 0.35,
+      "fx": 1735
+    },
+    {
+      "country": "Malaysia",
+      "code": "MY",
+      "currency": "MYR",
+      "symbol": "RM",
+      "pli": 0.45,
+      "fx": 4.7
+    },
+    {
+      "country": "Maldives",
+      "code": "MV",
+      "currency": "MVR",
+      "symbol": "Rf",
+      "pli": 0.55,
+      "fx": 15.4
+    },
+    {
+      "country": "Mali",
+      "code": "ML",
+      "currency": "XOF",
+      "symbol": "CFA",
+      "pli": 0.4,
+      "fx": 605
+    },
+    {
+      "country": "Malta",
+      "code": "MT",
+      "currency": "EUR",
+      "symbol": "€",
+      "pli": 0.8,
+      "fx": 0.92
+    },
+    {
+      "country": "Marshall Islands",
+      "code": "MH",
+      "currency": "USD",
+      "symbol": "$",
+      "pli": 0.6,
+      "fx": 1
+    },
+    {
+      "country": "Mauritania",
+      "code": "MR",
+      "currency": "MRU",
+      "symbol": "UM",
+      "pli": 0.4,
+      "fx": 39.7
+    },
+    {
+      "country": "Mauritius",
+      "code": "MU",
+      "currency": "MUR",
+      "symbol": "₨",
+      "pli": 0.5,
+      "fx": 46
+    },
+    {
+      "country": "Mexico",
+      "code": "MX",
+      "currency": "MXN",
+      "symbol": "MX$",
+      "pli": 0.47,
+      "fx": 17.1
+    },
+    {
+      "country": "Micronesia",
+      "code": "FM",
+      "currency": "USD",
+      "symbol": "$",
+      "pli": 0.55,
+      "fx": 1
+    },
+    {
+      "country": "Moldova",
+      "code": "MD",
+      "currency": "MDL",
+      "symbol": "L",
+      "pli": 0.42,
+      "fx": 17.8
+    },
+    {
+      "country": "Monaco",
+      "code": "MC",
+      "currency": "EUR",
+      "symbol": "€",
+      "pli": 1.15,
+      "fx": 0.92
+    },
+    {
+      "country": "Mongolia",
+      "code": "MN",
+      "currency": "MNT",
+      "symbol": "₮",
+      "pli": 0.42,
+      "fx": 3450
+    },
+    {
+      "country": "Montenegro",
+      "code": "ME",
+      "currency": "EUR",
+      "symbol": "€",
+      "pli": 0.55,
+      "fx": 0.92
+    },
+    {
+      "country": "Morocco",
+      "code": "MA",
+      "currency": "MAD",
+      "symbol": "د.م.",
+      "pli": 0.45,
+      "fx": 10
+    },
+    {
+      "country": "Mozambique",
+      "code": "MZ",
+      "currency": "MZN",
+      "symbol": "MT",
+      "pli": 0.38,
+      "fx": 63.5
+    },
+    {
+      "country": "Myanmar",
+      "code": "MM",
+      "currency": "MMK",
+      "symbol": "K",
+      "pli": 0.35,
+      "fx": 2100
+    },
+    {
+      "country": "Namibia",
+      "code": "NA",
+      "currency": "NAD",
+      "symbol": "N$",
+      "pli": 0.45,
+      "fx": 18.5
+    },
+    {
+      "country": "Nauru",
+      "code": "NR",
+      "currency": "AUD",
+      "symbol": "A$",
+      "pli": 0.6,
+      "fx": 1.52
+    },
+    {
+      "country": "Nepal",
+      "code": "NP",
+      "currency": "NPR",
+      "symbol": "₨",
+      "pli": 0.3,
+      "fx": 133
+    },
+    {
+      "country": "Netherlands",
+      "code": "NL",
+      "currency": "EUR",
+      "symbol": "€",
+      "pli": 0.98,
+      "fx": 0.92
+    },
+    {
+      "country": "New Zealand",
+      "code": "NZ",
+      "currency": "NZD",
+      "symbol": "NZ$",
+      "pli": 0.98,
+      "fx": 1.65
+    },
+    {
+      "country": "Nicaragua",
+      "code": "NI",
+      "currency": "NIO",
+      "symbol": "C$",
+      "pli": 0.42,
+      "fx": 36.8
+    },
+    {
+      "country": "Niger",
+      "code": "NE",
+      "currency": "XOF",
+      "symbol": "CFA",
+      "pli": 0.38,
+      "fx": 605
+    },
+    {
+      "country": "Nigeria",
+      "code": "NG",
+      "currency": "NGN",
+      "symbol": "₦",
+      "pli": 0.32,
+      "fx": 1450
+    },
+    {
+      "country": "North Macedonia",
+      "code": "MK",
+      "currency": "MKD",
+      "symbol": "ден",
+      "pli": 0.45,
+      "fx": 56.5
+    },
+    {
+      "country": "Norway",
+      "code": "NO",
+      "currency": "NOK",
+      "symbol": "kr",
+      "pli": 1.18,
+      "fx": 10.7
+    },
+    {
+      "country": "Oman",
+      "code": "OM",
+      "currency": "OMR",
+      "symbol": "﷼",
+      "pli": 0.62,
+      "fx": 0.385
+    },
+    {
+      "country": "Pakistan",
+      "code": "PK",
+      "currency": "PKR",
+      "symbol": "₨",
+      "pli": 0.28,
+      "fx": 278
+    },
+    {
+      "country": "Palau",
+      "code": "PW",
+      "currency": "USD",
+      "symbol": "$",
+      "pli": 0.7,
+      "fx": 1
+    },
+    {
+      "country": "Palestine",
+      "code": "PS",
+      "currency": "ILS",
+      "symbol": "₪",
+      "pli": 0.5,
+      "fx": 3.7
+    },
+    {
+      "country": "Panama",
+      "code": "PA",
+      "currency": "USD",
+      "symbol": "$",
+      "pli": 0.55,
+      "fx": 1
+    },
+    {
+      "country": "Papua New Guinea",
+      "code": "PG",
+      "currency": "PGK",
+      "symbol": "K",
+      "pli": 0.5,
+      "fx": 3.85
+    },
+    {
+      "country": "Paraguay",
+      "code": "PY",
+      "currency": "PYG",
+      "symbol": "₲",
+      "pli": 0.42,
+      "fx": 7300
+    },
+    {
+      "country": "Peru",
+      "code": "PE",
+      "currency": "PEN",
+      "symbol": "S/",
+      "pli": 0.45,
+      "fx": 3.75
+    },
+    {
+      "country": "Philippines",
+      "code": "PH",
+      "currency": "PHP",
+      "symbol": "₱",
+      "pli": 0.42,
+      "fx": 58
+    },
+    {
+      "country": "Poland",
+      "code": "PL",
+      "currency": "PLN",
+      "symbol": "zł",
+      "pli": 0.58,
+      "fx": 3.95
+    },
+    {
+      "country": "Portugal",
+      "code": "PT",
+      "currency": "EUR",
+      "symbol": "€",
+      "pli": 0.78,
+      "fx": 0.92
+    },
+    {
+      "country": "Qatar",
+      "code": "QA",
+      "currency": "QAR",
+      "symbol": "﷼",
+      "pli": 0.7,
+      "fx": 3.64
+    },
+    {
+      "country": "Republic of the Congo",
+      "code": "CG",
+      "currency": "XAF",
+      "symbol": "FCFA",
+      "pli": 0.42,
+      "fx": 605
+    },
+    {
+      "country": "Romania",
+      "code": "RO",
+      "currency": "RON",
+      "symbol": "lei",
+      "pli": 0.52,
+      "fx": 4.57
+    },
+    {
+      "country": "Russia",
+      "code": "RU",
+      "currency": "RUB",
+      "symbol": "₽",
+      "pli": 0.45,
+      "fx": 90
+    },
+    {
+      "country": "Rwanda",
+      "code": "RW",
+      "currency": "RWF",
+      "symbol": "FRw",
+      "pli": 0.38,
+      "fx": 1290
+    },
+    {
+      "country": "Saint Kitts & Nevis",
+      "code": "KN",
+      "currency": "XCD",
+      "symbol": "EC$",
+      "pli": 0.7,
+      "fx": 2.7
+    },
+    {
+      "country": "Saint Lucia",
+      "code": "LC",
+      "currency": "XCD",
+      "symbol": "EC$",
+      "pli": 0.68,
+      "fx": 2.7
+    },
+    {
+      "country": "Saint Vincent & the Grenadines",
+      "code": "VC",
+      "currency": "XCD",
+      "symbol": "EC$",
+      "pli": 0.62,
+      "fx": 2.7
+    },
+    {
+      "country": "Samoa",
+      "code": "WS",
+      "currency": "WST",
+      "symbol": "T",
+      "pli": 0.55,
+      "fx": 2.75
+    },
+    {
+      "country": "San Marino",
+      "code": "SM",
+      "currency": "EUR",
+      "symbol": "€",
+      "pli": 0.9,
+      "fx": 0.92
+    },
+    {
+      "country": "São Tomé & Príncipe",
+      "code": "ST",
+      "currency": "STN",
+      "symbol": "Db",
+      "pli": 0.42,
+      "fx": 22.5
+    },
+    {
+      "country": "Saudi Arabia",
+      "code": "SA",
+      "currency": "SAR",
+      "symbol": "﷼",
+      "pli": 0.62,
+      "fx": 3.75
+    },
+    {
+      "country": "Senegal",
+      "code": "SN",
+      "currency": "XOF",
+      "symbol": "CFA",
+      "pli": 0.45,
+      "fx": 605
+    },
+    {
+      "country": "Serbia",
+      "code": "RS",
+      "currency": "RSD",
+      "symbol": "дин",
+      "pli": 0.5,
+      "fx": 108
+    },
+    {
+      "country": "Seychelles",
+      "code": "SC",
+      "currency": "SCR",
+      "symbol": "₨",
+      "pli": 0.6,
+      "fx": 13.5
+    },
+    {
+      "country": "Sierra Leone",
+      "code": "SL",
+      "currency": "SLE",
+      "symbol": "Le",
+      "pli": 0.35,
+      "fx": 22.6
+    },
+    {
+      "country": "Singapore",
+      "code": "SG",
+      "currency": "SGD",
+      "symbol": "S$",
+      "pli": 0.85,
+      "fx": 1.35
+    },
+    {
+      "country": "Slovakia",
+      "code": "SK",
+      "currency": "EUR",
+      "symbol": "€",
+      "pli": 0.68,
+      "fx": 0.92
+    },
+    {
+      "country": "Slovenia",
+      "code": "SI",
+      "currency": "EUR",
+      "symbol": "€",
+      "pli": 0.74,
+      "fx": 0.92
+    },
+    {
+      "country": "Solomon Islands",
+      "code": "SB",
+      "currency": "SBD",
+      "symbol": "SI$",
+      "pli": 0.5,
+      "fx": 8.45
+    },
+    {
+      "country": "Somalia",
+      "code": "SO",
+      "currency": "SOS",
+      "symbol": "Sh",
+      "pli": 0.34,
+      "fx": 571
+    },
+    {
+      "country": "South Africa",
+      "code": "ZA",
+      "currency": "ZAR",
+      "symbol": "R",
+      "pli": 0.45,
+      "fx": 18.5
+    },
+    {
+      "country": "South Korea",
+      "code": "KR",
+      "currency": "KRW",
+      "symbol": "₩",
+      "pli": 0.85,
+      "fx": 1340
+    },
+    {
+      "country": "South Sudan",
+      "code": "SS",
+      "currency": "SSP",
+      "symbol": "£",
+      "pli": 0.34,
+      "fx": 1300
+    },
+    {
+      "country": "Spain",
+      "code": "ES",
+      "currency": "EUR",
+      "symbol": "€",
+      "pli": 0.85,
+      "fx": 0.92
+    },
+    {
+      "country": "Sri Lanka",
+      "code": "LK",
+      "currency": "LKR",
+      "symbol": "Rs",
+      "pli": 0.35,
+      "fx": 300
+    },
+    {
+      "country": "Sudan",
+      "code": "SD",
+      "currency": "SDG",
+      "symbol": "ج.س.",
+      "pli": 0.34,
+      "fx": 600
+    },
+    {
+      "country": "Suriname",
+      "code": "SR",
+      "currency": "SRD",
+      "symbol": "$",
+      "pli": 0.45,
+      "fx": 35
+    },
+    {
+      "country": "Sweden",
+      "code": "SE",
+      "currency": "SEK",
+      "symbol": "kr",
+      "pli": 1,
+      "fx": 10.5
+    },
+    {
+      "country": "Switzerland",
+      "code": "CH",
+      "currency": "CHF",
+      "symbol": "CHF",
+      "pli": 1.3,
+      "fx": 0.88
+    },
+    {
+      "country": "Syria",
+      "code": "SY",
+      "currency": "SYP",
+      "symbol": "£S",
+      "pli": 0.34,
+      "fx": 13000
+    },
+    {
+      "country": "Taiwan",
+      "code": "TW",
+      "currency": "TWD",
+      "symbol": "NT$",
+      "pli": 0.72,
+      "fx": 32
+    },
+    {
+      "country": "Tajikistan",
+      "code": "TJ",
+      "currency": "TJS",
+      "symbol": "ЅМ",
+      "pli": 0.38,
+      "fx": 10.9
+    },
+    {
+      "country": "Tanzania",
+      "code": "TZ",
+      "currency": "TZS",
+      "symbol": "TSh",
+      "pli": 0.36,
+      "fx": 2580
+    },
+    {
+      "country": "Thailand",
+      "code": "TH",
+      "currency": "THB",
+      "symbol": "฿",
+      "pli": 0.5,
+      "fx": 36.5
+    },
+    {
+      "country": "Timor-Leste",
+      "code": "TL",
+      "currency": "USD",
+      "symbol": "$",
+      "pli": 0.45,
+      "fx": 1
+    },
+    {
+      "country": "Togo",
+      "code": "TG",
+      "currency": "XOF",
+      "symbol": "CFA",
+      "pli": 0.4,
+      "fx": 605
+    },
+    {
+      "country": "Tonga",
+      "code": "TO",
+      "currency": "TOP",
+      "symbol": "T$",
+      "pli": 0.55,
+      "fx": 2.35
+    },
+    {
+      "country": "Trinidad & Tobago",
+      "code": "TT",
+      "currency": "TTD",
+      "symbol": "TT$",
+      "pli": 0.6,
+      "fx": 6.8
+    },
+    {
+      "country": "Tunisia",
+      "code": "TN",
+      "currency": "TND",
+      "symbol": "د.ت",
+      "pli": 0.42,
+      "fx": 3.1
+    },
+    {
+      "country": "Turkey",
+      "code": "TR",
+      "currency": "TRY",
+      "symbol": "₺",
+      "pli": 0.4,
+      "fx": 32
+    },
+    {
+      "country": "Turkmenistan",
+      "code": "TM",
+      "currency": "TMT",
+      "symbol": "m",
+      "pli": 0.4,
+      "fx": 3.5
+    },
+    {
+      "country": "Tuvalu",
+      "code": "TV",
+      "currency": "AUD",
+      "symbol": "A$",
+      "pli": 0.6,
+      "fx": 1.52
+    },
+    {
+      "country": "Uganda",
+      "code": "UG",
+      "currency": "UGX",
+      "symbol": "USh",
+      "pli": 0.36,
+      "fx": 3750
+    },
+    {
+      "country": "Ukraine",
+      "code": "UA",
+      "currency": "UAH",
+      "symbol": "₴",
+      "pli": 0.4,
+      "fx": 40
+    },
+    {
+      "country": "United Arab Emirates",
+      "code": "AE",
+      "currency": "AED",
+      "symbol": "د.إ",
+      "pli": 0.7,
+      "fx": 3.67
+    },
+    {
+      "country": "United Kingdom",
+      "code": "GB",
+      "currency": "GBP",
+      "symbol": "£",
+      "pli": 1.02,
+      "fx": 0.79
+    },
+    {
+      "country": "United States",
+      "code": "US",
+      "currency": "USD",
+      "symbol": "$",
+      "pli": 1,
+      "fx": 1
+    },
+    {
+      "country": "Uruguay",
+      "code": "UY",
+      "currency": "UYU",
+      "symbol": "$U",
+      "pli": 0.62,
+      "fx": 39
+    },
+    {
+      "country": "Uzbekistan",
+      "code": "UZ",
+      "currency": "UZS",
+      "symbol": "soʻm",
+      "pli": 0.38,
+      "fx": 12650
+    },
+    {
+      "country": "Vanuatu",
+      "code": "VU",
+      "currency": "VUV",
+      "symbol": "VT",
+      "pli": 0.55,
+      "fx": 119
+    },
+    {
+      "country": "Venezuela",
+      "code": "VE",
+      "currency": "VES",
+      "symbol": "Bs.",
+      "pli": 0.35,
+      "fx": 36
+    },
+    {
+      "country": "Vietnam",
+      "code": "VN",
+      "currency": "VND",
+      "symbol": "₫",
+      "pli": 0.4,
+      "fx": 25400
+    },
+    {
+      "country": "Yemen",
+      "code": "YE",
+      "currency": "YER",
+      "symbol": "﷼",
+      "pli": 0.35,
+      "fx": 250
+    },
+    {
+      "country": "Zambia",
+      "code": "ZM",
+      "currency": "ZMW",
+      "symbol": "ZK",
+      "pli": 0.4,
+      "fx": 26.5
+    },
+    {
+      "country": "Zimbabwe",
+      "code": "ZW",
+      "currency": "USD",
+      "symbol": "$",
+      "pli": 0.4,
+      "fx": 1
+    }
+  ]
+}
