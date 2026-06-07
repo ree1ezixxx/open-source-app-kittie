@@ -5,7 +5,9 @@ import {
   IconRising,
   IconStar,
   IconSettings,
+  IconChart,
 } from "../icons";
+import { IconKey } from "./aso/icons";
 
 const NAV: { id: string; label: string; icon: typeof IconDatabase }[] = [
   { id: "database", label: "Database", icon: IconDatabase },
@@ -49,6 +51,24 @@ export function Sidebar({ total }: { total: number }) {
             </button>
           );
         })}
+      </nav>
+
+      <nav className="nav-group">
+        <div className="nav-label">ASO</div>
+        <button
+          className={`nav-item ${loc.pathname.startsWith("/dashboard/aso/apps") ? "active" : ""}`}
+          onClick={() => nav("/dashboard/aso/apps")}
+        >
+          <IconChart />
+          <span>App Tracking</span>
+        </button>
+        <button
+          className={`nav-item ${loc.pathname.startsWith("/dashboard/aso/keywords") ? "active" : ""}`}
+          onClick={() => nav("/dashboard/aso/keywords")}
+        >
+          <IconKey />
+          <span>Keyword Explorer</span>
+        </button>
       </nav>
 
       <div className="sidebar-foot">
