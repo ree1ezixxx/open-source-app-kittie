@@ -34,7 +34,11 @@ _Avoid_: Winner, validated
 
 **Ad creative**:
 A Meta (Facebook/Instagram) ad asset linked to an App, sourced from the public Ad Library.
-_Avoid_: Campaign (unless referring to a grouped set of creatives)
+_Avoid_: Campaign (unless referring to a grouped set of creatives); Listing media (that is the App's own store assets, not an ad)
+
+**Listing media**:
+The visual assets on an App's *own* store listing — screenshots (images) and preview videos — that show what the app looks like before download. Sourced from the App Store / Google Play listing itself, never from advertising. Sub-types: **screenshot** (image; collected today) and **preview** (video; not yet ingested).
+_Avoid_: Ad creative (Meta-only); Screenshot (that is one sub-type, not the whole concept); Asset (too generic)
 
 **Keyword**:
 A search term users type in an app store. ASO intelligence tracks difficulty, traffic proxy, and which Apps rank for it.
