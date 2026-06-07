@@ -5,6 +5,7 @@ import {
   IconRising,
   IconStar,
   IconSettings,
+  IconSpark,
 } from "../icons";
 
 const NAV: { id: string; label: string; icon: typeof IconDatabase }[] = [
@@ -51,8 +52,30 @@ export function Sidebar({ total }: { total: number }) {
         })}
       </nav>
 
+      {/* Lane D — temporary nav; reconcile with Lane A's shell nav on rebase */}
+      <nav className="nav-group">
+        <div className="nav-label">Workspace</div>
+        <button
+          className={`nav-item ${loc.pathname.startsWith("/reviews") ? "active" : ""}`}
+          onClick={() => nav("/reviews/overview")}
+        >
+          <IconStar />
+          <span>Reviews</span>
+        </button>
+        <button
+          className={`nav-item ${loc.pathname === "/mcp" ? "active" : ""}`}
+          onClick={() => nav("/mcp")}
+        >
+          <IconSpark />
+          <span>MCP Server</span>
+        </button>
+      </nav>
+
       <div className="sidebar-foot">
-        <button className="nav-item">
+        <button
+          className={`nav-item ${loc.pathname === "/settings" ? "active" : ""}`}
+          onClick={() => nav("/settings")}
+        >
           <IconSettings />
           <span>Settings</span>
         </button>

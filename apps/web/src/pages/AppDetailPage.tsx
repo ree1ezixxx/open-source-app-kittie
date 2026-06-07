@@ -24,6 +24,7 @@ import {
   IconImage,
 } from "../icons";
 import { Lightbox } from "../components/Lightbox";
+import { DetailParitySections } from "../components/detail/ParitySections";
 
 // A gallery must be a real collection of *working* images, not a lone/broken shot.
 const MIN_COLLECTION = 3;
@@ -227,19 +228,6 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
                     <p className="desc">{app.description}</p>
                   </>
                 )}
-                {app.iaps.length > 0 && (
-                  <>
-                    <div className="section-label">In-app purchases</div>
-                    <div>
-                      {app.iaps.map((p, i) => (
-                        <div key={i} className="iap-row">
-                          <span>{p.name}</span>
-                          <span className="price">{p.price != null ? `${p.currency ?? "$"}${p.price}` : "—"}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
               </div>
               <div>
                 <div className="section-label">Details</div>
@@ -262,6 +250,9 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
                 )}
               </div>
             </div>
+
+            {/* Lane D — acquisition & monetization parity (honest empty-states today) */}
+            <DetailParitySections app={app} />
 
             {app.historicals.length < 2 && (
               <div className="notice">
