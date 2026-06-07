@@ -27,11 +27,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build shared types
-        run: pnpm --filter @kittie/types build
-
-      - name: Typecheck
-        run: pnpm typecheck
-
-      - name: Build
-        run: pnpm build
+      - name: Typecheck and build
+        run: |
+          pnpm --filter @kittie/types build
+          pnpm --filter @kittie/core build
+          pnpm --filter @kittie/intelligence build
+          pnpm typecheck
+          pnpm build
