@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { loadEnv } from "@kittie/core";
-import { createDb, getLatestSnapshot } from "@kittie/db";
+import { createDb } from "@kittie/db";
 
 import { lookupAppleApp } from "../apple/lookup.js";
 import { listTrackedApps, upsertSnapshot } from "../db/apps.js";
@@ -29,27 +29,19 @@ export async function runSnapshot(): Promise<void> {
           continue;
         }
 
-        const prior = await getLatestSnapshot(db, app.id);
         await upsertSnapshot(db, {
           appId: app.id,
           snapshotDate,
           reviewCount: meta.reviewCount,
           rating: meta.rating,
-          chartRank: prior?.chartRank ?? null,
-          chartCategory: prior?.chartCategory ?? null,
-          chartCountry: prior?.chartCountry ?? "US",
         });
       } else {
         const meta = await fetchGoogleAppMetadata(app.storeAppId);
-        const prior = await getLatestSnapshot(db, app.id);
         await upsertSnapshot(db, {
           appId: app.id,
           snapshotDate,
           reviewCount: meta.reviewCount,
           rating: meta.rating,
-          chartRank: prior?.chartRank ?? null,
-          chartCategory: prior?.chartCategory ?? null,
-          chartCountry: prior?.chartCountry ?? "US",
         });
         await sleep(150);
       }

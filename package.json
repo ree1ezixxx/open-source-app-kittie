@@ -12,9 +12,7 @@
     "db:migrate": "pnpm --filter @kittie/db migrate",
     "db:studio": "pnpm --filter @kittie/db studio",
     "ingest:seed": "pnpm --filter @kittie/ingest seed",
-    "ingest:snapshot": "pnpm --filter @kittie/ingest snapshot",
-    "ingest:score": "pnpm --filter @kittie/ingest score",
-    "ingest:reviews": "pnpm --filter @kittie/ingest reviews"
+    "ingest:snapshot": "pnpm --filter @kittie/ingest snapshot"
   },
   "engines": {
     "node": ">=20"
