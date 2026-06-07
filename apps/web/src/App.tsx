@@ -4,11 +4,11 @@ import { Sidebar } from "./components/Sidebar";
 import { ExplorePage } from "./pages/ExplorePage";
 import { AppDetailPage } from "./pages/AppDetailPage";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
+import { HighlightsPage } from "./pages/HighlightsPage";
+import { TrendingPage } from "./pages/TrendingPage";
+import { RisingPage } from "./pages/RisingPage";
+import { FavoritesPage } from "./pages/FavoritesPage";
 import {
-  IconSpark,
-  IconTrending,
-  IconRising,
-  IconStar,
   IconGrid,
   IconSearch,
   IconImage,
@@ -27,11 +27,6 @@ type Stub = { path: string; title: string; sub: string; lane: string; icon: Reac
 
 // Routes owned by other lanes (B/C/D) + Lane-A pages not yet built. Each lane swaps its stub.
 const STUBS: Stub[] = [
-  { path: "/dashboard/highlights", title: "Dashboard Highlights", sub: "New big hits, top gainers & losers", lane: "Lane A", icon: <IconSpark /> },
-  { path: "/dashboard/trending", title: "Store Rankings", sub: "Top charts by country and category", lane: "Lane A", icon: <IconTrending /> },
-  { path: "/dashboard/rising", title: "Rising Apps", sub: "Apps with accelerating revenue", lane: "Lane A", icon: <IconRising /> },
-  { path: "/dashboard/favorites", title: "Favorites", sub: "Apps, ads, creators & saved ideas", lane: "Lane A", icon: <IconStar /> },
-  { path: "/dashboard/favorites/apps", title: "Favorites", sub: "Apps, ads, creators & saved ideas", lane: "Lane A", icon: <IconStar /> },
   { path: "/dashboard/aso/apps", title: "App Keyword Tracking", sub: "Track apps & discover keyword opportunities", lane: "Lane B (ASO Keywords)", icon: <IconGrid /> },
   { path: "/dashboard/aso/keywords", title: "Keyword Explorer", sub: "Difficulty, popularity & related keywords", lane: "Lane B (ASO Keywords)", icon: <IconSearch /> },
   { path: "/dashboard/aso/screenshots", title: "AI Screenshot Generator", sub: "Generate optimized App Store visuals", lane: "Lane C (AI Studio)", icon: <IconImage /> },
@@ -59,6 +54,12 @@ export function App() {
           element={<ExplorePage theme={theme} onToggleTheme={toggleTheme} onTotal={setTotal} />}
         />
         <Route path="/apps/:id" element={<AppDetailPage theme={theme} onToggleTheme={toggleTheme} />} />
+
+        <Route path="/dashboard/highlights" element={<HighlightsPage theme={theme} onToggleTheme={toggleTheme} />} />
+        <Route path="/dashboard/trending" element={<TrendingPage theme={theme} onToggleTheme={toggleTheme} />} />
+        <Route path="/dashboard/rising" element={<RisingPage theme={theme} onToggleTheme={toggleTheme} />} />
+        <Route path="/dashboard/favorites" element={<FavoritesPage theme={theme} onToggleTheme={toggleTheme} />} />
+        <Route path="/dashboard/favorites/apps" element={<FavoritesPage theme={theme} onToggleTheme={toggleTheme} />} />
 
         {STUBS.map((s) => (
           <Route
