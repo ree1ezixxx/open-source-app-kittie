@@ -1,4 +1,10 @@
-import { findKeyword, keywordRowToDifficulty } from "@kittie/db";
+import {
+  countAppsForSuggestions,
+  findKeyword,
+  keywordRowToDifficulty,
+  listKeywordSuggestions,
+  type KeywordSuggestion,
+} from "@kittie/db";
 import { syncKeyword } from "@kittie/ingest";
 import type { KeywordDifficulty, Store } from "@kittie/types";
 
@@ -19,12 +25,28 @@ export async function getKeywordDifficulty(
   const db = getDb();
   const row = await findKeyword(db, keyword, country, store);
 
-  if (row) {
-    const cached = keywordRowToDifficulty(row);
-    if (cached && !isStale(row.computedAt)) return cached;
-  }
+  const cached = row ? keywordRowToDifficulty(row) : null;
 
-  return syncKeyword(db, keyword, country, store);
+  if (cached && row && !isStale(row.computedAt)) return cached;
+
+  try {
+    return await syncKeyword(db, keyword, country, store);
+  } catch (error) {
+    if (cached) return cached;
+    throw error;
+  }
+}
+
+export async function getKeywordSuggestions(
+  store?: Store,
+  limit = 20,
+): Promise<{ suggestions: KeywordSuggestion[]; appCount: number }> {
+  const db = getDb();
+  const [suggestions, appCount] = await Promise.all([
+    listKeywordSuggestions(db, { store, limit: Math.min(limit, 50) }),
+    countAppsForSuggestions(db, store),
+  ]);
+  return { suggestions, appCount };
 }
 
 export async function batchKeywordDifficulty(
@@ -34,5 +56,5 @@ export async function batchKeywordDifficulty(
   for (const item of items.slice(0, 10)) {
     results.push(await getKeywordDifficulty(item.keyword, item.country, item.store));
   }
-  return results;
+  return results.sort((a, b) => b.opportunityScore - a.opportunityScore);
 }

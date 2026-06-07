@@ -90,7 +90,7 @@ _Avoid_: Crawler, scraper (in domain docs)
 
 ## Flagged ambiguities
 
-**Popularity vs traffic score** — both are modeled proxies in v1; may merge or relabel once we have a better traffic signal.
+**Popularity vs traffic score** — decoupled in v1: popularity from SERP volume signals (total reviews in top 10); traffic from leader avg reviews; difficulty stays separate.
 
 **Keyword storefront scope (v1)** — Apple and Google Play, **US only**. Other countries deferred.
 

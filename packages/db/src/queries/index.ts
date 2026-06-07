@@ -22,3 +22,8 @@ export {
   upsertKeywordRow,
   type KeywordRow,
 } from "./keywords.js";
+export {
+  countAppsForSuggestions,
+  listKeywordSuggestions,
+  type KeywordSuggestion,
+} from "./keyword-suggestions.js";

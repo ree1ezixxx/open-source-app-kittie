@@ -1,4 +1,5 @@
 import { eq, and } from "drizzle-orm";
+import { computeOpportunityScore } from "@kittie/intelligence";
 import type { KeywordDifficulty, Store } from "@kittie/types";
 
 import type { Db } from "../client.js";
@@ -57,6 +58,7 @@ export function keywordRowToDifficulty(row: KeywordRow): KeywordDifficulty | nul
     popularity: row.popularity,
     difficulty: row.difficulty,
     trafficScore: row.trafficScore,
+    opportunityScore: computeOpportunityScore(row.popularity, row.difficulty),
     competingAppCount: row.competingAppCount,
     topApps,
   };
