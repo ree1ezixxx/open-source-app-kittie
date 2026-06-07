@@ -1,0 +1,21 @@
+{
+  "name": "open-source-app-kittie",
+  "private": true,
+  "scripts": {
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "build": "pnpm -r build",
+    "dev:api": "pnpm --filter @kittie/api dev",
+    "dev:web": "pnpm --filter @kittie/web dev",
+    "dev:mcp": "pnpm --filter @kittie/mcp dev",
+    "kittie": "pnpm --filter @kittie/cli dev",
+    "db:generate": "pnpm --filter @kittie/db generate",
+    "db:migrate": "pnpm --filter @kittie/db migrate",
+    "db:studio": "pnpm --filter @kittie/db studio",
+    "ingest:seed": "pnpm --filter @kittie/ingest seed",
+    "ingest:snapshot": "pnpm --filter @kittie/ingest snapshot"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

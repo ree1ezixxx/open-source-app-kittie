@@ -1,0 +1,10 @@
+node_modules/
+.pnpm-store/
+dist/
+.env
+data/
+*.db
+*.db-journal
+.DS_Store
+.turbo
+.worktrees/
