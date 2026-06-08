@@ -68,3 +68,57 @@ export async function getRelatedKeywords(
 ): Promise<string[]> {
   return suggestRelatedKeywords(keyword, country, store, limit);
 }
+
+/** Markets we score a keyword across (cross-market opportunity finder). */
+export const SUPPORTED_MARKETS = [
+  "US", "GB", "CA", "AU", "IE", "NZ", "DE", "FR", "IT", "ES", "JP", "BR", "MX", "IN",
+] as const;
+
+export interface KeywordMarket {
+  country: string;
+  popularity: number;
+  difficulty: number;
+  competingAppCount: number;
+  opportunityScore: number;
+}
+
+/** Run async `fn` over `items` with a concurrency cap (protects the upstream stores). */
+async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let i = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (i < items.length) {
+      const idx = i++;
+      out[idx] = await fn(items[idx]!);
+    }
+  });
+  await Promise.all(workers);
+  return out;
+}
+
+/**
+ * The same keyword scored across every supported market — the cross-market
+ * opportunity finder (surfaces countries where it's popular but uncontested).
+ * Each market reuses the cached per-keyword difficulty (7-day TTL).
+ */
+export async function getKeywordMarkets(
+  keyword: string,
+  store: Store,
+  countries: readonly string[] = SUPPORTED_MARKETS,
+): Promise<KeywordMarket[]> {
+  const results = await mapPool(countries.slice(0, 16), 4, async (country) => {
+    try {
+      const kd = await getKeywordDifficulty(keyword, country, store);
+      return {
+        country: country.toUpperCase(),
+        popularity: kd.popularity,
+        difficulty: kd.difficulty,
+        competingAppCount: kd.competingAppCount,
+        opportunityScore: kd.opportunityScore,
+      } satisfies KeywordMarket;
+    } catch {
+      return null;
+    }
+  });
+  return results.filter((r): r is KeywordMarket => r != null);
+}

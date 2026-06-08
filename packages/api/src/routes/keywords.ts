@@ -4,8 +4,10 @@ import { z } from "zod";
 import {
   batchKeywordDifficulty,
   getKeywordDifficulty,
+  getKeywordMarkets,
   getKeywordSuggestions,
   getRelatedKeywords,
+  SUPPORTED_MARKETS,
 } from "../services/keyword-service.js";
 
 export const keywordsRouter = new Hono();
@@ -45,6 +47,22 @@ keywordsRouter.get("/related", async (c) => {
 
   const data = await getRelatedKeywords(keyword, country, store, limit);
   return c.json({ data, meta: { source: "store-autocomplete", seed: keyword } });
+});
+
+// Cross-market metrics for one keyword (the opportunity finder behind row-expand).
+keywordsRouter.get("/markets", async (c) => {
+  const keyword = c.req.query("keyword");
+  const store = (c.req.query("store") ?? "apple") as Store;
+  const countriesParam = c.req.query("countries");
+
+  if (!keyword) return c.json({ error: "keyword is required" }, 400);
+
+  const countries = countriesParam
+    ? countriesParam.split(",").map((s) => s.trim().toUpperCase()).filter(Boolean).slice(0, 16)
+    : SUPPORTED_MARKETS;
+
+  const data = await getKeywordMarkets(keyword, store, countries);
+  return c.json({ data, meta: { source: "store-search", keyword, markets: SUPPORTED_MARKETS } });
 });
 
 const batchSchema = z.object({

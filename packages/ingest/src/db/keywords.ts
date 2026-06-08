@@ -3,6 +3,7 @@ import { findKeyword, keywordRowToDifficulty, upsertKeywordRow, type Db } from "
 import type { KeywordDifficulty, Store } from "@kittie/types";
 import { searchAppleKeyword } from "../apple/search.js";
 import { searchGoogleKeyword } from "../google/search.js";
+import { searchPopularity } from "../keyword-popularity.js";
 import { makeKeywordId } from "../util/ids.js";
 
 const SEARCH_LIMIT = 10;
@@ -34,12 +35,16 @@ export async function syncKeyword(
   country: string,
   store: Store,
 ): Promise<KeywordDifficulty> {
-  const topRankedApps = await fetchKeywordRankings(keyword, country, store);
+  const [topRankedApps, popularity] = await Promise.all([
+    fetchKeywordRankings(keyword, country, store),
+    searchPopularity(keyword, country, store).catch(() => null),
+  ]);
   const scored = computeKeywordDifficulty({
     keyword,
     country: country.toUpperCase(),
     store,
     topRankedApps,
+    searchPopularity: popularity,
   });
 
   const id = makeKeywordId(store, country, keyword);

@@ -7,5 +7,6 @@ export { upsertApp, upsertSnapshot, listTrackedApps } from "./db/apps.js";
 export { searchAppleKeyword, type StoreSearchResult } from "./apple/search.js";
 export { searchGoogleKeyword } from "./google/search.js";
 export { suggestRelatedKeywords } from "./keyword-suggest.js";
+export { searchPopularity } from "./keyword-popularity.js";
 export { syncKeyword, getCachedKeyword, fetchKeywordRankings } from "./db/keywords.js";
 export { runKeywordSync } from "./jobs/keyword-sync.js";

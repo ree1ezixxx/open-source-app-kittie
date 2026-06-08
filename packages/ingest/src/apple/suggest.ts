@@ -1,16 +1,22 @@
-/** US-tested; other storefronts wired for when multi-market lands. */
+/** Apple storefront IDs per market (multi-market keyword analysis). */
 const STOREFRONT_IDS: Record<string, number> = {
   US: 143441,
   GB: 143444,
   CA: 143455,
   AU: 143460,
+  IE: 143449,
+  NZ: 143461,
   DE: 143443,
   FR: 143442,
   IT: 143450,
   ES: 143454,
   NL: 143452,
+  SE: 143456,
   JP: 143462,
   KR: 143466,
+  BR: 143503,
+  MX: 143468,
+  IN: 143467,
 };
 
 function decodeXml(value: string): string {

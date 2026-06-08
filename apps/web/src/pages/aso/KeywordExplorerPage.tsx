@@ -7,6 +7,7 @@ import { KeywordCard, KeywordDetail, PendingCard } from "../../components/aso/Ke
 import { IdeasTable } from "../../components/aso/IdeasTable";
 import { GenerateModal, type GenState } from "../../components/aso/GenerateModal";
 import { compareKeywords, fetchRelated, fetchSuggestions, lookupKeyword, type KeywordDifficulty } from "../../lib/api/keywords";
+import { MARKETS, MARKET_COUNT, market } from "../../lib/markets";
 import type { Theme } from "../../lib/theme";
 import "../../styles/aso.css";
 
@@ -33,6 +34,7 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
   const [sp, setSp] = useSearchParams();
 
   const [store, setStore] = useState<Store>("apple");
+  const [country, setCountry] = useState("US");
   const [input, setInput] = useState("");
   const [results, setResults] = useState<KeywordDifficulty[]>([]);
   const [ideas, setIdeas] = useState<Record<string, KeywordDifficulty[]>>({});
@@ -52,12 +54,12 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
 
   // Batch compare (2–10 pasted terms) — no idea generation.
   const runCompare = useCallback(
-    async (terms: string[], forStore: Store) => {
+    async (terms: string[], forStore: Store, forCountry: string) => {
       if (terms.length === 0) return;
       setError(null);
       setPending((p) => [...new Set([...terms, ...p])]);
       try {
-        const fetched = await compareKeywords(terms.map((keyword) => ({ keyword, store: forStore })));
+        const fetched = await compareKeywords(terms.map((keyword) => ({ keyword, store: forStore })), forCountry);
         if (!mounted.current) return;
         setResults((prev) => {
           const incoming = new Map(fetched.map((f) => [keyOf(f), f]));
@@ -80,12 +82,12 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
 
   // Single seed → score it, discover related ideas, score those (staged progress modal).
   const generate = useCallback(
-    async (seed: string, forStore: Store) => {
+    async (seed: string, forStore: Store, forCountry: string) => {
       setError(null);
       setGen({ seed, stage: 0, done: 0, total: 0 });
       setPending((p) => [...new Set([seed, ...p])]);
       try {
-        const seedKd = await lookupKeyword(seed, forStore);
+        const seedKd = await lookupKeyword(seed, forStore, forCountry);
         if (!mounted.current) return;
         const seedKey = keyOf(seedKd);
         setResults((prev) => [seedKd, ...prev.filter((r) => keyOf(r) !== seedKey)]);
@@ -93,14 +95,14 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
         setTab("all");
 
         setGen((g) => (g ? { ...g, stage: 1 } : g));
-        const related = await fetchRelated(seed, forStore);
+        const related = await fetchRelated(seed, forStore, forCountry);
         if (!mounted.current) return;
 
         setGen((g) => (g ? { ...g, stage: 2, total: related.length, done: 0 } : g));
         const scored: KeywordDifficulty[] = [];
         for (let i = 0; i < related.length; i += 5) {
           const chunk = related.slice(i, i + 5).map((keyword) => ({ keyword, store: forStore }));
-          const part = await compareKeywords(chunk);
+          const part = await compareKeywords(chunk, forCountry);
           if (!mounted.current) return;
           scored.push(...part);
           setGen((g) => (g ? { ...g, done: scored.length } : g));
@@ -122,10 +124,10 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
   );
 
   const explore = useCallback(
-    (terms: string[], forStore: Store) => {
+    (terms: string[], forStore: Store, forCountry: string) => {
       if (terms.length === 0) return;
-      if (terms.length === 1) void generate(terms[0]!, forStore);
-      else void runCompare(terms, forStore);
+      if (terms.length === 1) void generate(terms[0]!, forStore, forCountry);
+      else void runCompare(terms, forStore, forCountry);
     },
     [generate, runCompare],
   );
@@ -133,7 +135,7 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
   function submit() {
     const terms = parseTerms(input);
     if (terms.length === 0) return;
-    explore(terms, store);
+    explore(terms, store, country);
     setInput("");
   }
 
@@ -147,7 +149,7 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
       const next = new URLSearchParams(sp);
       next.delete("q");
       setSp(next, { replace: true });
-      explore(parseTerms(q), store);
+      explore(parseTerms(q), store, country);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -165,6 +167,15 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
 
   const trackIdea = useCallback((kd: KeywordDifficulty) => {
     setResults((prev) => (prev.some((r) => keyOf(r) === keyOf(kd)) ? prev : [...prev, kd]));
+  }, []);
+
+  const clearIdeas = useCallback((seedKey: string) => {
+    setIdeas((prev) => {
+      if (!(seedKey in prev)) return prev;
+      const next = { ...prev };
+      delete next[seedKey];
+      return next;
+    });
   }, []);
 
   const counts = useMemo(
@@ -240,12 +251,20 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
               <button className={store === "apple" ? "on" : ""} onClick={() => setStore("apple")}><IconApple /> App Store</button>
               <button className={store === "google" ? "on" : ""} onClick={() => setStore("google")}><IconGooglePlay /> Google Play</button>
             </div>
+            <div className="select market-select" title="Market">
+              <select value={country} onChange={(e) => setCountry(e.target.value)} aria-label="Market">
+                {MARKETS.map((m) => (
+                  <option key={m.code} value={m.code}>{m.flag} {m.code}</option>
+                ))}
+              </select>
+              <IconChevron />
+            </div>
             <button className="btn btn-accent" onClick={submit} disabled={!input.trim()}>
               {parseTerms(input).length > 1 ? <><IconLayers /> Compare</> : <><IconSearch /> Explore</>}
             </button>
           </div>
           <div className="aso-hint">
-            <span className="kbd">⏎</span> explore one term for related ideas · paste up to 10 lines to compare · US only (v1)
+            <span className="kbd">⏎</span> explore one term for related ideas · paste up to 10 lines to compare · {market(country).flag} {market(country).name} · {MARKET_COUNT} markets
           </div>
         </div>
 
@@ -291,7 +310,7 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
               <div className="aso-hero-seedlabel">Try one from your catalog</div>
               <div className="chip-rail">
                 {chips.map((c) => (
-                  <button key={c} className="chip" onClick={() => explore([c], store)}><IconSearch />{c}</button>
+                  <button key={c} className="chip" onClick={() => explore([c], store, country)}><IconSearch />{c}</button>
                 ))}
               </div>
             </>
@@ -330,9 +349,12 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
                 {selectedIdeas && (
                   <IdeasTable
                     seed={selected.keyword}
+                    store={store}
+                    country={country}
                     ideas={selectedIdeas}
                     trackedKeys={trackedKeys}
                     onTrack={trackIdea}
+                    onClear={() => clearIdeas(keyOf(selected))}
                   />
                 )}
               </KeywordDetail>

@@ -91,6 +91,29 @@ export async function fetchRelated(
   return body.data;
 }
 
+export interface KeywordMarket {
+  country: string;
+  popularity: number;
+  difficulty: number;
+  competingAppCount: number;
+  opportunityScore: number;
+}
+
+/** The same keyword scored across markets — the cross-market opportunity finder. */
+export async function fetchKeywordMarkets(
+  keyword: string,
+  store: Store,
+  countries?: string[],
+  signal?: AbortSignal,
+): Promise<KeywordMarket[]> {
+  const q = new URLSearchParams({ keyword, store });
+  if (countries?.length) q.set("countries", countries.join(","));
+  const res = await fetch(`${BASE}/keywords/markets?${q}`, { signal });
+  if (!res.ok) throw new Error(`Markets lookup failed (${res.status})`);
+  const body = (await res.json()) as { data: KeywordMarket[] };
+  return body.data;
+}
+
 // ── Suggestion chips ─────────────────────────────────────────────
 // Primary: GET /keywords/suggestions. Falls back to deriving from the live apps
 // database, then to a static ASO seed — so the empty state is never barren.
