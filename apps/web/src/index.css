@@ -883,6 +883,10 @@ thead .col-app { z-index: 6; }
 .pager-bottom { display: flex; justify-content: flex-end; padding: 14px 22px 26px; }
 .pager-bottom .pager { margin-left: 0; }
 
+/* rank column */
+.rank-th, .rank-cell { width: 46px; }
+.rank-cell { color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+
 /* active filter chips */
 .active-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; min-width: 0; }
 .achip {

@@ -221,6 +221,7 @@ export function ExplorePage({
                   sortOrder={filters.order}
                   onSort={handleSort}
                   onSelect={(id) => navigate(`/apps/${encodeURIComponent(id)}`)}
+                  startRank={page * pageSize}
                 />
                 {total > pageSize && (
                   <div className="pager-bottom">

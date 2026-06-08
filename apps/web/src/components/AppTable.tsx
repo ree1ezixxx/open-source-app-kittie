@@ -55,6 +55,7 @@ function ReviewDelta({ d }: { d: number | null }) {
 function SkeletonRow() {
   return (
     <tr>
+      <td className="num"><div className="skel" style={{ height: 11, width: 16, marginLeft: "auto" }} /></td>
       <td className="col-app">
         <div className="app-cell">
           <div className="skel skel-circ" style={{ width: 34, height: 34 }} />
@@ -83,6 +84,7 @@ export function AppTable({
   sortOrder,
   onSort,
   onSelect,
+  startRank = 0,
 }: {
   apps: AppListItem[];
   loading: boolean;
@@ -90,6 +92,7 @@ export function AppTable({
   sortOrder: SortOrder;
   onSort: (f: AppSortField) => void;
   onSelect: (id: string) => void;
+  startRank?: number;
 }) {
   const maxRev = Math.max(1, ...apps.map((a) => a.revenueEstimate30d ?? 0));
 
@@ -97,6 +100,7 @@ export function AppTable({
     <table className="apps">
       <thead>
         <tr>
+          <th className="num rank-th">#</th>
           {COLS.map((c) => (
             <th
               key={c.key}
@@ -118,11 +122,12 @@ export function AppTable({
       <tbody>
         {loading
           ? Array.from({ length: 12 }).map((_, i) => <SkeletonRow key={i} />)
-          : apps.map((a) => {
+          : apps.map((a, i) => {
               const cColor = categoryColor(a.category);
               const revPct = ((a.revenueEstimate30d ?? 0) / maxRev) * 100;
               return (
                 <tr key={a.id} onClick={() => onSelect(a.id)}>
+                  <td className="num rank-cell">{startRank + i + 1}</td>
                   <td className="col-app">
                     <div className="app-cell">
                       {a.iconUrl ? (
