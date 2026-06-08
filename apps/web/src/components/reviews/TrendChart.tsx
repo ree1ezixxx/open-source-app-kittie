@@ -39,7 +39,7 @@ function yTicks(max: number, count = 4): number[] {
 export function TrendChart({
   periods,
   series,
-  defaultVisible = 6,
+  defaultVisible = 4,
   height = 230,
 }: {
   periods: string[];
@@ -51,7 +51,8 @@ export function TrendChart({
   const [hidden, setHidden] = useState<Set<string>>(
     () => new Set(ranked.slice(defaultVisible).map((s) => s.key)),
   );
-  const [hi, setHi] = useState<number | null>(null); // hovered period index
+  const [hi, setHi] = useState<number | null>(null);   // hovered period index
+  const [focus, setFocus] = useState<string | null>(null); // legend-hovered series
 
   const visible = ranked.filter((s) => !hidden.has(s.key));
   const n = periods.length;
@@ -78,8 +79,24 @@ export function TrendChart({
   const ix = (i: number) => pad.l + (i / (n - 1)) * (W - pad.l - pad.r);
   const iy = (v: number) => pad.t + (1 - v / top) * (H - pad.t - pad.b);
 
-  const lineFor = (s: TrendSeries) =>
-    s.values.map((v, i) => `${i ? "L" : "M"}${ix(i).toFixed(1)} ${iy(v).toFixed(1)}`).join(" ");
+  // Gentle Catmull-Rom → bézier smoothing so lines read as trends, not jagged
+  // zigzags. Low tension keeps it honest (no wild overshoot below 0).
+  const lineFor = (s: TrendSeries) => {
+    const pts = s.values.map((v, i) => ({ x: ix(i), y: iy(v) }));
+    if (pts.length < 2) return "";
+    const t = 0.16;
+    let d = `M${pts[0]!.x.toFixed(1)} ${pts[0]!.y.toFixed(1)}`;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p0 = pts[i - 1] ?? pts[i]!;
+      const p1 = pts[i]!;
+      const p2 = pts[i + 1]!;
+      const p3 = pts[i + 2] ?? p2;
+      const c1x = p1.x + (p2.x - p0.x) * t, c1y = p1.y + (p2.y - p0.y) * t;
+      const c2x = p2.x - (p3.x - p1.x) * t, c2y = p2.y - (p3.y - p1.y) * t;
+      d += ` C${c1x.toFixed(1)} ${c1y.toFixed(1)} ${c2x.toFixed(1)} ${c2y.toFixed(1)} ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
+    }
+    return d;
+  };
 
   // show ~8 x labels max
   const xStep = Math.max(1, Math.ceil(n / 8));
@@ -123,23 +140,32 @@ export function TrendChart({
           {hi != null && (
             <line className="rv-trend-cursor" x1={ix(hi)} y1={pad.t} x2={ix(hi)} y2={H - pad.b} />
           )}
-          {/* series lines */}
-          {visible.map((s) => (
-            <path key={s.key} d={lineFor(s)} fill="none" stroke={s.color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" opacity="0.9" />
-          ))}
-          {/* per-point dots (emphasised at the hovered day) */}
-          {visible.map((s) =>
-            s.values.map((v, i) => (
-              <circle
-                key={`${s.key}-${i}`}
-                cx={ix(i)}
-                cy={iy(v)}
-                r={hi === i ? 3.4 : 1.7}
-                fill={s.color}
-                opacity={hi == null || hi === i ? 1 : 0.55}
+          {/* series lines — hovering a legend key focuses one and fades the rest,
+              so any single topic stays traceable through the crossings */}
+          {visible.map((s) => {
+            const dim = focus != null && focus !== s.key;
+            const on = focus === s.key;
+            return (
+              <path
+                key={s.key}
+                d={lineFor(s)}
+                fill="none"
+                stroke={s.color}
+                strokeWidth={on ? 2.8 : dim ? 1 : 1.9}
+                strokeLinejoin="round"
+                strokeLinecap="round"
+                opacity={dim ? 0.12 : on ? 1 : 0.8}
               />
-            )),
-          )}
+            );
+          })}
+          {/* dots only at the hovered period (no always-on dot forest) */}
+          {hi != null &&
+            visible.map((s) => {
+              if (focus != null && focus !== s.key) return null;
+              return (
+                <circle key={`${s.key}-h`} cx={ix(hi)} cy={iy(s.values[hi] ?? 0)} r={focus === s.key ? 4 : 3} fill={s.color} />
+              );
+            })}
         </svg>
 
         {hi != null && tipRows.length > 0 && (
@@ -169,7 +195,9 @@ export function TrendChart({
           return (
             <button
               key={s.key}
-              className={`rv-trend-key ${off ? "off" : ""}`}
+              className={`rv-trend-key ${off ? "off" : ""} ${focus === s.key ? "focus" : ""}`}
+              onMouseEnter={() => !off && setFocus(s.key)}
+              onMouseLeave={() => setFocus(null)}
               onClick={() =>
                 setHidden((prev) => {
                   const next = new Set(prev);

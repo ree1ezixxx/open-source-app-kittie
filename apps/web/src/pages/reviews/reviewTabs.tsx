@@ -7,7 +7,7 @@
    interim heuristic classifier — the one LLM-swap seam — so every surface
    is live today and sharpens when the model is plugged in.
    ============================================================ */
-import { Fragment, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   averageRating,
@@ -22,7 +22,6 @@ import {
   improvementFacets,
   withinPeriod,
   SENTIMENT_LABEL,
-  SENTIMENT_ARROW,
   SERIES_PALETTE,
   GRANULARITY_LABEL,
   type TaggedReview,
@@ -45,6 +44,22 @@ function Stars({ value, size = 12 }: { value: number; size?: number }) {
         />
       ))}
     </span>
+  );
+}
+
+/* tiny inline trend line — replaces the awkward topic-timeline matrix */
+function Sparkline({ values, color }: { values: number[]; color: string }) {
+  const n = values.length;
+  if (n < 2) return <span className="rv-spark-empty">—</span>;
+  const max = Math.max(1, ...values);
+  const W = 84, H = 22, p = 2;
+  const x = (i: number) => p + (i / (n - 1)) * (W - 2 * p);
+  const y = (v: number) => p + (1 - v / max) * (H - 2 * p);
+  const d = values.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(" ");
+  return (
+    <svg className="rv-spark" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
+      <path d={d} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
   );
 }
 
@@ -229,7 +244,8 @@ export function ReviewsTab({ tagged }: { tagged: TaggedReview[] }) {
     return sorted;
   }, [periodSet, rating, sentiment, topic, area, q, sort]);
 
-  const SENTS: SentFilter[] = ["all", "positive", "negative", "neutral", "mixed"];
+  // "Mixed" intentionally omitted — too discretionary a bucket to filter on.
+  const SENTS: SentFilter[] = ["all", "positive", "negative", "neutral"];
 
   return (
     <div className="rv-reviews">
@@ -397,61 +413,28 @@ export function SemanticsTab({ tagged, onRefresh, refreshing }: { tagged: Tagged
           <section className="rv-card">
             <div className="rv-card-head">
               <div className="rv-card-title">Topic trends</div>
-              <span className="rv-card-meta">mentions / {gran} · top {Math.min(6, ts.rows.length)} shown</span>
+              <span className="rv-card-meta">mentions / {gran} · top {Math.min(4, ts.rows.length)} shown · hover a topic to isolate</span>
             </div>
             <TrendChart periods={trend.periods} series={trend.series} />
           </section>
 
-          {/* Topic timeline metric grid */}
-          {ts.periods.length > 1 && (
-            <section className="rv-card">
-              <div className="rv-card-head">
-                <div className="rv-card-title">Topic timeline</div>
-                <span className="rv-card-meta">{ts.rows.length} topics · {ts.periods.length} {gran}{ts.periods.length === 1 ? "" : "s"}</span>
-              </div>
-              <div className="rv-timeline" style={{ gridTemplateColumns: `minmax(130px,1.4fr) 96px 52px 46px repeat(${ts.periods.length}, minmax(26px,1fr))` }}>
-                <div className="rv-tl-corner">Topic</div>
-                <div className="rv-tl-h">Sentiment</div>
-                <div className="rv-tl-h rv-tl-r">Rating</div>
-                <div className="rv-tl-h rv-tl-r">Total</div>
-                {ts.periods.map((p) => <div className="rv-tl-date" key={p.key}>{p.label}</div>)}
-                {ts.rows.map((r) => (
-                  <Fragment key={r.label}>
-                    <div className="rv-tl-topic">{r.label}</div>
-                    <div className="rv-tl-sent" style={{ color: SENTIMENT_COLOR[r.sentiment] }}>
-                      <span className="rv-tl-arrow">{SENTIMENT_ARROW[r.sentiment]}</span>{SENTIMENT_LABEL[r.sentiment]}
-                    </div>
-                    <div className="rv-tl-num">{r.avgRating.toFixed(1)}</div>
-                    <div className="rv-tl-num rv-tl-total">{r.totalMentions}</div>
-                    {ts.periods.map((p) => {
-                      const v = r.periodValues[p.key] ?? 0;
-                      return (
-                        <div
-                          className="rv-tl-cell"
-                          key={p.key}
-                          style={{ background: v ? `color-mix(in srgb, ${SENTIMENT_COLOR[r.sentiment]} ${Math.min(85, 20 + v * 22)}%, transparent)` : "transparent" }}
-                        >{v || "—"}</div>
-                      );
-                    })}
-                  </Fragment>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* Topics table */}
+          {/* Topics table — each row carries a compact trend sparkline, so the
+              per-topic history lives here instead of in a wide numeric matrix */}
           <section className="rv-card">
             <div className="rv-card-head">
               <div className="rv-card-title">Topics ({ts.rows.length})</div>
-              <span className="rv-card-meta">{formatCompact(tagged.length)} reviews tagged</span>
+              <span className="rv-card-meta">{formatCompact(tagged.length)} reviews tagged · trend / {gran}</span>
             </div>
             <div className="rv-topic-table">
               <div className="rv-topic-h">
-                <span>Topic</span><span>Sentiment</span><span>Rating</span><span>Mentions</span>
+                <span>Topic</span><span>Trend</span><span>Sentiment</span><span>Rating</span><span>Mentions</span>
               </div>
               {ts.rows.map((r) => (
                 <div className="rv-topic-row" key={r.label}>
                   <span className="rv-topic-name">{r.label}</span>
+                  <span className="rv-topic-spark">
+                    <Sparkline values={ts.periods.map((p) => r.periodValues[p.key] ?? 0)} color={SENTIMENT_COLOR[r.sentiment]} />
+                  </span>
                   <span className="rv-topic-sent" style={{ color: SENTIMENT_COLOR[r.sentiment] }}>
                     <i style={{ background: SENTIMENT_COLOR[r.sentiment] }} />{SENTIMENT_LABEL[r.sentiment]}
                   </span>
@@ -518,7 +501,7 @@ export function ImprovementsTab({ tagged, onRefresh, refreshing }: { tagged: Tag
           <section className="rv-card">
             <div className="rv-card-head">
               <div className="rv-card-title">Improvement trends</div>
-              <span className="rv-card-meta">mentions / {impGran} · top {Math.min(6, impTs.rows.length)} shown</span>
+              <span className="rv-card-meta">mentions / {impGran} · top {Math.min(4, impTs.rows.length)} shown · hover an area to isolate</span>
             </div>
             <TrendChart periods={impTrend.periods} series={impTrend.series} />
           </section>
