@@ -15,6 +15,7 @@ import { sleep } from "../util/rate-limit.js";
 
 const LIMIT = process.env.LIMIT ? Number(process.env.LIMIT) : Infinity;
 const CONCURRENCY = process.env.CONCURRENCY ? Number(process.env.CONCURRENCY) : 5;
+const SLEEP = process.env.SLEEP ? Number(process.env.SLEEP) : 120;
 
 export async function runBackfillScreenshotsWeb(): Promise<void> {
   loadEnv();
@@ -62,7 +63,7 @@ export async function runBackfillScreenshotsWeb(): Promise<void> {
       if (++done % 100 === 0) {
         console.log(`  …${done}/${ids.length} · ${filled} filled · ${empty} none · ${failed} failed`);
       }
-      await sleep(120);
+      await sleep(SLEEP);
     }
   }
 
