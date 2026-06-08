@@ -93,6 +93,8 @@ async function loadScoredRows(period: GrowthPeriod): Promise<ScoredAppRow[]> {
   });
 }
 
+// Module-level cache of scored rows, keyed by growth period. Resets on process
+// reload (tsx watch). Rebuilds from the DB on the next request after a reseed.
 let cachedRows: ScoredAppRow[] | null = null;
 let cachePeriod: GrowthPeriod | null = null;
 
