@@ -36,19 +36,29 @@ export function Phone({ src, alt = "", style, hideEmpty }: FrameProps) {
           width: `${PHONE_SCREEN.W}%`,
           height: `${PHONE_SCREEN.H}%`,
           borderRadius: `${PHONE_SCREEN.RX}% / ${PHONE_SCREEN.RY}%`,
-          background: "#111",
+          background: "#0c0c0f",
         }}
       >
         {resolved ? (
           <img
             src={resolved}
             alt={alt}
-            style={{ display: "block", width: "100%", height: "100%", objectFit: "cover", objectPosition: "top" }}
+            style={{ display: "block", width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }}
             draggable={false}
           />
         ) : hideEmpty ? null : (
           <EmptySlot />
         )}
+        <div
+          aria-hidden
+          style={{
+            position: "absolute",
+            inset: 0,
+            borderRadius: "inherit",
+            pointerEvents: "none",
+            boxShadow: "inset 0 0 0 2px rgba(255,255,255,0.05), inset 0 1.5px 3px rgba(255,255,255,0.1)",
+          }}
+        />
       </div>
     </div>
   );
@@ -98,7 +108,7 @@ export function IPad({ src, alt = "", style, hideEmpty }: FrameProps) {
             <img
               src={resolved}
               alt={alt}
-              style={{ display: "block", width: "100%", height: "100%", objectFit: "cover", objectPosition: "top" }}
+              style={{ display: "block", width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }}
               draggable={false}
             />
           ) : hideEmpty ? null : (

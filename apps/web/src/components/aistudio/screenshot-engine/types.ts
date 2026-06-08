@@ -10,7 +10,36 @@ export type SlideLayout =
   | "hero" // headline above, device anchored at the bottom (cropped)
   | "device-bottom" // headline top, full device below
   | "device-top" // device on top, headline below (contrast)
+  | "split" // caption stacked over an offset device (character-hero feel)
   | "no-device"; // big standalone headline, no device
+
+/** Background treatment rendered behind a slide. */
+export type BackgroundStyle = "gradient" | "mesh" | "duotone" | "glow" | "solid";
+
+/** Deck-level narrative flow (sequence of layouts). */
+export type FlowStrategy = "default" | "hero-split" | "alternating-split";
+
+/** Curated display fonts (loaded in index.html). */
+export type FontId = "grotesk" | "inter" | "poppins" | "playfair" | "dmsans";
+
+/** Resolved colours used by the renderer. */
+export type Palette = {
+  base: string; // background base
+  base2: string; // secondary background tone
+  accent: string;
+  brand: string; // secondary brand colour
+  fg: string; // headline text
+  muted: string; // kicker / sub text
+};
+
+/** Deck-level design spec resolved by aiService and consumed by the engine. */
+export type DesignSpec = {
+  background: BackgroundStyle;
+  font: FontId;
+  flow: FlowStrategy;
+  accent: string;
+  brand: string;
+};
 
 export type ThemeId =
   | "clean-light"

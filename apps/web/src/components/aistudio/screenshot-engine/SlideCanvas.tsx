@@ -1,19 +1,24 @@
-// Lean one-slide renderer. Inspired by the original slide-canvas.tsx but
-// rewritten for the one-click generation path: deterministic inline styles
-// (so html-to-image exports cleanly), a fixed set of auto-rotated layouts,
-// no drag/inspect/element machinery. Always renders at full CANVAS pixel size;
-// callers scale a wrapper for previews.
+// Lean one-slide renderer. Deterministic inline styles (clean html-to-image
+// export), a fixed set of auto-rotated layouts, designed backgrounds, and a
+// resolved brand palette. Always renders at full CANVAS pixel size; callers
+// scale a wrapper for previews.
 
-import { CANVAS, MK_RATIO, IPAD_RATIO, phoneW, ipadW } from "./constants";
-import type { Device, Slide, Theme } from "./types";
+import { CANVAS, MK_RATIO, IPAD_RATIO, phoneW, ipadW, fontFamily } from "./constants";
+import type { Device, DesignSpec, Palette, Slide, Theme } from "./types";
 import { Phone, IPad } from "./device-frames";
-
-const FONT_STACK =
-  '"Space Grotesk", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif';
+import { SlideBackground } from "./backgrounds";
+import { shade, rgba } from "./color";
 
 type Placement = {
-  device?: { top: number; left: number; width: number };
-  text: { top?: number; bottom?: number; justify: "flex-start" | "center" | "flex-end" };
+  device?: { top: number; left: number; width: number; rotate?: number };
+  text: {
+    top?: number;
+    bottom?: number;
+    justify: "flex-start" | "center" | "flex-end";
+    align: "center" | "flex-start";
+    maxWidth: number;
+    insetX?: number;
+  };
 };
 
 function placement(layout: Slide["layout"], w: number, h: number, device: Device): Placement {
@@ -21,46 +26,69 @@ function placement(layout: Slide["layout"], w: number, h: number, device: Device
   const devWidth = (device === "ipad" ? ipadW(w, h) : phoneW(w, h)) * w;
   const devHeight = devWidth / aspect;
   const left = (w - devWidth) / 2;
+  const centeredText = { align: "center" as const, maxWidth: w * 0.86 };
 
   switch (layout) {
     case "device-bottom":
       return {
         device: { top: h - devHeight, left, width: devWidth },
-        text: { top: h * 0.05, justify: "flex-start" },
+        text: { top: h * 0.05, justify: "flex-start", ...centeredText },
       };
     case "device-top":
       return {
         device: { top: -devHeight * 0.12, left, width: devWidth },
-        text: { bottom: h * 0.06, justify: "flex-end" },
+        text: { bottom: h * 0.06, justify: "flex-end", ...centeredText },
       };
+    case "split": {
+      // Character-hero feel: caption upper-left, device offset to the right.
+      const sw = devWidth * 0.82;
+      return {
+        device: { top: h * 0.36, left: w - sw * 0.74, width: sw, rotate: 5 },
+        text: { top: h * 0.08, justify: "flex-start", align: "flex-start", maxWidth: w * 0.64, insetX: w * 0.085 },
+      };
+    }
     case "no-device":
-      return { text: { top: 0, justify: "center" } };
+      return { text: { top: 0, justify: "center", ...centeredText } };
     case "hero":
     default:
       return {
         device: { top: h * 0.32, left, width: devWidth },
-        text: { top: h * 0.07, justify: "flex-start" },
+        text: { top: h * 0.07, justify: "flex-start", ...centeredText },
       };
   }
+}
+
+function buildPalette(theme: Theme, design: DesignSpec, inverted: boolean): Palette {
+  const base = inverted ? theme.bgAlt : theme.bg;
+  return {
+    base,
+    base2: shade(base, inverted ? 0.05 : -0.03),
+    accent: design.accent,
+    brand: design.brand,
+    fg: inverted ? theme.fgAlt : theme.fg,
+    muted: theme.muted,
+  };
 }
 
 export function SlideCanvas({
   slide,
   theme,
   device,
+  design,
 }: {
   slide: Slide;
   theme: Theme;
   device: Device;
+  design: DesignSpec;
 }) {
   const { w, h } = CANVAS[device];
-  const bg = slide.inverted ? theme.bgAlt : theme.bg;
-  const fg = slide.inverted ? theme.fgAlt : theme.fg;
+  const pal = buildPalette(theme, design, slide.inverted);
   const p = placement(slide.layout, w, h, device);
   const Frame = device === "ipad" ? IPad : Phone;
+  const seed = slide.id.charCodeAt(slide.id.length - 1) || 0;
 
-  const padX = w * 0.085;
-  const headlineSize = slide.layout === "no-device" ? w * 0.1 : w * 0.072;
+  const padX = p.text.insetX ?? w * 0.085;
+  const headlineSize = slide.layout === "no-device" ? w * 0.102 : w * 0.072;
   const labelSize = w * 0.026;
 
   return (
@@ -70,25 +98,11 @@ export function SlideCanvas({
         height: h,
         position: "relative",
         overflow: "hidden",
-        background: bg,
-        fontFamily: FONT_STACK,
+        background: pal.base,
+        fontFamily: fontFamily(design.font),
       }}
     >
-      {/* decorative accent glow */}
-      <div
-        style={{
-          position: "absolute",
-          top: slide.layout === "device-top" ? "auto" : -h * 0.12,
-          bottom: slide.layout === "device-top" ? -h * 0.12 : "auto",
-          left: -w * 0.2,
-          width: w * 0.7,
-          height: w * 0.7,
-          borderRadius: "50%",
-          background: theme.accent,
-          opacity: 0.14,
-          filter: "blur(120px)",
-        }}
-      />
+      <SlideBackground background={design.background} palette={pal} seed={seed} />
 
       {/* text block */}
       <div
@@ -103,8 +117,8 @@ export function SlideCanvas({
           display: "flex",
           flexDirection: "column",
           justifyContent: p.text.justify,
-          alignItems: "center",
-          textAlign: "center",
+          alignItems: p.text.align,
+          textAlign: p.text.align === "flex-start" ? "left" : "center",
           zIndex: 5,
         }}
       >
@@ -115,10 +129,14 @@ export function SlideCanvas({
               fontWeight: 700,
               letterSpacing: labelSize * 0.18,
               textTransform: "uppercase",
-              color: theme.accent,
-              marginBottom: headlineSize * 0.32,
+              color: pal.accent,
+              marginBottom: headlineSize * 0.3,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: labelSize * 0.5,
             }}
           >
+            <span style={{ width: labelSize * 1.4, height: 3, borderRadius: 2, background: pal.accent, display: "inline-block" }} />
             {slide.label}
           </div>
         )}
@@ -128,28 +146,47 @@ export function SlideCanvas({
             fontWeight: 800,
             lineHeight: 1.04,
             letterSpacing: -headlineSize * 0.02,
-            color: fg,
+            color: pal.fg,
             whiteSpace: "pre-line",
-            maxWidth: w * 0.86,
+            maxWidth: p.text.maxWidth,
+            textShadow: `0 2px 30px ${rgba(pal.base, 0.5)}`,
           }}
         >
           {slide.headline}
         </div>
       </div>
 
-      {/* device */}
+      {/* device + backing glow (keeps the dark device readable on any base) */}
       {p.device && (
-        <div
-          style={{
-            position: "absolute",
-            top: p.device.top,
-            left: p.device.left,
-            width: p.device.width,
-            zIndex: 2,
-          }}
-        >
-          <Frame src={slide.screenshot} hideEmpty={false} />
-        </div>
+        <>
+          <div
+            aria-hidden
+            style={{
+              position: "absolute",
+              top: p.device.top - p.device.width * 0.14,
+              left: p.device.left - p.device.width * 0.2,
+              width: p.device.width * 1.4,
+              height: p.device.width * 1.95,
+              borderRadius: "50%",
+              background: `radial-gradient(closest-side, ${rgba(pal.accent, 0.18)} 0%, transparent 72%)`,
+              filter: "blur(70px)",
+              zIndex: 1,
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              top: p.device.top,
+              left: p.device.left,
+              width: p.device.width,
+              transform: p.device.rotate ? `rotate(${p.device.rotate}deg)` : undefined,
+              filter: "drop-shadow(0 24px 46px rgba(0,0,0,0.4))",
+              zIndex: 2,
+            }}
+          >
+            <Frame src={slide.screenshot} hideEmpty={false} />
+          </div>
+        </>
       )}
     </div>
   );

@@ -2,7 +2,7 @@
 // dimensions, the pre-measured iPhone screen overlay, and the theme palette.
 // Trimmed to Apple devices (iPhone + iPad) for the App Store screenshot flow.
 
-import type { Device, Theme, ThemeId } from "./types";
+import type { BackgroundStyle, Device, FlowStrategy, FontId, Theme, ThemeId } from "./types";
 
 // ---------- Canvas dimensions (design at largest required resolution) ----------
 export const CANVAS: Record<Device, { w: number; h: number }> = {
@@ -112,3 +112,32 @@ export const THEMES: Record<string, Theme> = {
 export function themeById(themeId: string | undefined): Theme {
   return THEMES[themeId || ""] || THEMES[DEFAULT_THEME_ID]!;
 }
+
+// ---------- Fonts (loaded in index.html) ----------
+export const FONTS: Record<FontId, { label: string; family: string }> = {
+  grotesk: { label: "Space Grotesk", family: '"Space Grotesk", system-ui, sans-serif' },
+  inter: { label: "Inter", family: '"Inter", system-ui, sans-serif' },
+  poppins: { label: "Poppins", family: '"Poppins", system-ui, sans-serif' },
+  dmsans: { label: "DM Sans", family: '"DM Sans", system-ui, sans-serif' },
+  playfair: { label: "Playfair Display", family: '"Playfair Display", Georgia, serif' },
+};
+
+export function fontFamily(id: FontId): string {
+  return (FONTS[id] ?? FONTS.grotesk).family;
+}
+
+// ---------- Background styles (for the picker) ----------
+export const BACKGROUNDS: { value: BackgroundStyle; label: string }[] = [
+  { value: "mesh", label: "Mesh" },
+  { value: "gradient", label: "Gradient" },
+  { value: "duotone", label: "Duotone" },
+  { value: "glow", label: "Glow" },
+  { value: "solid", label: "Solid" },
+];
+
+// ---------- Flow strategies (for the picker) ----------
+export const FLOWS: { value: FlowStrategy; label: string }[] = [
+  { value: "default", label: "Default" },
+  { value: "hero-split", label: "Hero split" },
+  { value: "alternating-split", label: "Alternating split" },
+];

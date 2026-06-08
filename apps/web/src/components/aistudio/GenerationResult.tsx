@@ -22,6 +22,7 @@ function slug(s: string) {
 export function GenerationResult({ generation }: { generation: ScreenshotGeneration }) {
   const theme = themeById(generation.themeId);
   const device = generation.device;
+  const design = generation.design;
   const { w, h } = CANVAS[device];
 
   // Full-resolution off-screen nodes keyed by slide id — html-to-image captures
@@ -77,7 +78,7 @@ export function GenerationResult({ generation }: { generation: ScreenshotGenerat
       <div className="studio-shots">
         {generation.slides.map((s, i) => (
           <div className="studio-shot" key={s.id}>
-            <SlidePreview slide={s} theme={theme} device={device} width={220} />
+            <SlidePreview slide={s} theme={theme} device={device} design={design} width={220} />
             <div className="cap" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {s.headline.replace(/\n/g, " ")}
@@ -107,7 +108,7 @@ export function GenerationResult({ generation }: { generation: ScreenshotGenerat
             }}
             style={{ width: w, height: h }}
           >
-            <SlideCanvas slide={s} theme={theme} device={device} />
+            <SlideCanvas slide={s} theme={theme} device={device} design={design} />
           </div>
         ))}
       </div>

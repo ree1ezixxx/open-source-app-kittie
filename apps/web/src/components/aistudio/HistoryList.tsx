@@ -23,7 +23,7 @@ export function HistoryList({
             onClick={() => onSelect(g.id)}
           >
             <div className="swatch" style={{ overflow: "hidden" }}>
-              {first && <SlidePreview slide={first} theme={themeById(g.themeId)} device={g.device} width={40} radius={8} />}
+              {first && <SlidePreview slide={first} theme={themeById(g.themeId)} device={g.device} design={g.design} width={40} radius={8} />}
             </div>
             <div style={{ minWidth: 0, flex: 1 }}>
               <div className="h-name">{g.appName}</div>

@@ -4,12 +4,15 @@ import type { AppListItem } from "@kittie/types";
 import {
   aiService,
   AI_INTEGRATION_POINTS,
+  designDefaults,
   type ScreenshotGeneration,
   type ScreenshotStyle,
   type UploadedImage,
 } from "../lib/aiService";
+import { BACKGROUNDS, FLOWS, FONTS, type DesignSpec, type FontId } from "../components/aistudio/screenshot-engine";
 import { StudioHeader } from "../components/aistudio/StudioHeader";
 import { AppPicker } from "../components/aistudio/AppPicker";
+import { AppDetailsForm, EMPTY_DETAILS, splitTerms, type AppDetails } from "../components/aistudio/AppDetailsForm";
 import { ScreenshotUploader } from "../components/aistudio/ScreenshotUploader";
 import { StepFlow } from "../components/aistudio/StepFlow";
 import { GenerationResult } from "../components/aistudio/GenerationResult";
@@ -18,7 +21,7 @@ import { StudioEmptyState } from "../components/aistudio/StudioEmptyState";
 import { IconImage, IconInfo } from "../icons";
 import { IconWand, IconPlus } from "../components/aistudio/icons";
 
-const STEPS = ["Select app", "Upload screenshots", "Generate"];
+const STEPS = ["App details", "Upload screenshots", "Generate"];
 const STYLES: { value: ScreenshotStyle; label: string }[] = [
   { value: "bold", label: "Bold" },
   { value: "minimal", label: "Minimal" },
@@ -31,18 +34,31 @@ const SHOT_POINT = AI_INTEGRATION_POINTS.find((p) => p.id === "screenshot-art-di
 export function ScreenshotGeneratorPage() {
   const [newMode, setNewMode] = useState(false);
   const [selectedApp, setSelectedApp] = useState<AppListItem | null>(null);
-  const [newName, setNewName] = useState("");
-  const [newBrief, setNewBrief] = useState("");
+  const [details, setDetails] = useState<AppDetails>(EMPTY_DETAILS);
   const [images, setImages] = useState<UploadedImage[]>([]);
   const [style, setStyle] = useState<ScreenshotStyle>("bold");
   const [count, setCount] = useState(4);
+  const [design, setDesign] = useState<DesignSpec>(() => designDefaults("bold"));
+
+  // Picking a style snaps the design controls to that preset's coherent defaults.
+  function chooseStyle(s: ScreenshotStyle) {
+    setStyle(s);
+    setDesign(designDefaults(s));
+  }
+  function patchDesign(p: Partial<DesignSpec>) {
+    setDesign((d) => ({ ...d, ...p }));
+  }
+  function patchDetails(p: Partial<AppDetails>) {
+    setDetails((d) => ({ ...d, ...p }));
+  }
 
   const [history, setHistory] = useState<ScreenshotGeneration[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [view, setView] = useState<"build" | "result">("build");
   const [generating, setGenerating] = useState(false);
 
-  const targetChosen = newMode ? newName.trim().length > 0 : !!selectedApp;
+  const started = newMode || !!selectedApp;
+  const targetChosen = started && details.name.trim().length > 0;
   const step = !targetChosen ? 0 : images.length === 0 ? 1 : 2;
   const ready = targetChosen && images.length > 0 && !generating;
   const activeGen = useMemo(() => history.find((g) => g.id === activeId) ?? null, [history, activeId]);
@@ -51,8 +67,7 @@ export function ScreenshotGeneratorPage() {
     setView("build");
     setNewMode(false);
     setSelectedApp(null);
-    setNewName("");
-    setNewBrief("");
+    setDetails(EMPTY_DETAILS);
     setImages([]);
     setActiveId(null);
   }
@@ -61,11 +76,19 @@ export function ScreenshotGeneratorPage() {
     setSelectedApp(app);
     setNewMode(false);
     setView("build");
+    // Prefill what the tracked app gives us; the rest stays editable.
+    setDetails({
+      ...EMPTY_DETAILS,
+      name: app.title,
+      developer: app.developer ?? "",
+      category: app.category ?? "",
+    });
   }
 
   function pickNew() {
     setNewMode(true);
     setSelectedApp(null);
+    setDetails(EMPTY_DETAILS);
     setView("build");
   }
 
@@ -74,12 +97,24 @@ export function ScreenshotGeneratorPage() {
     setGenerating(true);
     try {
       const gen = await aiService.generateScreenshots({
-        appId: newMode ? null : selectedApp?.id ?? null,
-        appName: newMode ? newName.trim() : selectedApp?.title ?? "Untitled app",
-        brief: newMode ? newBrief.trim() || undefined : undefined,
+        appId: selectedApp?.id ?? null,
+        appName: details.name.trim(),
+        subtitle: details.subtitle.trim() || undefined,
+        developer: details.developer.trim() || undefined,
+        category: details.category.trim() || undefined,
+        description: details.description.trim() || undefined,
+        prompt: details.prompt.trim() || undefined,
+        targetAudience: details.targetAudience.trim() || undefined,
+        appStoreKeywords: splitTerms(details.appStoreKeywords),
+        brandKeywords: splitTerms(details.brandKeywords),
         sourceImages: images,
         style,
         count,
+        accent: design.accent,
+        brand: design.brand,
+        background: design.background,
+        font: design.font,
+        flow: design.flow,
       });
       setHistory((h) => [gen, ...h]);
       setActiveId(gen.id);
@@ -148,47 +183,29 @@ export function ScreenshotGeneratorPage() {
               <>
                 <StepFlow steps={STEPS} current={step} />
 
-                {/* Step 1 — target */}
+                {/* Step 1 — app details */}
                 <div className="studio-block">
                   <div className="studio-block-head">
-                    <div className="studio-block-title">1 · Select app</div>
+                    <div className="studio-block-title">1 · App details</div>
                     <div className="studio-block-hint">Pick a tracked app on the left, or describe a new one</div>
                   </div>
-                  {newMode ? (
+                  {started ? (
                     <>
-                      <div className="studio-field">
-                        <label htmlFor="new-name">App name</label>
-                        <input
-                          id="new-name"
-                          className="studio-input"
-                          placeholder="e.g. Streak — Sober Companion"
-                          value={newName}
-                          onChange={(e) => setNewName(e.target.value)}
-                        />
-                      </div>
-                      <div className="studio-field">
-                        <label htmlFor="new-brief">What does it do? (optional)</label>
-                        <textarea
-                          id="new-brief"
-                          className="studio-textarea"
-                          placeholder="One or two lines on the app, audience, and the feeling the screenshots should sell."
-                          value={newBrief}
-                          onChange={(e) => setNewBrief(e.target.value)}
-                        />
-                      </div>
-                    </>
-                  ) : selectedApp ? (
-                    <div className="studio-appitem active" style={{ cursor: "default" }}>
-                      {selectedApp.iconUrl ? (
-                        <img className="app-icon" src={selectedApp.iconUrl} alt="" />
-                      ) : (
-                        <div className="app-icon placeholder">{selectedApp.title.charAt(0)}</div>
+                      {selectedApp && (
+                        <div className="studio-appitem active" style={{ cursor: "default", marginBottom: 14 }}>
+                          {selectedApp.iconUrl ? (
+                            <img className="app-icon" src={selectedApp.iconUrl} alt="" />
+                          ) : (
+                            <div className="app-icon placeholder">{selectedApp.title.charAt(0)}</div>
+                          )}
+                          <div style={{ minWidth: 0 }}>
+                            <div className="name">{selectedApp.title}</div>
+                            <div className="sub">{selectedApp.developer}{selectedApp.category ? ` · ${selectedApp.category}` : ""}</div>
+                          </div>
+                        </div>
                       )}
-                      <div style={{ minWidth: 0 }}>
-                        <div className="name">{selectedApp.title}</div>
-                        <div className="sub">{selectedApp.developer}{selectedApp.category ? ` · ${selectedApp.category}` : ""}</div>
-                      </div>
-                    </div>
+                      <AppDetailsForm details={details} onChange={patchDetails} />
+                    </>
                   ) : (
                     <StudioEmptyState
                       title="No app selected"
@@ -206,7 +223,7 @@ export function ScreenshotGeneratorPage() {
                   <ScreenshotUploader images={images} onChange={setImages} />
                 </div>
 
-                {/* Step 3 — style + generate */}
+                {/* Step 3 — direction + generate */}
                 <div className="studio-block" style={{ opacity: images.length ? 1 : 0.5, pointerEvents: images.length ? "auto" : "none" }}>
                   <div className="studio-block-head">
                     <div className="studio-block-title">3 · Generate</div>
@@ -216,12 +233,68 @@ export function ScreenshotGeneratorPage() {
                     <label>Style</label>
                     <div className="studio-chips">
                       {STYLES.map((s) => (
-                        <button key={s.value} className={`studio-chip${style === s.value ? " on" : ""}`} onClick={() => setStyle(s.value)}>
+                        <button key={s.value} className={`studio-chip${style === s.value ? " on" : ""}`} onClick={() => chooseStyle(s.value)}>
                           {s.label}
                         </button>
                       ))}
                     </div>
                   </div>
+
+                  <div className="studio-field">
+                    <label>Background</label>
+                    <div className="studio-chips">
+                      {BACKGROUNDS.map((b) => (
+                        <button key={b.value} className={`studio-chip${design.background === b.value ? " on" : ""}`} onClick={() => patchDesign({ background: b.value })}>
+                          {b.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="studio-field">
+                    <label>Flow</label>
+                    <div className="studio-chips">
+                      {FLOWS.map((f) => (
+                        <button key={f.value} className={`studio-chip${design.flow === f.value ? " on" : ""}`} onClick={() => patchDesign({ flow: f.value })}>
+                          {f.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-end" }}>
+                    <div className="studio-field" style={{ flex: "1 1 180px", minWidth: 150 }}>
+                      <label>Font</label>
+                      <div className="select">
+                        <select value={design.font} onChange={(e) => patchDesign({ font: e.target.value as FontId })}>
+                          {Object.entries(FONTS).map(([id, f]) => (
+                            <option key={id} value={id}>{f.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="studio-field">
+                      <label>Accent</label>
+                      <input
+                        type="color"
+                        value={design.accent}
+                        onChange={(e) => patchDesign({ accent: e.target.value })}
+                        aria-label="Accent colour"
+                        style={{ width: 46, height: 36, border: "1px solid var(--border)", borderRadius: 9, background: "transparent", cursor: "pointer", padding: 3 }}
+                      />
+                    </div>
+                    <div className="studio-field">
+                      <label>Brand</label>
+                      <input
+                        type="color"
+                        value={design.brand}
+                        onChange={(e) => patchDesign({ brand: e.target.value })}
+                        aria-label="Brand colour"
+                        style={{ width: 46, height: 36, border: "1px solid var(--border)", borderRadius: 9, background: "transparent", cursor: "pointer", padding: 3 }}
+                      />
+                    </div>
+                  </div>
+
                   <div className="studio-field">
                     <label>Frames</label>
                     <div className="studio-chips">

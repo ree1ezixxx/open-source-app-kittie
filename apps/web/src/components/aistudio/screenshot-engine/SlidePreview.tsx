@@ -3,19 +3,21 @@
 // canvas (see GenerationResult's hidden layer), never this scaled wrapper.
 
 import { CANVAS } from "./constants";
-import type { Device, Slide, Theme } from "./types";
+import type { Device, DesignSpec, Slide, Theme } from "./types";
 import { SlideCanvas } from "./SlideCanvas";
 
 export function SlidePreview({
   slide,
   theme,
   device,
+  design,
   width,
   radius = 14,
 }: {
   slide: Slide;
   theme: Theme;
   device: Device;
+  design: DesignSpec;
   width: number;
   radius?: number;
 }) {
@@ -33,7 +35,7 @@ export function SlidePreview({
       }}
     >
       <div style={{ width: w, height: h, transform: `scale(${scale})`, transformOrigin: "top left" }}>
-        <SlideCanvas slide={slide} theme={theme} device={device} />
+        <SlideCanvas slide={slide} theme={theme} device={device} design={design} />
       </div>
     </div>
   );
