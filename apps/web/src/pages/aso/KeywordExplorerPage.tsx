@@ -12,7 +12,32 @@ import type { Theme } from "../../lib/theme";
 import "../../styles/aso.css";
 
 type Tab = "all" | "opp" | "lowdiff" | "pending";
-type Sort = "newest" | "opportunity" | "difficulty";
+type Sort =
+  | "newest"
+  | "opportunity"
+  | "most-difficult"
+  | "least-difficult"
+  | "most-popular"
+  | "least-popular";
+
+// Mirrors AppKittie's keyword-workspace sort menu.
+const SORT_OPTIONS: { value: Sort; label: string }[] = [
+  { value: "newest", label: "Newest" },
+  { value: "opportunity", label: "Best opportunity" },
+  { value: "most-difficult", label: "Most difficult" },
+  { value: "least-difficult", label: "Least difficult" },
+  { value: "most-popular", label: "Most popular" },
+  { value: "least-popular", label: "Least popular" },
+];
+
+const SORTERS: Record<Sort, ((a: KeywordDifficulty, b: KeywordDifficulty) => number) | null> = {
+  newest: null, // results are kept newest-first by insertion order
+  opportunity: (a, b) => b.opportunityScore - a.opportunityScore,
+  "most-difficult": (a, b) => b.difficulty - a.difficulty,
+  "least-difficult": (a, b) => a.difficulty - b.difficulty,
+  "most-popular": (a, b) => b.popularity - a.popularity,
+  "least-popular": (a, b) => a.popularity - b.popularity,
+};
 
 const keyOf = (kd: { store: Store; keyword: string }) => `${kd.store}:${kd.keyword.toLowerCase()}`;
 
@@ -194,8 +219,8 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
     else if (tab === "lowdiff") list = list.filter((r) => r.difficulty <= 30);
     else if (tab === "pending") list = [];
     const sorted = [...list];
-    if (sort === "opportunity") sorted.sort((a, b) => b.opportunityScore - a.opportunityScore);
-    else if (sort === "difficulty") sorted.sort((a, b) => a.difficulty - b.difficulty);
+    const sorter = SORTERS[sort];
+    if (sorter) sorted.sort(sorter);
     return sorted;
   }, [results, tab, sort]);
 
@@ -283,9 +308,9 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
           ))}
           <div className="select" style={{ marginLeft: "auto", alignSelf: "center" }}>
             <select value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
-              <option value="newest">Sort: Newest</option>
-              <option value="opportunity">Sort: Opportunity</option>
-              <option value="difficulty">Sort: Difficulty</option>
+              {SORT_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>Sort: {o.label}</option>
+              ))}
             </select>
             <IconChevron />
           </div>

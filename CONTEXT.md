@@ -96,7 +96,9 @@ _Avoid_: Crawler, scraper (in domain docs)
 
 **Popularity vs traffic score** — decoupled in v1: popularity from SERP volume signals (total reviews in top 10); traffic from leader avg reviews; difficulty stays separate.
 
-**Keyword storefront scope (v1)** — Apple and Google Play, **US only**. Other countries deferred.
+**Keyword storefront scope** — Apple and Google Play, **multi-market**. v1 was US-only; now 14 markets wired (target: AppKittie's 26). Each Keyword is scored per-country, with a cross-market view that flags untapped markets (high popularity + low difficulty).
+
+**Keyword popularity source** — derived from Apple search **autocomplete rank** (a free signal that reflects real search demand), NOT Apple's official popularity index (which is paid/scraped and has no free equivalent). Directionally accurate for ranking terms; not a calibrated volume figure. Architected pluggable so a real source can drop in later. See ADR.
 
 ## Example dialogue
 
