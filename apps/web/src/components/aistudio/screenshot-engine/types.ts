@@ -20,7 +20,7 @@ export type BackgroundStyle = "gradient" | "mesh" | "duotone" | "glow" | "solid"
 export type FlowStrategy = "default" | "hero-split" | "alternating-split";
 
 /** Curated display fonts (loaded in index.html). */
-export type FontId = "grotesk" | "inter" | "poppins" | "playfair" | "dmsans";
+export type FontId = "anton" | "grotesk" | "archivo" | "poppins" | "playfair" | "inter" | "dmsans";
 
 /** Resolved colours used by the renderer. */
 export type Palette = {

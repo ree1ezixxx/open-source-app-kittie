@@ -11,6 +11,7 @@ export function SlidePreview({
   theme,
   device,
   design,
+  appName,
   width,
   radius = 14,
 }: {
@@ -18,6 +19,7 @@ export function SlidePreview({
   theme: Theme;
   device: Device;
   design: DesignSpec;
+  appName: string;
   width: number;
   radius?: number;
 }) {
@@ -35,7 +37,7 @@ export function SlidePreview({
       }}
     >
       <div style={{ width: w, height: h, transform: `scale(${scale})`, transformOrigin: "top left" }}>
-        <SlideCanvas slide={slide} theme={theme} device={device} design={design} />
+        <SlideCanvas slide={slide} theme={theme} device={device} design={design} appName={appName} />
       </div>
     </div>
   );

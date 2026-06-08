@@ -119,7 +119,7 @@ type StyleDesign = {
 };
 
 const STYLE_DESIGN: Record<ScreenshotStyle, StyleDesign> = {
-  bold: { themeId: "dark-bold", accent: "#c6f24d", brand: "#8b5cf6", background: "mesh", font: "grotesk", flow: "hero-split" },
+  bold: { themeId: "dark-bold", accent: "#c6f24d", brand: "#8b5cf6", background: "mesh", font: "anton", flow: "hero-split" },
   minimal: { themeId: "clean-light", accent: "#5b7cfa", brand: "#0ea5e9", background: "gradient", font: "inter", flow: "default" },
   playful: { themeId: "ocean-fresh", accent: "#0284c7", brand: "#f59e0b", background: "mesh", font: "poppins", flow: "alternating-split" },
   premium: { themeId: "bloom-roast", accent: "#b8794a", brand: "#24352f", background: "duotone", font: "playfair", flow: "default" },

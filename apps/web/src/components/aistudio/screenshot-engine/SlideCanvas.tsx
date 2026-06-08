@@ -1,13 +1,12 @@
 // Lean one-slide renderer. Deterministic inline styles (clean html-to-image
-// export), a fixed set of auto-rotated layouts, designed backgrounds, and a
-// resolved brand palette. Always renders at full CANVAS pixel size; callers
-// scale a wrapper for previews.
+// export). Poster composition: app wordmark header, pill kicker, big multi-tonal
+// condensed headline, designed background, framed screenshot.
 
-import { CANVAS, MK_RATIO, IPAD_RATIO, phoneW, ipadW, fontFamily } from "./constants";
+import { CANVAS, MK_RATIO, IPAD_RATIO, phoneW, ipadW, fontFamily, displayFamily } from "./constants";
 import type { Device, DesignSpec, Palette, Slide, Theme } from "./types";
 import { Phone, IPad } from "./device-frames";
 import { SlideBackground } from "./backgrounds";
-import { shade, rgba } from "./color";
+import { shade, rgba, readableOn } from "./color";
 
 type Placement = {
   device?: { top: number; left: number; width: number; rotate?: number };
@@ -19,6 +18,7 @@ type Placement = {
     maxWidth: number;
     insetX?: number;
   };
+  header: boolean;
 };
 
 function placement(layout: Slide["layout"], w: number, h: number, device: Device): Placement {
@@ -26,34 +26,37 @@ function placement(layout: Slide["layout"], w: number, h: number, device: Device
   const devWidth = (device === "ipad" ? ipadW(w, h) : phoneW(w, h)) * w;
   const devHeight = devWidth / aspect;
   const left = (w - devWidth) / 2;
-  const centeredText = { align: "center" as const, maxWidth: w * 0.86 };
+  const centeredText = { align: "center" as const, maxWidth: w * 0.88 };
 
   switch (layout) {
     case "device-bottom":
       return {
         device: { top: h - devHeight, left, width: devWidth },
-        text: { top: h * 0.05, justify: "flex-start", ...centeredText },
+        text: { top: h * 0.1, justify: "flex-start", ...centeredText },
+        header: true,
       };
     case "device-top":
       return {
         device: { top: -devHeight * 0.12, left, width: devWidth },
         text: { bottom: h * 0.06, justify: "flex-end", ...centeredText },
+        header: false,
       };
     case "split": {
-      // Character-hero feel: caption upper-left, device offset to the right.
       const sw = devWidth * 0.82;
       return {
-        device: { top: h * 0.36, left: w - sw * 0.74, width: sw, rotate: 5 },
-        text: { top: h * 0.08, justify: "flex-start", align: "flex-start", maxWidth: w * 0.64, insetX: w * 0.085 },
+        device: { top: h * 0.38, left: w - sw * 0.74, width: sw, rotate: 5 },
+        text: { top: h * 0.12, justify: "flex-start", align: "flex-start", maxWidth: w * 0.64, insetX: w * 0.085 },
+        header: true,
       };
     }
     case "no-device":
-      return { text: { top: 0, justify: "center", ...centeredText } };
+      return { text: { top: 0, justify: "center", ...centeredText }, header: true };
     case "hero":
     default:
       return {
-        device: { top: h * 0.32, left, width: devWidth },
-        text: { top: h * 0.07, justify: "flex-start", ...centeredText },
+        device: { top: h * 0.34, left, width: devWidth },
+        text: { top: h * 0.11, justify: "flex-start", ...centeredText },
+        header: true,
       };
   }
 }
@@ -70,16 +73,33 @@ function buildPalette(theme: Theme, design: DesignSpec, inverted: boolean): Pale
   };
 }
 
+/** Split a headline so the last word/line can be emphasised in a tonal colour. */
+function splitHeadline(h: string): { main: string; emph: string } {
+  if (h.includes("\n")) {
+    const lines = h.split("\n");
+    const emph = lines.pop() ?? "";
+    return { main: lines.join("\n"), emph };
+  }
+  const words = h.split(" ");
+  if (words.length >= 2) {
+    const emph = words.pop() ?? "";
+    return { main: words.join(" ") + " ", emph };
+  }
+  return { main: "", emph: h };
+}
+
 export function SlideCanvas({
   slide,
   theme,
   device,
   design,
+  appName,
 }: {
   slide: Slide;
   theme: Theme;
   device: Device;
   design: DesignSpec;
+  appName: string;
 }) {
   const { w, h } = CANVAS[device];
   const pal = buildPalette(theme, design, slide.inverted);
@@ -87,9 +107,12 @@ export function SlideCanvas({
   const Frame = device === "ipad" ? IPad : Phone;
   const seed = slide.id.charCodeAt(slide.id.length - 1) || 0;
 
+  const condensed = design.font === "anton" || design.font === "archivo";
   const padX = p.text.insetX ?? w * 0.085;
-  const headlineSize = slide.layout === "no-device" ? w * 0.102 : w * 0.072;
+  const big = slide.layout === "no-device";
+  const headlineSize = condensed ? w * (big ? 0.142 : 0.118) : w * (big ? 0.104 : 0.08);
   const labelSize = w * 0.026;
+  const { main, emph } = splitHeadline(slide.headline);
 
   return (
     <div
@@ -104,7 +127,29 @@ export function SlideCanvas({
     >
       <SlideBackground background={design.background} palette={pal} seed={seed} />
 
-      {/* text block */}
+      {/* app wordmark header */}
+      {p.header && appName && (
+        <div
+          style={{
+            position: "absolute",
+            top: h * 0.038,
+            left: 0,
+            right: 0,
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            gap: w * 0.016,
+            zIndex: 6,
+          }}
+        >
+          <span style={{ width: w * 0.028, height: w * 0.028, borderRadius: w * 0.008, background: pal.accent, display: "inline-block" }} />
+          <span style={{ fontFamily: fontFamily(design.font), fontWeight: 700, fontSize: w * 0.033, color: pal.fg, letterSpacing: -w * 0.0004 }}>
+            {appName}
+          </span>
+        </div>
+      )}
+
+      {/* kicker pill + headline */}
       <div
         style={{
           position: "absolute",
@@ -112,7 +157,7 @@ export function SlideCanvas({
           right: 0,
           top: p.text.top,
           bottom: p.text.bottom,
-          height: slide.layout === "no-device" ? "100%" : undefined,
+          height: big ? "100%" : undefined,
           padding: `0 ${padX}px`,
           display: "flex",
           flexDirection: "column",
@@ -127,36 +172,38 @@ export function SlideCanvas({
             style={{
               fontSize: labelSize,
               fontWeight: 700,
-              letterSpacing: labelSize * 0.18,
+              letterSpacing: labelSize * 0.12,
               textTransform: "uppercase",
-              color: pal.accent,
-              marginBottom: headlineSize * 0.3,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: labelSize * 0.5,
+              color: readableOn(pal.accent),
+              background: pal.accent,
+              padding: `${labelSize * 0.46}px ${labelSize * 0.95}px`,
+              borderRadius: 999,
+              marginBottom: headlineSize * 0.24,
             }}
           >
-            <span style={{ width: labelSize * 1.4, height: 3, borderRadius: 2, background: pal.accent, display: "inline-block" }} />
             {slide.label}
           </div>
         )}
         <div
           style={{
+            fontFamily: displayFamily(design.font),
             fontSize: headlineSize,
-            fontWeight: 800,
-            lineHeight: 1.04,
-            letterSpacing: -headlineSize * 0.02,
+            fontWeight: condensed ? 400 : 800,
+            lineHeight: condensed ? 0.92 : 1.03,
+            letterSpacing: condensed ? -headlineSize * 0.005 : -headlineSize * 0.02,
+            textTransform: condensed ? "uppercase" : "none",
             color: pal.fg,
             whiteSpace: "pre-line",
             maxWidth: p.text.maxWidth,
-            textShadow: `0 2px 30px ${rgba(pal.base, 0.5)}`,
+            textShadow: `0 2px 34px ${rgba(pal.base, 0.45)}`,
           }}
         >
-          {slide.headline}
+          {main}
+          <span style={{ color: pal.accent }}>{emph}</span>
         </div>
       </div>
 
-      {/* device + backing glow (keeps the dark device readable on any base) */}
+      {/* device + backing glow */}
       {p.device && (
         <>
           <div

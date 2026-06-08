@@ -3,7 +3,7 @@
 // colours flow through. Overlay alphas stay modest so headline text keeps
 // contrast on both light and dark bases.
 
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import type { BackgroundStyle, Palette } from "./types";
 import { rgba, shade, mix, isLight } from "./color";
 
@@ -26,12 +26,24 @@ export function SlideBackground({
   const a = light ? 0.5 : 0.42;
   const flip = seed % 2 === 1;
 
+  // Edge vignette adds depth (stronger on dark bases). Sits above the treatment.
+  const vignette = (
+    <Layer
+      style={{
+        background: `radial-gradient(125% 115% at 50% 38%, transparent 52%, ${rgba("#000000", light ? 0.08 : 0.34)} 100%)`,
+        pointerEvents: "none",
+      }}
+    />
+  );
+
+  let treatment: ReactNode;
   switch (background) {
     case "solid":
-      return <Layer style={{ background: base }} />;
+      treatment = <Layer style={{ background: base }} />;
+      break;
 
     case "glow":
-      return (
+      treatment = (
         <>
           <Layer style={{ background: base }} />
           <Layer
@@ -41,18 +53,20 @@ export function SlideBackground({
           />
         </>
       );
+      break;
 
     case "gradient":
-      return (
+      treatment = (
         <Layer
           style={{
             background: `linear-gradient(${flip ? 200 : 155}deg, ${shade(base, light ? 0.04 : 0.08)} 0%, ${base} 45%, ${mix(base, accent, light ? 0.12 : 0.2)} 100%)`,
           }}
         />
       );
+      break;
 
     case "duotone":
-      return (
+      treatment = (
         <>
           <Layer style={{ background: base }} />
           <Layer
@@ -62,10 +76,11 @@ export function SlideBackground({
           />
         </>
       );
+      break;
 
     case "mesh":
     default:
-      return (
+      treatment = (
         <>
           <Layer style={{ background: base2 }} />
           <Layer
@@ -81,4 +96,11 @@ export function SlideBackground({
         </>
       );
   }
+
+  return (
+    <>
+      {treatment}
+      {vignette}
+    </>
+  );
 }

@@ -114,16 +114,24 @@ export function themeById(themeId: string | undefined): Theme {
 }
 
 // ---------- Fonts (loaded in index.html) ----------
-export const FONTS: Record<FontId, { label: string; family: string }> = {
-  grotesk: { label: "Space Grotesk", family: '"Space Grotesk", system-ui, sans-serif' },
-  inter: { label: "Inter", family: '"Inter", system-ui, sans-serif' },
-  poppins: { label: "Poppins", family: '"Poppins", system-ui, sans-serif' },
-  dmsans: { label: "DM Sans", family: '"DM Sans", system-ui, sans-serif' },
-  playfair: { label: "Playfair Display", family: '"Playfair Display", Georgia, serif' },
+// `display` is the heavy/condensed face used for poster headlines; `family` is
+// the face used for body/kickers. Most fonts share one; condensed faces differ.
+export const FONTS: Record<FontId, { label: string; family: string; display: string }> = {
+  anton: { label: "Anton", family: '"Archivo", system-ui, sans-serif', display: '"Anton", "Archivo Black", system-ui, sans-serif' },
+  grotesk: { label: "Space Grotesk", family: '"Space Grotesk", system-ui, sans-serif', display: '"Space Grotesk", system-ui, sans-serif' },
+  archivo: { label: "Archivo Black", family: '"Archivo", system-ui, sans-serif', display: '"Archivo Black", system-ui, sans-serif' },
+  poppins: { label: "Poppins", family: '"Poppins", system-ui, sans-serif', display: '"Poppins", system-ui, sans-serif' },
+  playfair: { label: "Playfair Display", family: '"Playfair Display", Georgia, serif', display: '"Playfair Display", Georgia, serif' },
+  inter: { label: "Inter", family: '"Inter", system-ui, sans-serif', display: '"Inter", system-ui, sans-serif' },
+  dmsans: { label: "DM Sans", family: '"DM Sans", system-ui, sans-serif', display: '"DM Sans", system-ui, sans-serif' },
 };
 
 export function fontFamily(id: FontId): string {
   return (FONTS[id] ?? FONTS.grotesk).family;
+}
+
+export function displayFamily(id: FontId): string {
+  return (FONTS[id] ?? FONTS.grotesk).display;
 }
 
 // ---------- Background styles (for the picker) ----------
