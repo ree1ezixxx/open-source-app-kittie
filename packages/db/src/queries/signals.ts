@@ -138,12 +138,69 @@ export async function listSnapshotContexts(
   db: Db,
   period: GrowthPeriod = "7d",
 ): Promise<SnapshotContext[]> {
-  const allApps = await db.select().from(apps);
-  const contexts: SnapshotContext[] = [];
+  // Bulk-load everything in a handful of queries, then assemble in memory.
+  // The per-app version (getSnapshotContext) fires ~6 queries each — at 100K
+  // apps that's ~600K queries and a ~30s cold build. This is the same data in 4.
+  const periodDays = GROWTH_PERIOD_DAYS[period] ?? 7;
+  const [allApps, allSnapshots, allIaps, allMetaAds] = await Promise.all([
+    db.select().from(apps),
+    db.select().from(appSnapshots).orderBy(appSnapshots.appId, appSnapshots.snapshotDate),
+    db.select({ appId: iaps.appId }).from(iaps),
+    db.select().from(metaAds),
+  ]);
 
+  // Group by appId (snapshots arrive pre-sorted by date).
+  const snapshotsByApp = new Map<string, AppSnapshot[]>();
+  for (const snap of allSnapshots) {
+    const list = snapshotsByApp.get(snap.appId);
+    if (list) list.push(snap);
+    else snapshotsByApp.set(snap.appId, [snap]);
+  }
+
+  const iapCountByApp = new Map<string, number>();
+  for (const { appId } of allIaps) iapCountByApp.set(appId, (iapCountByApp.get(appId) ?? 0) + 1);
+
+  const metaAdsByApp = new Map<string, typeof allMetaAds>();
+  for (const ad of allMetaAds) {
+    const list = metaAdsByApp.get(ad.appId);
+    if (list) list.push(ad);
+    else metaAdsByApp.set(ad.appId, [ad]);
+  }
+
+  // Category counts are derivable from the apps list — no per-app COUNT query.
+  const categoryCount = new Map<string, number>();
   for (const app of allApps) {
-    const ctx = await getSnapshotContext(db, app.id, period);
-    if (ctx) contexts.push(ctx);
+    if (app.category) categoryCount.set(app.category, (categoryCount.get(app.category) ?? 0) + 1);
+  }
+
+  const contexts: SnapshotContext[] = [];
+  for (const app of allApps) {
+    const snaps = snapshotsByApp.get(app.id);
+    const latest = snaps?.at(-1);
+    if (!latest) continue; // mirrors getSnapshotContext: no snapshot → skip
+
+    // Prior = last snapshot on/before (latest.date - periodDays). snaps is date-sorted.
+    const targetDate = daysBefore(latest.snapshotDate, periodDays);
+    let prior: AppSnapshot | null = null;
+    for (const snap of snaps!) {
+      if (snap.snapshotDate <= targetDate) prior = snap;
+      else break;
+    }
+
+    const metaRows = metaAdsByApp.get(app.id) ?? [];
+    const metaAdCountPrior = prior
+      ? metaRows.filter((ad) => ad.firstSeenAt && ad.firstSeenAt <= prior.createdAt).length
+      : null;
+
+    contexts.push({
+      app,
+      latest,
+      prior,
+      iapCount: iapCountByApp.get(app.id) ?? 0,
+      metaAdCount: metaRows.length,
+      metaAdCountPrior,
+      categoryAppCount: app.category ? (categoryCount.get(app.category) ?? 0) : 0,
+    });
   }
 
   return contexts;
