@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import type { AppSortField } from "@kittie/types";
 import { Topbar } from "../components/Topbar";
 import { AppTable } from "../components/AppTable";
 import { ExploreFilterRail } from "../components/ExploreFilterRail";
 import { ActiveFilters } from "../components/ActiveFilters";
+import { Pagination } from "../components/Pagination";
 import { useApps } from "../hooks/useApps";
 import { listApps } from "../lib/api";
 import {
@@ -81,11 +82,17 @@ export function ExplorePage({
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const { apps, total, loading, loadingMore, error, hasMore, loadMore, refresh } = useApps(apiParams);
+  const { apps, total, page, totalPages, pageSize, loading, error, hasNext, hasPrev, next, prev, refresh } =
+    useApps(apiParams);
 
   useEffect(() => {
     onTotal(total);
   }, [total, onTotal]);
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: 0 });
+  }, [page]);
 
   function handleSort(field: AppSortField) {
     if (filters.sort === field) patch({ order: filters.order === "desc" ? "asc" : "desc" });
@@ -174,12 +181,21 @@ export function ExplorePage({
               onClearSearch={() => setSearchInput("")}
               onClearAll={clearAll}
             />
-            <span className="explore-count">
-              {loading ? "Loading…" : `Showing ${apps.length.toLocaleString()} of ${total.toLocaleString()}`}
-            </span>
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              total={total}
+              count={apps.length}
+              pageSize={pageSize}
+              loading={loading}
+              hasPrev={hasPrev}
+              hasNext={hasNext}
+              onPrev={prev}
+              onNext={next}
+            />
           </div>
 
-          <div className="table-scroll">
+          <div className="table-scroll" ref={scrollRef}>
             {error ? (
               <div className="center-state">
                 <IconSearch />
@@ -206,11 +222,20 @@ export function ExplorePage({
                   onSort={handleSort}
                   onSelect={(id) => navigate(`/apps/${encodeURIComponent(id)}`)}
                 />
-                {hasMore && !loading && (
-                  <div className="load-more-wrap">
-                    <button className="btn" onClick={loadMore} disabled={loadingMore}>
-                      {loadingMore ? "Loading…" : "Load more"}
-                    </button>
+                {total > pageSize && (
+                  <div className="pager-bottom">
+                    <Pagination
+                      page={page}
+                      totalPages={totalPages}
+                      total={total}
+                      count={apps.length}
+                      pageSize={pageSize}
+                      loading={loading}
+                      hasPrev={hasPrev}
+                      hasNext={hasNext}
+                      onPrev={prev}
+                      onNext={next}
+                    />
                   </div>
                 )}
               </>
