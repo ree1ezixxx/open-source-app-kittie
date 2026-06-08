@@ -1,24 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import type {
-  AppSearchParams,
-  AppSortField,
-  GrowthPeriod,
-  SortOrder,
-  Store,
-} from "@kittie/types";
+import type { AppSortField } from "@kittie/types";
 import { Topbar } from "../components/Topbar";
 import { AppTable } from "../components/AppTable";
+import { ExploreFilterRail } from "../components/ExploreFilterRail";
+import { ActiveFilters } from "../components/ActiveFilters";
 import { useApps } from "../hooks/useApps";
 import { listApps } from "../lib/api";
+import {
+  activeChips,
+  EMPTY_FILTERS,
+  parseFilters,
+  toApiParams,
+  writeFilters,
+  type Chip,
+  type ExploreFilters,
+} from "../lib/exploreFilters";
 import type { Theme } from "../lib/theme";
 import { IconSearch } from "../icons";
-
-const VIEW_META: Record<string, { title: string; subtitle: string }> = {
-  database: { title: "Explore Apps", subtitle: "Search and filter the app database" },
-  trending: { title: "Trending", subtitle: "Apps with the strongest momentum" },
-  rising: { title: "Rising", subtitle: "Fast-growing newcomers" },
-};
 
 export function ExplorePage({
   theme,
@@ -31,46 +30,35 @@ export function ExplorePage({
 }) {
   const [sp, setSp] = useSearchParams();
   const navigate = useNavigate();
+  const spStr = sp.toString();
 
-  const view = sp.get("view") || "database";
-  const source = (sp.get("source") as Store | null) || undefined;
-  const category = sp.get("category") || "";
-  const sortBy = (sp.get("sort") as AppSortField | null) || "revenue";
-  const sortOrder = (sp.get("order") as SortOrder | null) || "desc";
-  const minRevenue = sp.get("minrev") ? Number(sp.get("minrev")) : undefined;
-  const maxRating = sp.get("maxrating") ? Number(sp.get("maxrating")) : undefined;
-  const growthPeriod = (sp.get("period") as GrowthPeriod | null) || "7d";
-  const qParam = sp.get("q") || "";
+  const filters = useMemo<ExploreFilters>(() => parseFilters(sp), [spStr]);
+  const apiParams = useMemo(() => toApiParams(filters), [spStr]);
 
-  const [searchInput, setSearchInput] = useState(qParam);
+  const [searchInput, setSearchInput] = useState(filters.q);
   const [categories, setCategories] = useState<string[]>([]);
 
-  // filter changes replace history (no back-button spam); only detail nav pushes
-  function update(mut: (p: URLSearchParams) => void) {
-    const next = new URLSearchParams(sp);
-    mut(next);
-    setSp(next, { replace: true });
+  // apply a partial filter change → URL (replace, so filter tweaks don't spam history).
+  // functional updater reads the *latest* params, so rapid successive clicks compose
+  // instead of clobbering each other.
+  function patch(p: Partial<ExploreFilters>) {
+    setSp((prev) => writeFilters({ ...parseFilters(prev), ...p }), { replace: true });
   }
 
-  // debounce search input → q param
+  // debounce search input → q
   useEffect(() => {
     const t = setTimeout(() => {
-      if (searchInput.trim() !== qParam) {
-        update((p) => {
-          if (searchInput.trim()) p.set("q", searchInput.trim());
-          else p.delete("q");
-        });
-      }
+      if (searchInput.trim() !== filters.q) patch({ q: searchInput.trim() });
     }, 280);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchInput]);
 
-  // keep input in sync if q changes externally (e.g. back navigation)
+  // keep input in sync if q changes externally (chip clear, back nav)
   useEffect(() => {
-    setSearchInput(qParam);
+    setSearchInput(filters.q);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [qParam]);
+  }, [filters.q]);
 
   useEffect(() => {
     listApps({ limit: 100 })
@@ -93,155 +81,142 @@ export function ExplorePage({
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const effectiveSort: AppSortField =
-    view === "trending" ? "trending" : view === "rising" ? "growth" : sortBy;
-
-  const params = useMemo<AppSearchParams>(
-    () => ({
-      search: qParam || undefined,
-      source,
-      categories: category || undefined,
-      sortBy: effectiveSort,
-      sortOrder,
-      minRevenue,
-      maxRating,
-      growthPeriod,
-      growthType: view === "rising" ? "positive" : undefined,
-    }),
-    [qParam, source, category, effectiveSort, sortOrder, minRevenue, maxRating, growthPeriod, view],
-  );
-
-  const { apps, total, loading, loadingMore, error, hasMore, loadMore, refresh } = useApps(params);
+  const { apps, total, loading, loadingMore, error, hasMore, loadMore, refresh } = useApps(apiParams);
 
   useEffect(() => {
     onTotal(total);
   }, [total, onTotal]);
 
   function handleSort(field: AppSortField) {
-    update((p) => {
-      if (view !== "database") p.delete("view");
-      if (sortBy === field && view === "database") {
-        p.set("order", sortOrder === "desc" ? "asc" : "desc");
-      } else {
-        p.set("sort", field);
-        p.set("order", "desc");
-      }
-    });
+    if (filters.sort === field) patch({ order: filters.order === "desc" ? "asc" : "desc" });
+    else patch({ sort: field, order: "desc" });
   }
 
-  function handleExport() {
+  function clearFilters() {
+    setSp((prev) => writeFilters({ ...EMPTY_FILTERS, q: parseFilters(prev).q }), { replace: true });
+  }
+
+  function clearAll() {
+    setSearchInput("");
+    setSp(new URLSearchParams(), { replace: true });
+  }
+
+  function clearChip(chip: Chip) {
+    patch(chip.clear);
+  }
+
+  function exportRows(format: "csv" | "json") {
     if (apps.length === 0) return;
-    const cols: [string, (a: (typeof apps)[number]) => string | number][] = [
-      ["Title", (a) => a.title],
-      ["Developer", (a) => a.developer],
-      ["Store", (a) => a.store],
-      ["Category", (a) => a.category ?? ""],
-      ["Rating", (a) => a.rating ?? ""],
-      ["Reviews", (a) => a.reviewCount],
-      ["Downloads30d", (a) => a.downloadsEstimate30d ?? ""],
-      ["Revenue30d", (a) => a.revenueEstimate30d ?? ""],
-      ["GrowthScore", (a) => a.growthScore ?? ""],
-      ["Released", (a) => a.releasedAt ?? ""],
-      ["Updated", (a) => a.updatedAt ?? ""],
-    ];
-    const esc = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
-    const rows = [
-      cols.map((c) => c[0]).join(","),
-      ...apps.map((a) => cols.map((c) => esc(c[1](a))).join(",")),
-    ];
-    const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8" });
+    let blob: Blob;
+    if (format === "json") {
+      blob = new Blob([JSON.stringify(apps, null, 2)], { type: "application/json;charset=utf-8" });
+    } else {
+      const cols: [string, (a: (typeof apps)[number]) => string | number][] = [
+        ["Title", (a) => a.title],
+        ["Developer", (a) => a.developer],
+        ["Store", (a) => a.store],
+        ["Category", (a) => a.category ?? ""],
+        ["Rating", (a) => a.rating ?? ""],
+        ["Reviews", (a) => a.reviewCount],
+        ["Downloads30d", (a) => a.downloadsEstimate30d ?? ""],
+        ["Revenue30d", (a) => a.revenueEstimate30d ?? ""],
+        ["GrowthScore", (a) => a.growthScore ?? ""],
+        ["Released", (a) => a.releasedAt ?? ""],
+        ["Updated", (a) => a.updatedAt ?? ""],
+      ];
+      const esc = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
+      const rows = [
+        cols.map((c) => c[0]).join(","),
+        ...apps.map((a) => cols.map((c) => esc(c[1](a))).join(",")),
+      ];
+      blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8" });
+    }
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `kittie-${view}-export.csv`;
+    link.download = `kittie-explore-export.${format}`;
     link.click();
     URL.revokeObjectURL(url);
   }
 
-  const meta = VIEW_META[view] ?? VIEW_META.database!;
+  const chips = activeChips(filters);
 
   return (
     <main className="main">
       <Topbar
-        title={meta.title}
-        subtitle={meta.subtitle}
+        title="Explore Apps"
+        subtitle="Search and filter the app database"
         total={total}
-        shown={apps.length}
         loading={loading}
         theme={theme}
         onToggleTheme={onToggleTheme}
         search={searchInput}
         onSearch={setSearchInput}
-        source={source}
-        onSource={(s) => update((p) => (s ? p.set("source", s) : p.delete("source")))}
-        category={category}
-        categories={categories}
-        onCategory={(c) => update((p) => (c ? p.set("category", c) : p.delete("category")))}
-        sortBy={effectiveSort}
-        onSortBy={(s) =>
-          update((p) => {
-            p.delete("view");
-            p.set("sort", s);
-          })
-        }
-        minRevenue={minRevenue}
-        onMinRevenue={(v) =>
-          update((p) => (v != null ? p.set("minrev", String(v)) : p.delete("minrev")))
-        }
-        maxRating={maxRating}
-        onMaxRating={(v) =>
-          update((p) => (v != null ? p.set("maxrating", String(v)) : p.delete("maxrating")))
-        }
-        onLowHangingFruit={() =>
-          update((p) => {
-            p.delete("view");
-            // $25k floor on the current (compressed) seed estimates; bump to 50_000
-            // once real revenue data lands — see Topbar tooltip.
-            p.set("minrev", "25000");
-            p.set("maxrating", "3.5");
-            p.set("sort", "rating");
-            p.set("order", "asc");
-          })
-        }
-        growthPeriod={growthPeriod}
-        onGrowthPeriod={(pp) => update((p) => p.set("period", pp))}
         onRefresh={refresh}
-        onExport={handleExport}
+        onExportCsv={() => exportRows("csv")}
+        onExportJson={() => exportRows("json")}
       />
 
-      <div className="table-scroll">
-        {error ? (
-          <div className="center-state">
-            <IconSearch />
-            <div className="title">Couldn’t load apps</div>
-            <div className="sub">{error}. Make sure the API is running on port 3007.</div>
-            <button className="btn" onClick={refresh}>Retry</button>
-          </div>
-        ) : !loading && apps.length === 0 ? (
-          <div className="center-state">
-            <IconSearch />
-            <div className="title">No apps match these filters</div>
-            <div className="sub">Try clearing the search or switching stores.</div>
-          </div>
-        ) : (
-          <>
-            <AppTable
-              apps={apps}
-              loading={loading}
-              sortBy={effectiveSort}
-              sortOrder={sortOrder}
-              onSort={handleSort}
-              onSelect={(id) => navigate(`/apps/${encodeURIComponent(id)}`)}
+      <div className="rail-layout">
+        <ExploreFilterRail
+          filters={filters}
+          categories={categories}
+          onPatch={patch}
+          onClear={clearFilters}
+        />
+
+        <div className="explore-main">
+          <div className="explore-bar">
+            <ActiveFilters
+              chips={chips}
+              query={filters.q}
+              onClearChip={clearChip}
+              onClearSearch={() => setSearchInput("")}
+              onClearAll={clearAll}
             />
-            {hasMore && !loading && (
-              <div className="load-more-wrap">
-                <button className="btn" onClick={loadMore} disabled={loadingMore}>
-                  {loadingMore ? "Loading…" : "Load more"}
-                </button>
+            <span className="explore-count">
+              {loading ? "Loading…" : `Showing ${apps.length.toLocaleString()} of ${total.toLocaleString()}`}
+            </span>
+          </div>
+
+          <div className="table-scroll">
+            {error ? (
+              <div className="center-state">
+                <IconSearch />
+                <div className="title">Couldn’t load apps</div>
+                <div className="sub">{error}. Make sure the API is running on port 3007.</div>
+                <button className="btn" onClick={refresh}>Retry</button>
               </div>
+            ) : !loading && apps.length === 0 ? (
+              <div className="center-state">
+                <IconSearch />
+                <div className="title">No apps match these filters</div>
+                <div className="sub">Try widening a range or clearing a filter from the rail.</div>
+                {chips.length > 0 && (
+                  <button className="btn" onClick={clearFilters}>Clear filters</button>
+                )}
+              </div>
+            ) : (
+              <>
+                <AppTable
+                  apps={apps}
+                  loading={loading}
+                  sortBy={filters.sort}
+                  sortOrder={filters.order}
+                  onSort={handleSort}
+                  onSelect={(id) => navigate(`/apps/${encodeURIComponent(id)}`)}
+                />
+                {hasMore && !loading && (
+                  <div className="load-more-wrap">
+                    <button className="btn" onClick={loadMore} disabled={loadingMore}>
+                      {loadingMore ? "Loading…" : "Load more"}
+                    </button>
+                  </div>
+                )}
+              </>
             )}
-          </>
-        )}
+          </div>
+        </div>
       </div>
     </main>
   );

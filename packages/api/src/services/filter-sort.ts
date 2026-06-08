@@ -45,6 +45,17 @@ export function matchesSearch(row: ScoredAppRow, params: AppSearchParams): boole
   if (params.minReviews != null && item.reviewCount < params.minReviews) return false;
   if (params.maxReviews != null && item.reviewCount > params.maxReviews) return false;
 
+  // Time windows — releasedAfter/updatedAfter are epoch *seconds* (the UI sends days→epoch).
+  // releasedAt/updatedAt are ISO strings; compare in seconds. A missing date is excluded.
+  if (params.releasedAfter != null) {
+    const released = item.releasedAt ? Math.floor(new Date(item.releasedAt).getTime() / 1000) : null;
+    if (released == null || released < params.releasedAfter) return false;
+  }
+  if (params.updatedAfter != null) {
+    const updated = item.updatedAt ? Math.floor(new Date(item.updatedAt).getTime() / 1000) : null;
+    if (updated == null || updated < params.updatedAfter) return false;
+  }
+
   if (params.minGrowth != null && (item.growthScore ?? 0) < params.minGrowth) return false;
   if (params.maxGrowth != null && (item.growthScore ?? 0) > params.maxGrowth) return false;
 
