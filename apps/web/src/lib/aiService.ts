@@ -1,28 +1,29 @@
 /**
  * aiService — the single typed contract the AI Studio surfaces consume.
  *
- * These features are NET-NEW: no backend exists yet. Every method below is wired
- * to a deterministic, offline MOCK so the UI is fully clickable today. The two
- * real integrations are flagged in AI_INTEGRATION_POINTS for Rhodri to wire later;
- * swapping `aiService` from `mockAiService` to a real impl is the only change the
- * pages need.
+ * Hot Ideas remains a deterministic offline MOCK (flagged in AI_INTEGRATION_POINTS).
+ *
+ * Screenshot generation is now REAL on the render+export side: it produces
+ * framed, store-spec slides rendered by the screenshot-engine (ported from
+ * ParthJadhav/app-store-screenshots, MIT) and exported as exact App Store PNGs.
+ * The remaining AI gap is the *art direction* (auto-choosing layout/copy/theme),
+ * which today uses a deterministic style→theme mapping rather than a model.
  */
 import { queryIdeas, type IdeasPage, type IdeasQuery } from "./api/ideas";
+import {
+  themeById,
+  type Device,
+  type Slide,
+  type SlideLayout,
+} from "../components/aistudio/screenshot-engine";
 
 /* ============================================================ Types */
 
 export interface UploadedImage {
   id: string;
   name: string;
-  /** base64 data URL for preview + (mock) source frame. */
+  /** base64 data URL — used directly as the source frame inside the device. */
   dataUrl: string;
-}
-
-export interface GeneratedShot {
-  id: string;
-  /** data URL of the generated App-Store visual (mock = composed SVG). */
-  imageUrl: string;
-  headline: string;
 }
 
 export type JobStatus = "done" | "error";
@@ -47,9 +48,13 @@ export interface ScreenshotGeneration {
   appId: string | null;
   appName: string;
   style: ScreenshotStyle;
+  /** Target device the slides are sized for. */
+  device: Device;
+  /** Theme id used by the engine (resolve with themeById). */
+  themeId: string;
   createdAt: string; // ISO
   status: JobStatus;
-  shots: GeneratedShot[];
+  slides: Slide[];
 }
 
 export interface AiService {
@@ -61,14 +66,14 @@ export interface AiService {
 
 export const AI_SERVICE_MODE: "mock" | "live" = "mock";
 
-/** The real integrations Rhodri needs to wire. Surfaced in-UI as honest notices. */
+/** The real integrations Rhodri may still wire. Surfaced in-UI as honest notices. */
 export const AI_INTEGRATION_POINTS = [
   {
-    id: "screenshot-generation",
+    id: "screenshot-art-direction",
     method: "generateScreenshots",
-    title: "App-Store screenshot generation",
+    title: "Screenshot art-direction model",
     needs:
-      "An image-generation model (e.g. Gemini / DALL·E / SDXL) plus a layout engine that composes headline + device frame into store-spec visuals. Mock returns SVG posters.",
+      "Rendering + store-spec PNG export are REAL (screenshot-engine). What's still deterministic is the art direction — an LLM/vision model could pick layout, headline copy, theme and per-slide screenshot ordering from the app's listing instead of the current style→theme mapping.",
   },
   {
     id: "ideas-pipeline",
@@ -83,96 +88,86 @@ let warned = false;
 function flagMockOnce(method: string) {
   if (warned || typeof console === "undefined") return;
   warned = true;
-  console.info(
-    `[aiService] running in MOCK mode (${method}). Real integrations to wire:`,
-    AI_INTEGRATION_POINTS.map((p) => p.method),
-  );
+  console.info(`[aiService] ${method}: ideas are MOCK; screenshot render+export are live.`);
 }
 
-/* ============================================================ Mock impl */
+/* ============================================================ Art direction (deterministic) */
 
 const HEADLINES: Record<ScreenshotStyle, string[]> = {
-  bold: ["Built to win", "Your edge, daily", "Move faster", "No more guesswork", "Results that compound"],
-  minimal: ["Just the essentials", "Clarity, by default", "Less app, more done", "Quiet by design", "One clean view"],
-  playful: ["Make it fun", "Tap into your streak", "Little wins, big days", "You've got this", "Progress feels good"],
-  premium: ["Crafted for you", "The pro standard", "Every detail considered", "Worth the upgrade", "Designed to last"],
+  bold: ["Built to win", "Your edge, daily", "Move faster", "No more guesswork", "Results that compound", "Own your day"],
+  minimal: ["Just the essentials", "Clarity, by default", "Less app,\nmore done", "Quiet by design", "One clean view", "Calm, on purpose"],
+  playful: ["Make it fun", "Tap into\nyour streak", "Little wins,\nbig days", "You've got this", "Progress feels good", "Keep the chain alive"],
+  premium: ["Crafted for you", "The pro standard", "Every detail\nconsidered", "Worth the upgrade", "Designed to last", "Quietly powerful"],
 };
 
-const STYLE_PALETTE: Record<ScreenshotStyle, [string, string, string]> = {
-  // [bg-top, bg-bottom, accent]
-  bold: ["#0b1f12", "#08120b", "#c6f24d"],
-  minimal: ["#14141a", "#0c0c10", "#9aa7ff"],
-  playful: ["#231233", "#120a1f", "#ff8fcf"],
-  premium: ["#1a1410", "#0d0a08", "#e8c887"],
+const LABELS: Record<ScreenshotStyle, string[]> = {
+  bold: ["Performance", "Momentum", "Focus", "Results", "Edge", "Daily"],
+  minimal: ["Simple", "Clean", "Focus", "Calm", "Clear", "Essential"],
+  playful: ["Streaks", "Wins", "Fun", "Habits", "Progress", "Daily"],
+  premium: ["Pro", "Crafted", "Detail", "Premium", "Quality", "Upgrade"],
 };
 
-function esc(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
+const STYLE_THEME: Record<ScreenshotStyle, string> = {
+  bold: "dark-bold",
+  minimal: "clean-light",
+  playful: "ocean-fresh",
+  premium: "bloom-roast",
+};
 
-/** Compose a 9:16 App-Store-style poster as an inline SVG data URL (no network). */
-function poster(headline: string, style: ScreenshotStyle, source: UploadedImage | undefined, seed: number): string {
-  const [top, bottom, accent] = STYLE_PALETTE[style];
-  const W = 600;
-  const H = 1067;
-  // Faux device screen: real upload if present, else an abstract UI mock.
-  const screen = source
-    ? `<image href="${source.dataUrl}" x="90" y="360" width="420" height="620" preserveAspectRatio="xMidYMid slice" clip-path="url(#round)"/>`
-    : `<g clip-path="url(#round)">
-         <rect x="90" y="360" width="420" height="620" fill="#0c0c0f"/>
-         <rect x="120" y="400" width="360" height="44" rx="10" fill="${accent}" opacity="0.9"/>
-         <rect x="120" y="470" width="240" height="20" rx="6" fill="#ffffff" opacity="0.18"/>
-         <rect x="120" y="505" width="300" height="20" rx="6" fill="#ffffff" opacity="0.12"/>
-         <rect x="120" y="560" width="360" height="120" rx="16" fill="#ffffff" opacity="0.05"/>
-         <rect x="120" y="700" width="360" height="120" rx="16" fill="#ffffff" opacity="0.05"/>
-         <rect x="120" y="900" width="360" height="48" rx="12" fill="${accent}" opacity="0.85"/>
-       </g>`;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
-    <defs>
-      <linearGradient id="bg${seed}" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="${top}"/><stop offset="1" stop-color="${bottom}"/>
-      </linearGradient>
-      <clipPath id="round"><rect x="90" y="360" width="420" height="620" rx="34"/></clipPath>
-    </defs>
-    <rect width="${W}" height="${H}" fill="url(#bg${seed})"/>
-    <circle cx="${seed % 2 ? 120 : 480}" cy="180" r="220" fill="${accent}" opacity="0.10"/>
-    <text x="${W / 2}" y="170" text-anchor="middle" fill="#ffffff" font-family="-apple-system, Inter, sans-serif" font-size="48" font-weight="800" letter-spacing="-1.5">${esc(headline)}</text>
-    <rect x="${W / 2 - 60}" y="210" width="120" height="6" rx="3" fill="${accent}"/>
-    <rect x="90" y="350" width="420" height="640" rx="44" fill="none" stroke="${accent}" stroke-opacity="0.35" stroke-width="3"/>
-    ${screen}
-    <text x="${W / 2}" y="1030" text-anchor="middle" fill="#ffffff" opacity="0.4" font-family="-apple-system, sans-serif" font-size="20" font-weight="600">${esc(style.toUpperCase())} · MOCK PREVIEW</text>
-  </svg>`;
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+// Auto-rotate layouts for visual rhythm: lead with a hero, alternate device
+// anchoring, and drop in a standalone-headline beat on longer decks.
+function pickLayout(i: number, count: number): SlideLayout {
+  if (i === 0) return "hero";
+  if (count >= 5 && i === count - 1) return "no-device";
+  return i % 2 === 1 ? "device-bottom" : "device-top";
 }
 
 function delay(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+/* ============================================================ Service */
+
 export const mockAiService: AiService = {
   async generateScreenshots(input) {
     flagMockOnce("generateScreenshots");
-    await delay(900 + Math.random() * 700); // simulate model latency
+    // Brief artificial pause so the generating state is visible; the work
+    // itself (slide spec assembly) is synchronous and real.
+    await delay(700);
+
     const style = input.style ?? "bold";
-    const count = Math.min(Math.max(input.count ?? 4, 1), 6);
-    const pool = HEADLINES[style];
-    const shots: GeneratedShot[] = Array.from({ length: count }, (_, i) => {
-      const headline = pool[i % pool.length] ?? "Built for you";
-      const source = input.sourceImages[i % Math.max(input.sourceImages.length, 1)];
+    const count = Math.min(Math.max(input.count ?? 4, 1), 8);
+    const device: Device = "iphone";
+    const themeId = STYLE_THEME[style];
+    const theme = themeById(themeId);
+    const headlines = HEADLINES[style];
+    const labels = LABELS[style];
+    const sources = input.sourceImages;
+    const stamp = Date.now();
+
+    const slides: Slide[] = Array.from({ length: count }, (_, i) => {
+      const layout = pickLayout(i, count);
+      const src = sources.length ? sources[i % sources.length]! : undefined;
       return {
-        id: `shot-${Date.now()}-${i}`,
-        headline,
-        imageUrl: poster(headline, style, source, i + 1),
+        id: `slide-${stamp}-${i}`,
+        layout,
+        label: labels[i % labels.length]!,
+        headline: headlines[i % headlines.length]!,
+        screenshot: layout === "no-device" ? "" : src?.dataUrl ?? "",
+        inverted: theme.id === "dark-bold" ? false : i % 3 === 2,
       };
     });
+
     return {
-      id: `gen-${Date.now()}`,
+      id: `gen-${stamp}`,
       appId: input.appId,
       appName: input.appName,
       style,
+      device,
+      themeId,
       createdAt: new Date().toISOString(),
       status: "done",
-      shots,
+      slides,
     };
   },
 

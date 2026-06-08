@@ -26,7 +26,7 @@ const STYLES: { value: ScreenshotStyle; label: string }[] = [
   { value: "premium", label: "Premium" },
 ];
 const FRAME_COUNTS = [3, 4, 5, 6];
-const SHOT_POINT = AI_INTEGRATION_POINTS.find((p) => p.id === "screenshot-generation")!;
+const SHOT_POINT = AI_INTEGRATION_POINTS.find((p) => p.id === "screenshot-art-direction")!;
 
 export function ScreenshotGeneratorPage() {
   const [newMode, setNewMode] = useState(false);
@@ -141,7 +141,7 @@ export function ScreenshotGeneratorPage() {
                 <GenerationResult generation={activeGen} />
                 <div className="notice">
                   <IconInfo />
-                  <span>Mock preview frames. Wire real image generation to ship store-ready PNGs — see the notice below the builder.</span>
+                  <span>Live, store-spec frames. Use “Download PNGs (zip)” for an exact App Store bundle (6.9″ → 6.1″).</span>
                 </div>
               </>
             ) : (
@@ -250,10 +250,10 @@ export function ScreenshotGeneratorPage() {
                   </div>
                 )}
 
-                <div className="notice warn">
+                <div className="notice">
                   <IconInfo />
                   <span>
-                    <strong>Mock mode.</strong> {SHOT_POINT.needs} Swap <code>aiService</code> to a live impl to ship real visuals.
+                    <strong>Render &amp; export are live</strong> — real device frames, exact App Store PNG sizes. {SHOT_POINT.needs}
                   </span>
                 </div>
               </>

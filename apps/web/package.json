@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@kittie/types": "workspace:*",
+    "html-to-image": "^1.11.13",
+    "jszip": "^3.10.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-router-dom": "^7.17.0"
