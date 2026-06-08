@@ -11,6 +11,7 @@ import type { Review } from "@kittie/types";
 import type { Theme } from "../../lib/theme";
 import {
   fetchReviews,
+  fetchReviewCounts,
   syncReviews,
   getMonitored,
   addMonitored,
@@ -62,6 +63,18 @@ export function ReviewsPage({ theme, onToggleTheme }: { theme: Theme; onToggleTh
   const [error, setError] = useState<string | null>(null);
   const [reloadTick, setReloadTick] = useState(0); // bumped to re-read from DB
   const [syncing, setSyncing] = useState(false);   // live pull in flight
+  const [indexed, setIndexed] = useState<Record<string, number>>({}); // real indexed counts per app
+
+  // Indexed review counts for the rail — what we actually hold, not the store's
+  // listing total. Refreshes when the monitored set or data changes.
+  useEffect(() => {
+    if (monitored.length === 0) { setIndexed({}); return; }
+    const ac = new AbortController();
+    fetchReviewCounts(monitored.map((a) => a.id), ac.signal)
+      .then((c) => !ac.signal.aborted && setIndexed(c))
+      .catch(() => { /* non-fatal — rail just falls back to a dash */ });
+    return () => ac.abort();
+  }, [monitoredKey, reloadTick]);
 
   // load reviews — one app, or the union of all monitored apps (rollup)
   useEffect(() => {
@@ -207,7 +220,9 @@ export function ReviewsPage({ theme, onToggleTheme }: { theme: Theme; onToggleTh
                     )}
                     <div className="rv-rail-meta">
                       <div className="rv-rail-name">{a.title}</div>
-                      <div className="rv-rail-sub">{formatCompact(a.reviewCount)} reviews</div>
+                      <div className="rv-rail-sub">
+                        {indexed[a.id] != null ? `${formatCompact(indexed[a.id]!)} indexed` : "…"}
+                      </div>
                     </div>
                   </button>
                   <button

@@ -21,6 +21,19 @@ export interface ReviewsResponse {
   meta: { source: string; stale: boolean };
 }
 
+/** Indexed review counts (what we actually hold) per app id. The rail shows
+    these instead of the store's inflated listing total. */
+export async function fetchReviewCounts(
+  ids: string[],
+  signal?: AbortSignal,
+): Promise<Record<string, number>> {
+  if (ids.length === 0) return {};
+  const res = await fetch(`${BASE}/reviews/counts?ids=${encodeURIComponent(ids.join(","))}`, { signal });
+  if (!res.ok) throw new Error(`Failed to load review counts (${res.status})`);
+  const json = (await res.json()) as { data: Record<string, number> };
+  return json.data;
+}
+
 export async function fetchReviews(
   appId: string,
   opts: { country?: string; limit?: number } = {},

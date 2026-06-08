@@ -1,4 +1,4 @@
-import { desc, eq, sql } from "drizzle-orm";
+import { desc, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "../client.js";
 import {
   appleSearchAds,
@@ -44,6 +44,26 @@ export async function listFreshSet(
     .from(reviews)
     .groupBy(reviews.appId)
     .orderBy(sql`max(${reviews.ingestedAt}) asc`);
+}
+
+/**
+ * Count of *indexed* reviews per app (what we actually hold), keyed by app id.
+ * Used by the monitoring rail so it shows real coverage, not the store's
+ * inflated listing total.
+ */
+export async function reviewCountsByApp(
+  db: Db,
+  ids: string[],
+): Promise<Record<string, number>> {
+  if (ids.length === 0) return {};
+  const rows = await db
+    .select({ appId: reviews.appId, n: sql<number>`count(*)` })
+    .from(reviews)
+    .where(inArray(reviews.appId, ids))
+    .groupBy(reviews.appId);
+  const out: Record<string, number> = {};
+  for (const r of rows) out[r.appId] = Number(r.n);
+  return out;
 }
 
 export async function appsWithAppleAds(db: Db): Promise<Set<string>> {
