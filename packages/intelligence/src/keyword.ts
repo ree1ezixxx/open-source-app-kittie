@@ -14,8 +14,12 @@ export function computeKeywordDifficulty(input: KeywordDifficultyInput): Keyword
   const reviewScore = Math.min(avgReviews / 50_000, 1) * 60;
   const difficulty = Math.round(countScore + reviewScore);
 
-  const popularity = Math.min(100, Math.round(difficulty * 0.7 + competingAppCount * 3));
-  const trafficScore = Math.round(popularity * 0.85);
+  const totalReviews = topApps.reduce((sum, a) => sum + a.reviewCount, 0);
+  const popularity = Math.min(
+    100,
+    Math.round(Math.min(totalReviews / 100_000, 1) * 70 + (competingAppCount / 10) * 30),
+  );
+  const trafficScore = Math.min(100, Math.round(Math.min(avgReviews / 30_000, 1) * 100));
 
   return {
     keyword: input.keyword,
@@ -24,7 +28,13 @@ export function computeKeywordDifficulty(input: KeywordDifficultyInput): Keyword
     popularity,
     difficulty,
     trafficScore,
+    opportunityScore: computeOpportunityScore(popularity, difficulty),
     competingAppCount,
     topApps,
   };
+}
+
+/** v1: no manual relevance term — max 70 before UI adds app-specific context. */
+export function computeOpportunityScore(popularity: number, difficulty: number): number {
+  return Math.round(popularity * 0.4 + (100 - difficulty) * 0.3);
 }

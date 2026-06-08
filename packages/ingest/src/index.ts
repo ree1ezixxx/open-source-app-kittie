@@ -4,3 +4,8 @@ export { fetchGoogleAppMetadata, fetchGoogleAppsMetadata, fetchGoogleCharts } fr
 export { runSeed } from "./jobs/seed.js";
 export { runSnapshot } from "./jobs/snapshot.js";
 export { upsertApp, upsertSnapshot, listTrackedApps } from "./db/apps.js";
+export { upsertReviews } from "./db/reviews.js";
+export { searchAppleKeyword, type StoreSearchResult } from "./apple/search.js";
+export { searchGoogleKeyword } from "./google/search.js";
+export { syncKeyword, getCachedKeyword, fetchKeywordRankings } from "./db/keywords.js";
+export { runKeywordSync } from "./jobs/keyword-sync.js";

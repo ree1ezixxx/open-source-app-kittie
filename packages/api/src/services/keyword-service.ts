@@ -1,55 +1,60 @@
-import { computeKeywordDifficulty } from "@kittie/intelligence";
+import {
+  countAppsForSuggestions,
+  findKeyword,
+  keywordRowToDifficulty,
+  listKeywordSuggestions,
+  type KeywordSuggestion,
+} from "@kittie/db";
+import { syncKeyword } from "@kittie/ingest";
 import type { KeywordDifficulty, Store } from "@kittie/types";
-import { MOCK_APPS } from "../mock/fixtures.js";
 
-const KEYWORD_FIXTURES: Record<string, KeywordDifficulty> = {
-  "focus timer": buildKeywordFixture("focus timer", "US", "apple"),
-  "budget app": buildKeywordFixture("budget app", "US", "apple"),
-  "photo editor": buildKeywordFixture("photo editor", "US", "google"),
-};
+import { getDb } from "../lib/db.js";
 
-function buildKeywordFixture(keyword: string, country: string, store: Store): KeywordDifficulty {
-  const ranked = MOCK_APPS.filter((a) => a.store === store)
-    .sort((a, b) => (a.signals.chartRank ?? 999) - (b.signals.chartRank ?? 999))
-    .slice(0, 10)
-    .map((a, i) => ({
-      title: a.title,
-      iconUrl: a.iconUrl,
-      reviewCount: a.reviewCount,
-      rating: a.rating,
-      rank: i + 1,
-    }));
+/** Re-fetch store rankings after this window. */
+const KEYWORD_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-  return computeKeywordDifficulty({ keyword, country, store, topRankedApps: ranked });
+function isStale(computedAt: Date): boolean {
+  return Date.now() - computedAt.getTime() > KEYWORD_TTL_MS;
 }
 
-export function getKeywordDifficulty(
+export async function getKeywordDifficulty(
   keyword: string,
   country: string,
   store: Store,
-): KeywordDifficulty {
-  const key = keyword.toLowerCase();
-  const cached = KEYWORD_FIXTURES[key];
-  if (cached && cached.country === country && cached.store === store) return cached;
+): Promise<KeywordDifficulty> {
+  const db = getDb();
+  const row = await findKeyword(db, keyword, country, store);
 
-  return computeKeywordDifficulty({
-    keyword,
-    country,
-    store,
-    topRankedApps: MOCK_APPS.filter((a) => a.store === store)
-      .slice(0, 5)
-      .map((a, i) => ({
-        title: a.title,
-        iconUrl: a.iconUrl,
-        reviewCount: a.reviewCount,
-        rating: a.rating,
-        rank: i + 1,
-      })),
-  });
+  const cached = row ? keywordRowToDifficulty(row) : null;
+
+  if (cached && row && !isStale(row.computedAt)) return cached;
+
+  try {
+    return await syncKeyword(db, keyword, country, store);
+  } catch (error) {
+    if (cached) return cached;
+    throw error;
+  }
 }
 
-export function batchKeywordDifficulty(
+export async function getKeywordSuggestions(
+  store?: Store,
+  limit = 20,
+): Promise<{ suggestions: KeywordSuggestion[]; appCount: number }> {
+  const db = getDb();
+  const [suggestions, appCount] = await Promise.all([
+    listKeywordSuggestions(db, { store, limit: Math.min(limit, 50) }),
+    countAppsForSuggestions(db, store),
+  ]);
+  return { suggestions, appCount };
+}
+
+export async function batchKeywordDifficulty(
   items: Array<{ keyword: string; country: string; store: Store }>,
-): KeywordDifficulty[] {
-  return items.slice(0, 10).map((item) => getKeywordDifficulty(item.keyword, item.country, item.store));
+): Promise<KeywordDifficulty[]> {
+  const results: KeywordDifficulty[] = [];
+  for (const item of items.slice(0, 10)) {
+    results.push(await getKeywordDifficulty(item.keyword, item.country, item.store));
+  }
+  return results.sort((a, b) => b.opportunityScore - a.opportunityScore);
 }
