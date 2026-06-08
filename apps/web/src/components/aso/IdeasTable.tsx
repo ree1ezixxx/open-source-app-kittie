@@ -84,6 +84,7 @@ export function IdeasTable({
   ideas,
   trackedKeys,
   onTrack,
+  onUntrack,
   onClear,
 }: {
   seed: string;
@@ -92,6 +93,7 @@ export function IdeasTable({
   ideas: KeywordDifficulty[];
   trackedKeys: Set<string>;
   onTrack: (kd: KeywordDifficulty) => void;
+  onUntrack?: (kd: KeywordDifficulty) => void;
   onClear?: () => void;
 }) {
   const [sort, setSort] = useState<SortKey>("opportunity");
@@ -240,7 +242,13 @@ export function IdeasTable({
                       <td><AppStack apps={kd.topApps} /></td>
                       <td className="kw-ideas-action">
                         {tracked ? (
-                          <span className="kw-ideas-tracked">Tracked</span>
+                          <button
+                            className="kw-ideas-tracked"
+                            onClick={() => onUntrack?.(kd)}
+                            title={onUntrack ? "Tracked — click to untrack" : "Tracked"}
+                          >
+                            Tracked
+                          </button>
                         ) : (
                           <button className="kw-ideas-track" onClick={() => onTrack(kd)} title="Track keyword">+</button>
                         )}

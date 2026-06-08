@@ -4,6 +4,7 @@ import type { Store } from "@kittie/types";
 import { IconApple, IconGooglePlay, IconRank, IconSpark, IconStar, IconUsers } from "../../icons";
 import { computeInsights, type KeywordDifficulty } from "../../lib/api/keywords";
 import { formatCompact } from "../../lib/format";
+import { flagOf } from "../../lib/markets";
 
 export function StorePill({ store }: { store: Store }) {
   return (
@@ -111,7 +112,21 @@ export function PendingCard({ keyword }: { keyword: string }) {
 
 /** Full keyword detail — insights + metrics + top ranking apps. Shared by both pages.
  *  Optional `children` render inside the same scroll container (e.g. the related-ideas table). */
-export function KeywordDetail({ kd, children }: { kd: KeywordDifficulty; children?: ReactNode }) {
+export function KeywordDetail({
+  kd,
+  children,
+  onRefresh,
+  refreshing,
+  tracked,
+  onToggleTrack,
+}: {
+  kd: KeywordDifficulty;
+  children?: ReactNode;
+  onRefresh?: () => void;
+  refreshing?: boolean;
+  tracked?: boolean;
+  onToggleTrack?: () => void;
+}) {
   const insights = computeInsights(kd);
   return (
     <div className="aso-detail-inner">
@@ -123,8 +138,22 @@ export function KeywordDetail({ kd, children }: { kd: KeywordDifficulty; childre
           </div>
         </div>
         <div className="spacer" />
+        {onToggleTrack && (
+          <button
+            className={`kw-ideas-tool ${tracked ? "" : "accent"}`}
+            onClick={onToggleTrack}
+            title={tracked ? "Stop tracking this keyword" : "Track this keyword"}
+          >
+            {tracked ? "✓ Tracked" : "+ Track"}
+          </button>
+        )}
+        {onRefresh && (
+          <button className="kw-ideas-tool" onClick={onRefresh} disabled={refreshing} title="Re-pull live metrics">
+            {refreshing ? "Refreshing…" : "↻ Refresh"}
+          </button>
+        )}
         <StorePill store={kd.store} />
-        <span className="flag" title="United States">🇺🇸</span>
+        <span className="flag" title={kd.country}>{flagOf(kd.country)}</span>
         <OpportunityBadge score={kd.opportunityScore} large />
       </div>
 

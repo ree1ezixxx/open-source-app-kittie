@@ -6,12 +6,22 @@ import { IconKey, IconLayers } from "../../components/aso/icons";
 import { KeywordCard, KeywordDetail, PendingCard } from "../../components/aso/KeywordBits";
 import { IdeasTable } from "../../components/aso/IdeasTable";
 import { GenerateModal, type GenState } from "../../components/aso/GenerateModal";
-import { compareKeywords, fetchRelated, fetchSuggestions, lookupKeyword, type KeywordDifficulty } from "../../lib/api/keywords";
+import {
+  compareKeywords,
+  fetchRelated,
+  fetchSuggestions,
+  fetchTracked,
+  lookupKeyword,
+  trackKeyword,
+  untrackKeyword,
+  type KeywordDifficulty,
+  type TrackedKeyword,
+} from "../../lib/api/keywords";
 import { MARKETS, MARKET_COUNT, market } from "../../lib/markets";
 import type { Theme } from "../../lib/theme";
 import "../../styles/aso.css";
 
-type Tab = "all" | "opp" | "lowdiff" | "pending";
+type Tab = "all" | "opp" | "lowdiff" | "tracked" | "pending";
 type Sort =
   | "newest"
   | "opportunity"
@@ -70,6 +80,9 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
   const [sort, setSort] = useState<Sort>("newest");
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [chips, setChips] = useState<string[]>([]);
+  // Durable shortlist, server-persisted — keyed by keyOf. See ADR 0003.
+  const [tracked, setTracked] = useState<Map<string, TrackedKeyword>>(new Map());
+  const [refreshing, setRefreshing] = useState(false);
   const mounted = useRef(true);
 
   useEffect(() => {
@@ -188,10 +201,99 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
     return () => { alive = false; };
   }, [store]);
 
-  const trackedKeys = useMemo(() => new Set(results.map(keyOf)), [results]);
+  // On mount, restore the durable tracked shortlist from the server (survives reload).
+  useEffect(() => {
+    let alive = true;
+    fetchTracked()
+      .then((list) => {
+        if (!alive) return;
+        setTracked(new Map(list.map((t) => [keyOf(t), t])));
+        const restored = list.map((t) => t.metrics).filter((m): m is KeywordDifficulty => m != null);
+        if (restored.length) {
+          setResults((prev) => {
+            const have = new Set(prev.map(keyOf));
+            return [...prev, ...restored.filter((r) => !have.has(keyOf(r)))];
+          });
+        }
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
 
+  const trackedKeys = useMemo(() => new Set(tracked.keys()), [tracked]);
+
+  // Track an idea: optimistic, persisted server-side; revert on failure.
   const trackIdea = useCallback((kd: KeywordDifficulty) => {
-    setResults((prev) => (prev.some((r) => keyOf(r) === keyOf(kd)) ? prev : [...prev, kd]));
+    const k = keyOf(kd);
+    setResults((prev) => (prev.some((r) => keyOf(r) === k) ? prev : [...prev, kd]));
+    setTracked((prev) => {
+      if (prev.has(k)) return prev;
+      const next = new Map(prev);
+      next.set(k, {
+        id: k, keywordId: `${kd.store}:${kd.country.toUpperCase()}:${kd.keyword.toLowerCase()}`,
+        keyword: kd.keyword, country: kd.country, store: kd.store,
+        note: null, trackedAt: new Date().toISOString(), metrics: kd,
+      });
+      return next;
+    });
+    void trackKeyword(kd.keyword, kd.store, kd.country).catch(() => {
+      if (mounted.current) setTracked((prev) => { const next = new Map(prev); next.delete(k); return next; });
+    });
+  }, []);
+
+  // Untrack: optimistic remove from the shortlist; revert on failure.
+  const untrackIdea = useCallback((kd: KeywordDifficulty) => {
+    const k = keyOf(kd);
+    let snapshot: TrackedKeyword | undefined;
+    setTracked((prev) => {
+      snapshot = prev.get(k);
+      const next = new Map(prev);
+      next.delete(k);
+      return next;
+    });
+    void untrackKeyword(kd.keyword, kd.store, kd.country).catch(() => {
+      if (mounted.current && snapshot) setTracked((prev) => new Map(prev).set(k, snapshot!));
+    });
+  }, []);
+
+  // Manual add: score + track a typed term without generating its idea set.
+  const trackTerm = useCallback(async (term: string, forStore: Store, forCountry: string) => {
+    setError(null);
+    try {
+      const entry = await trackKeyword(term, forStore, forCountry);
+      if (!entry || !mounted.current) return;
+      setTracked((prev) => new Map(prev).set(keyOf(entry), entry));
+      if (entry.metrics) {
+        const m = entry.metrics;
+        setResults((prev) => (prev.some((r) => keyOf(r) === keyOf(m)) ? prev : [m, ...prev]));
+        setSelectedKey(keyOf(m));
+      }
+      setTab("tracked");
+    } catch (e) {
+      if (mounted.current) setError(e instanceof Error ? e.message : "Track failed");
+    }
+  }, []);
+
+  // Refresh: bypass the cache TTL and re-pull live metrics for one keyword.
+  const refreshKeyword = useCallback(async (kd: KeywordDifficulty) => {
+    setRefreshing(true);
+    setError(null);
+    try {
+      const fresh = await lookupKeyword(kd.keyword, kd.store, kd.country, undefined, { refresh: true });
+      if (!mounted.current) return;
+      const k = keyOf(fresh);
+      setResults((prev) => prev.map((r) => (keyOf(r) === k ? fresh : r)));
+      setTracked((prev) => {
+        if (!prev.has(k)) return prev;
+        const next = new Map(prev);
+        next.set(k, { ...next.get(k)!, metrics: fresh });
+        return next;
+      });
+    } catch (e) {
+      if (mounted.current) setError(e instanceof Error ? e.message : "Refresh failed");
+    } finally {
+      if (mounted.current) setRefreshing(false);
+    }
   }, []);
 
   const clearIdeas = useCallback((seedKey: string) => {
@@ -208,21 +310,23 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
       all: results.length,
       opp: results.filter((r) => r.opportunityScore >= 45).length,
       lowdiff: results.filter((r) => r.difficulty <= 30).length,
+      tracked: results.filter((r) => trackedKeys.has(keyOf(r))).length,
       pending: pending.length,
     }),
-    [results, pending],
+    [results, pending, trackedKeys],
   );
 
   const visible = useMemo(() => {
     let list = results;
     if (tab === "opp") list = list.filter((r) => r.opportunityScore >= 45);
     else if (tab === "lowdiff") list = list.filter((r) => r.difficulty <= 30);
+    else if (tab === "tracked") list = list.filter((r) => trackedKeys.has(keyOf(r)));
     else if (tab === "pending") list = [];
     const sorted = [...list];
     const sorter = SORTERS[sort];
     if (sorter) sorted.sort(sorter);
     return sorted;
-  }, [results, tab, sort]);
+  }, [results, tab, sort, trackedKeys]);
 
   const showPending = tab === "all" || tab === "pending";
 
@@ -284,6 +388,15 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
               </select>
               <IconChevron />
             </div>
+            {parseTerms(input).length === 1 && (
+              <button
+                className="btn"
+                onClick={() => { const t = parseTerms(input)[0]!; void trackTerm(t, store, country); setInput(""); }}
+                title="Add straight to your tracked shortlist (no idea generation)"
+              >
+                + Track
+              </button>
+            )}
             <button className="btn btn-accent" onClick={submit} disabled={!input.trim()}>
               {parseTerms(input).length > 1 ? <><IconLayers /> Compare</> : <><IconSearch /> Explore</>}
             </button>
@@ -299,6 +412,7 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
             ["all", "All"],
             ["opp", "Opportunities"],
             ["lowdiff", "Low-diff"],
+            ["tracked", "Tracked"],
             ["pending", "Pending"],
           ] as [Tab, string][]).map(([id, label]) => (
             <button key={id} className={`aso-tab ${tab === id ? "on" : ""}`} onClick={() => setTab(id)}>
@@ -370,7 +484,15 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
           </div>
           <div className="aso-detail">
             {selected ? (
-              <KeywordDetail kd={selected}>
+              <KeywordDetail
+                kd={selected}
+                onRefresh={() => void refreshKeyword(selected)}
+                refreshing={refreshing}
+                tracked={trackedKeys.has(keyOf(selected))}
+                onToggleTrack={() =>
+                  trackedKeys.has(keyOf(selected)) ? untrackIdea(selected) : trackIdea(selected)
+                }
+              >
                 {selectedIdeas && (
                   <IdeasTable
                     seed={selected.keyword}
@@ -379,6 +501,7 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
                     ideas={selectedIdeas}
                     trackedKeys={trackedKeys}
                     onTrack={trackIdea}
+                    onUntrack={untrackIdea}
                     onClear={() => clearIdeas(keyOf(selected))}
                   />
                 )}

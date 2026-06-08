@@ -27,3 +27,10 @@ export {
   listKeywordSuggestions,
   type KeywordSuggestion,
 } from "./keyword-suggestions.js";
+export {
+  isKeywordTracked,
+  listTrackedKeywords,
+  trackKeyword,
+  untrackKeyword,
+  type TrackedKeywordEntry,
+} from "./tracked-keywords.js";

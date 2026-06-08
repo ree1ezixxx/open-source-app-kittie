@@ -3,7 +3,12 @@ import {
   findKeyword,
   keywordRowToDifficulty,
   listKeywordSuggestions,
+  listTrackedKeywords,
+  makeKeywordLookupId,
+  trackKeyword as dbTrackKeyword,
+  untrackKeyword as dbUntrackKeyword,
   type KeywordSuggestion,
+  type TrackedKeywordEntry,
 } from "@kittie/db";
 import { suggestRelatedKeywords, syncKeyword } from "@kittie/ingest";
 import type { KeywordDifficulty, Store } from "@kittie/types";
@@ -21,13 +26,14 @@ export async function getKeywordDifficulty(
   keyword: string,
   country: string,
   store: Store,
+  options: { forceRefresh?: boolean } = {},
 ): Promise<KeywordDifficulty> {
   const db = getDb();
   const row = await findKeyword(db, keyword, country, store);
 
   const cached = row ? keywordRowToDifficulty(row) : null;
 
-  if (cached && row && !isStale(row.computedAt)) return cached;
+  if (!options.forceRefresh && cached && row && !isStale(row.computedAt)) return cached;
 
   try {
     return await syncKeyword(db, keyword, country, store);
@@ -35,6 +41,36 @@ export async function getKeywordDifficulty(
     if (cached) return cached;
     throw error;
   }
+}
+
+/** The durable tracked-keyword shortlist with current metrics. */
+export async function listTracked(): Promise<TrackedKeywordEntry[]> {
+  return listTrackedKeywords(getDb());
+}
+
+/**
+ * Add a keyword to the shortlist. Scores it first (so the lookup row the FK
+ * points at exists and metrics are fresh), then tracks it. Returns the entry.
+ */
+export async function addTrackedKeyword(
+  keyword: string,
+  country: string,
+  store: Store,
+): Promise<TrackedKeywordEntry | null> {
+  const db = getDb();
+  await getKeywordDifficulty(keyword, country, store);
+  const keywordId = makeKeywordLookupId(store, country, keyword);
+  await dbTrackKeyword(db, keywordId);
+  const all = await listTrackedKeywords(db);
+  return all.find((e) => e.keywordId === keywordId) ?? null;
+}
+
+export async function removeTrackedKeyword(
+  keyword: string,
+  country: string,
+  store: Store,
+): Promise<void> {
+  await dbUntrackKeyword(getDb(), makeKeywordLookupId(store, country, keyword));
 }
 
 export async function getKeywordSuggestions(

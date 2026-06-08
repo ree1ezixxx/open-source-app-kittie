@@ -52,6 +52,14 @@ _Avoid_: Search, query (in domain docs)
 A Keyword proposed by the system for the user to run a Keyword lookup on. Sources: (1) a specific App's metadata and niche, or (2) patterns across the tracked App database (category phrases, recurring title terms).
 _Avoid_: Recommendation, auto-keyword
 
+**Competing app count**:
+The true depth of the field ranking for a Keyword — how many apps the store returns for the term (e.g. ~170 for "learn chinese"), sourced from the search `resultCount`, not the handful displayed. Difficulty is still judged on the top 10; this number is the honest size of the competition.
+_Avoid_: Ranking apps / results shown (those mean the displayed top 10, a different, smaller number)
+
+**Tracked keyword**:
+A Keyword the user has explicitly added to a durable shortlist to monitor. Distinct from a Keyword lookup (an ephemeral, cache-backed scored result): a Tracked keyword persists independently of the lookup cache — it is never cache-evicted — and is the anchor a future rank-history attaches to. Lives in its own store, referencing the lookup row for current metrics.
+_Avoid_: Saved search, favorite, watchlist (in schema names — the table is `tracked_keywords`)
+
 **Keyword difficulty**:
 A modeled 0–100 score for how hard it is to rank in the top results for a Keyword, based on the strength of Apps currently ranking there — not an official store metric.
 _Avoid_: Competition score (in schema names)

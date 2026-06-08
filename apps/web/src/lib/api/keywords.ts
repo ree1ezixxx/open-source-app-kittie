@@ -51,12 +51,57 @@ export async function lookupKeyword(
   store: Store,
   country = "US",
   signal?: AbortSignal,
+  opts: { refresh?: boolean } = {},
 ): Promise<KeywordDifficulty> {
   const q = new URLSearchParams({ keyword, country, store });
+  if (opts.refresh) q.set("refresh", "true");
   const res = await fetch(`${BASE}/keywords/difficulty?${q}`, { signal });
   if (!res.ok) throw new Error(`Lookup failed (${res.status})`);
   const body = (await res.json()) as { data: KeywordDifficulty };
   return normalize(body.data);
+}
+
+// ── Tracked shortlist (durable, server-persisted — survives reload). ADR 0003 ──
+
+export interface TrackedKeyword {
+  id: string;
+  keywordId: string; // stable deep-link identity (store:COUNTRY:keyword)
+  keyword: string;
+  country: string;
+  store: Store;
+  note: string | null;
+  trackedAt: string;
+  metrics: KeywordDifficulty | null;
+}
+
+export async function fetchTracked(signal?: AbortSignal): Promise<TrackedKeyword[]> {
+  const res = await fetch(`${BASE}/keywords/tracked`, { signal });
+  if (!res.ok) throw new Error(`Tracked fetch failed (${res.status})`);
+  const body = (await res.json()) as { data: TrackedKeyword[] };
+  return body.data.map((t) => ({ ...t, metrics: t.metrics ? normalize(t.metrics) : null }));
+}
+
+/** Score (if needed) + add a keyword to the shortlist. Returns the new entry. */
+export async function trackKeyword(
+  keyword: string,
+  store: Store,
+  country = "US",
+): Promise<TrackedKeyword | null> {
+  const res = await fetch(`${BASE}/keywords/tracked`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ keyword, country, store }),
+  });
+  if (!res.ok) throw new Error(`Track failed (${res.status})`);
+  const body = (await res.json()) as { data: TrackedKeyword | null };
+  if (!body.data) return null;
+  return { ...body.data, metrics: body.data.metrics ? normalize(body.data.metrics) : null };
+}
+
+export async function untrackKeyword(keyword: string, store: Store, country = "US"): Promise<void> {
+  const q = new URLSearchParams({ keyword, country, store });
+  const res = await fetch(`${BASE}/keywords/tracked?${q}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(`Untrack failed (${res.status})`);
 }
 
 /** Batch compare ≤10 keywords — sorted by opportunity score descending (we sort, not the server). */
