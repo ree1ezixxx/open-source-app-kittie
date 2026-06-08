@@ -40,6 +40,70 @@ export async function fetchReviews(
   return (await res.json()) as ReviewsResponse;
 }
 
+/* ----------------------------------------------------------------
+   REAL — on-demand live review pull (Refresh button + add-to-monitoring).
+   Hits POST /api/v1/apps/:id/sync-reviews, which fetches the latest written
+   reviews from the store and upserts them. Google is live; Apple pending.
+   ---------------------------------------------------------------- */
+export interface ReviewSyncResult {
+  synced: number;
+  store: "apple" | "google";
+  supported: boolean;
+}
+
+export async function syncReviews(appId: string, signal?: AbortSignal): Promise<ReviewSyncResult> {
+  const res = await fetch(`${BASE}/apps/${encodeURIComponent(appId)}/sync-reviews`, {
+    method: "POST",
+    signal,
+  });
+  if (!res.ok) throw new Error(`Failed to sync reviews (${res.status})`);
+  const json = (await res.json()) as { data: ReviewSyncResult };
+  return json.data;
+}
+
+/* ----------------------------------------------------------------
+   REAL — streaming sync for the 5-stage add-to-monitoring modal.
+   Consumes GET /apps/:id/sync-reviews/stream (SSE). Each event maps to a
+   real backend milestone (start → fetch* → analyse → save → done), so the
+   progress bar tracks actual work — no faked timers. Returns a cancel fn.
+   ---------------------------------------------------------------- */
+export interface SyncStreamHandlers {
+  onFetch?: (fetched: number) => void;
+  onAnalyse?: (total: number) => void;
+  onSave?: (inserted: number) => void;
+  onDone?: (result: ReviewSyncResult) => void;
+  onError?: (message: string) => void;
+}
+
+export function streamSyncReviews(appId: string, h: SyncStreamHandlers): () => void {
+  const es = new EventSource(`${BASE}/apps/${encodeURIComponent(appId)}/sync-reviews/stream`);
+  let finished = false;
+  const close = () => { finished = true; es.close(); };
+  const num = (e: Event, key: string): number => {
+    try { return JSON.parse((e as MessageEvent).data)[key] as number; } catch { return 0; }
+  };
+
+  es.addEventListener("fetch", (e) => h.onFetch?.(num(e, "fetched")));
+  es.addEventListener("analyse", (e) => h.onAnalyse?.(num(e, "total")));
+  es.addEventListener("save", (e) => h.onSave?.(num(e, "inserted")));
+  es.addEventListener("done", (e) => {
+    try { h.onDone?.(JSON.parse((e as MessageEvent).data) as ReviewSyncResult); }
+    catch { h.onDone?.({ synced: 0, store: "google", supported: true }); }
+    close();
+  });
+  // Server-side failure (named 'failed' to avoid EventSource's reserved 'error').
+  es.addEventListener("failed", (e) => {
+    let msg = "Sync failed";
+    try { msg = JSON.parse((e as MessageEvent).data).message ?? msg; } catch { /* keep default */ }
+    h.onError?.(msg);
+    close();
+  });
+  // Native connection error (drop / refused).
+  es.onerror = () => { if (!finished) { h.onError?.("Connection lost — is the API running?"); close(); } };
+
+  return close;
+}
+
 /* Rating distribution derived from REAL review rows — not mocked. */
 export function ratingDistribution(reviews: Review[]): Record<1 | 2 | 3 | 4 | 5, number> {
   const dist: Record<1 | 2 | 3 | 4 | 5, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };

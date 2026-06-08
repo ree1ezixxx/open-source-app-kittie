@@ -11,21 +11,26 @@ import type { Review } from "@kittie/types";
 import type { Theme } from "../../lib/theme";
 import {
   fetchReviews,
-  getReviewInsights,
+  syncReviews,
   getMonitored,
   addMonitored,
   removeMonitored,
   type MonitoredApp,
-  type ReviewInsights,
+  type ReviewSyncResult,
 } from "../../lib/api/reviews";
+import { enrichReviews } from "../../lib/api/reviewIntel";
 import { PageHeader, Tabs, EmptyState, type TabDef } from "../../components/reviews/primitives";
 import { AppPicker } from "../../components/reviews/AppPicker";
+import { SyncProgress } from "../../components/reviews/SyncProgress";
 import { OverviewTab, ReviewsTab, SemanticsTab, ImprovementsTab } from "./reviewTabs";
 import { formatCompact } from "../../lib/format";
 import {
   IconStar, IconSun, IconMoon, IconInfo, IconClose, IconSearch,
-  IconChart, IconSpark, IconUsers,
+  IconChart, IconSpark, IconUsers, IconGrid,
 } from "../../icons";
+
+/** Sentinel id for the cross-app rollup entry in the rail. */
+const ALL_APPS = "__all__";
 
 const TABS: TabDef[] = [
   { id: "overview", label: "Overview", icon: <IconChart style={{ width: 14, height: 14 }} /> },
@@ -43,30 +48,70 @@ export function ReviewsPage({ theme, onToggleTheme }: { theme: Theme; onToggleTh
 
   const [monitored, setMonitoredState] = useState<MonitoredApp[]>(() => getMonitored());
   const [picking, setPicking] = useState(false);
+  const [adding, setAdding] = useState<MonitoredApp | null>(null); // 5-stage sync modal
   const [howto, setHowto] = useState(false);
 
-  // selected app: ?app=id, else first monitored
+  // selected app: ?app=id (incl. the All-Apps sentinel), else first monitored
   const selectedId = sp.get("app") || monitored[0]?.id || null;
-  const selected = monitored.find((a) => a.id === selectedId) || monitored[0] || null;
+  const isAll = selectedId === ALL_APPS && monitored.length > 0;
+  const selected = isAll ? null : (monitored.find((a) => a.id === selectedId) || monitored[0] || null);
+  const monitoredKey = monitored.map((a) => a.id).join(","); // stable dep for the rollup
 
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reloadTick, setReloadTick] = useState(0); // bumped to re-read from DB
+  const [syncing, setSyncing] = useState(false);   // live pull in flight
 
-  // load reviews for selected app
+  // load reviews — one app, or the union of all monitored apps (rollup)
   useEffect(() => {
+    if (isAll) {
+      if (monitored.length === 0) { setReviews([]); return; }
+      const ac = new AbortController();
+      setLoading(true);
+      setError(null);
+      Promise.all(
+        monitored.map((a) =>
+          fetchReviews(a.id, { limit: 500 }, ac.signal).then((r) => r.data).catch(() => []),
+        ),
+      )
+        .then((lists) => !ac.signal.aborted && setReviews(lists.flat()))
+        .catch((e) => !ac.signal.aborted && setError(e instanceof Error ? e.message : "Failed to load reviews"))
+        .finally(() => !ac.signal.aborted && setLoading(false));
+      return () => ac.abort();
+    }
     if (!selected) { setReviews([]); return; }
     const ac = new AbortController();
     setLoading(true);
     setError(null);
-    fetchReviews(selected.id, { limit: 100 }, ac.signal)
+    fetchReviews(selected.id, { limit: 500 }, ac.signal)
       .then((res) => !ac.signal.aborted && setReviews(res.data))
       .catch((e) => !ac.signal.aborted && setError(e instanceof Error ? e.message : "Failed to load reviews"))
       .finally(() => !ac.signal.aborted && setLoading(false));
     return () => ac.abort();
-  }, [selected?.id]);
+  }, [isAll, selected?.id, monitoredKey, reloadTick]);
 
-  const insights: ReviewInsights = useMemo(() => getReviewInsights(reviews), [reviews]);
+  // Refresh = live pull from the store, then re-read from the DB. For the
+  // rollup, sync every monitored app (sequential — polite to the stores).
+  const refresh = useCallback(async () => {
+    setSyncing(true);
+    try {
+      if (isAll) {
+        for (const a of monitored) {
+          try { await syncReviews(a.id); } catch { /* keep going */ }
+        }
+      } else if (selectedId) {
+        await syncReviews(selectedId);
+      }
+    } catch {
+      /* surface nothing — re-read anyway so any partial pull shows */
+    } finally {
+      setSyncing(false);
+      setReloadTick((t) => t + 1);
+    }
+  }, [isAll, selectedId, monitoredKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const tagged = useMemo(() => enrichReviews(reviews), [reviews]);
 
   const setTab = useCallback((id: string) => {
     const qs = sp.toString();
@@ -79,11 +124,18 @@ export function ReviewsPage({ theme, onToggleTheme }: { theme: Theme; onToggleTh
     setSp(next, { replace: true });
   }, [sp, setSp]);
 
+  // Pick → close picker → open the 5-stage sync modal. The app is registered
+  // on the stream's `done`, then the user lands on its populated tabs.
   function handleAdd(app: MonitoredApp) {
+    setPicking(false);
+    setAdding(app);
+  }
+
+  function handleSynced(app: MonitoredApp, _result: ReviewSyncResult) {
     const next = addMonitored(app);
     setMonitoredState(next);
     selectApp(app.id);
-    setPicking(false);
+    setReloadTick((t) => t + 1); // re-read so the freshly-synced reviews show
   }
 
   function handleRemove(id: string) {
@@ -102,7 +154,7 @@ export function ReviewsPage({ theme, onToggleTheme }: { theme: Theme; onToggleTh
       <PageHeader
         icon={<IconStar style={{ width: 18, height: 18 }} />}
         title="Reviews"
-        subtitle="Monitor reviews, sentiment & AI insights"
+        subtitle="Monitor reviews, sentiment & AI insights across your apps"
         actions={
           <>
             <button className="btn" onClick={() => setHowto((v) => !v)}>
@@ -128,8 +180,22 @@ export function ReviewsPage({ theme, onToggleTheme }: { theme: Theme; onToggleTh
             <div className="rv-rail-empty">No apps yet</div>
           ) : (
             <ul className="rv-rail-list">
+              {monitored.length > 1 && (
+                <li className="rv-rail-li" key={ALL_APPS}>
+                  <button
+                    className={`rv-rail-item rv-rail-all ${isAll ? "on" : ""}`}
+                    onClick={() => selectApp(ALL_APPS)}
+                  >
+                    <div className="app-icon placeholder rv-rail-all-icon"><IconGrid style={{ width: 16, height: 16 }} /></div>
+                    <div className="rv-rail-meta">
+                      <div className="rv-rail-name">All apps</div>
+                      <div className="rv-rail-sub">{monitored.length} apps combined</div>
+                    </div>
+                  </button>
+                </li>
+              )}
               {monitored.map((a) => (
-                <li key={a.id}>
+                <li className="rv-rail-li" key={a.id}>
                   <button
                     className={`rv-rail-item ${selected?.id === a.id ? "on" : ""}`}
                     onClick={() => selectApp(a.id)}
@@ -143,14 +209,14 @@ export function ReviewsPage({ theme, onToggleTheme }: { theme: Theme; onToggleTh
                       <div className="rv-rail-name">{a.title}</div>
                       <div className="rv-rail-sub">{formatCompact(a.reviewCount)} reviews</div>
                     </div>
-                    <span
-                      className="rv-rail-x"
-                      role="button"
-                      aria-label={`Stop monitoring ${a.title}`}
-                      onClick={(e) => { e.stopPropagation(); handleRemove(a.id); }}
-                    >
-                      <IconClose style={{ width: 13, height: 13 }} />
-                    </span>
+                  </button>
+                  <button
+                    className="rv-rail-x"
+                    aria-label={`Stop monitoring ${a.title}`}
+                    title={`Stop monitoring ${a.title}`}
+                    onClick={() => handleRemove(a.id)}
+                  >
+                    <IconClose style={{ width: 13, height: 13 }} />
                   </button>
                 </li>
               ))}
@@ -160,7 +226,7 @@ export function ReviewsPage({ theme, onToggleTheme }: { theme: Theme; onToggleTh
 
         {/* content */}
         <section className="rv-content">
-          {!selected ? (
+          {monitored.length === 0 ? (
             <EmptyState
               icon={<IconStar style={{ width: 30, height: 30 }} />}
               title="No apps monitored yet"
@@ -170,15 +236,29 @@ export function ReviewsPage({ theme, onToggleTheme }: { theme: Theme; onToggleTh
           ) : (
             <>
               <div className="rv-selected">
-                {selected.iconUrl ? (
-                  <img className="app-icon" style={{ width: 40, height: 40, borderRadius: 11 }} src={selected.iconUrl} alt="" referrerPolicy="no-referrer" />
-                ) : (
-                  <div className="app-icon placeholder" style={{ width: 40, height: 40, borderRadius: 11 }}>{selected.title.charAt(0)}</div>
-                )}
-                <div>
-                  <div className="rv-selected-name">{selected.title}</div>
-                  <div className="rv-selected-dev">{selected.developer}</div>
-                </div>
+                {isAll ? (
+                  <>
+                    <div className="app-icon placeholder rv-rail-all-icon" style={{ width: 40, height: 40, borderRadius: 11 }}>
+                      <IconGrid style={{ width: 20, height: 20 }} />
+                    </div>
+                    <div>
+                      <div className="rv-selected-name">All apps</div>
+                      <div className="rv-selected-dev">Combined across {monitored.length} monitored apps</div>
+                    </div>
+                  </>
+                ) : selected ? (
+                  <>
+                    {selected.iconUrl ? (
+                      <img className="app-icon" style={{ width: 40, height: 40, borderRadius: 11 }} src={selected.iconUrl} alt="" referrerPolicy="no-referrer" />
+                    ) : (
+                      <div className="app-icon placeholder" style={{ width: 40, height: 40, borderRadius: 11 }}>{selected.title.charAt(0)}</div>
+                    )}
+                    <div>
+                      <div className="rv-selected-name">{selected.title}</div>
+                      <div className="rv-selected-dev">{selected.developer}</div>
+                    </div>
+                  </>
+                ) : null}
               </div>
 
               <Tabs tabs={TABS} active={activeTab} onChange={setTab} />
@@ -189,13 +269,13 @@ export function ReviewsPage({ theme, onToggleTheme }: { theme: Theme; onToggleTh
                 ) : loading ? (
                   <ReviewsSkeleton />
                 ) : activeTab === "overview" ? (
-                  <OverviewTab reviews={reviews} insights={insights} />
+                  <OverviewTab tagged={tagged} appsMonitored={monitored.length} />
                 ) : activeTab === "reviews" ? (
-                  <ReviewsTab reviews={reviews} />
+                  <ReviewsTab tagged={tagged} />
                 ) : activeTab === "semantics" ? (
-                  <SemanticsTab insights={insights} />
+                  <SemanticsTab tagged={tagged} onRefresh={refresh} refreshing={syncing || loading} />
                 ) : (
-                  <ImprovementsTab insights={insights} />
+                  <ImprovementsTab tagged={tagged} onRefresh={refresh} refreshing={syncing || loading} />
                 )}
               </div>
             </>
@@ -210,20 +290,30 @@ export function ReviewsPage({ theme, onToggleTheme }: { theme: Theme; onToggleTh
           onClose={() => setPicking(false)}
         />
       )}
+
+      {adding && (
+        <SyncProgress
+          app={adding}
+          onComplete={handleSynced}
+          onClose={() => setAdding(null)}
+        />
+      )}
     </main>
   );
 }
 
 function HowItWorks({ onClose }: { onClose: () => void }) {
   const steps = [
-    { n: 1, t: "Add apps to monitor", d: "Pick any app in the database. We track its public review stream per store and country." },
-    { n: 2, t: "Read the real reviews", d: "The Overview and Reviews tabs render live review text — titles, bodies, ratings, dates — filterable by rating and recency." },
-    { n: 3, t: "Surface AI insights", d: "Sentiment, semantic themes and improvement ideas roll up the noise. These are labelled previews until the analysis backend ships." },
+    { n: 1, t: "Written reviews only", d: "Only reviews with a written comment are indexed — rating-only reviews are skipped." },
+    { n: 2, t: "Latest 500 on add, then daily", d: "Adding a new app initially indexes the latest 500 reviews. After that, every new review is picked up automatically each day." },
+    { n: 3, t: "AI-analysed", d: "Each review is analysed by AI for sentiment, semantic topics and improvement areas." },
+    { n: 4, t: "Refresh any time", d: "Hit Refresh to manually fetch the latest reviews at any time." },
   ];
   return (
     <div className="rv-howto">
       <button className="rv-howto-close" onClick={onClose} aria-label="Dismiss"><IconClose style={{ width: 14, height: 14 }} /></button>
       <div className="rv-howto-title">How review monitoring works</div>
+      <p className="rv-howto-intro">Reviews aren’t fully historical by default — here’s what gets indexed and when to refresh.</p>
       <div className="rv-howto-steps">
         {steps.map((s) => (
           <div className="rv-howto-step" key={s.n}>

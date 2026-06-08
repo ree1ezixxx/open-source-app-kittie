@@ -78,10 +78,10 @@
 .rv-add-btn:hover { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
 .rv-rail-empty { padding: 8px 16px 16px; font-size: 12px; color: var(--text-faint); }
 .rv-rail-list { list-style: none; margin: 0; padding: 4px 8px 12px; display: flex; flex-direction: column; gap: 2px; }
+.rv-rail-li { position: relative; }
 .rv-rail-item {
-  position: relative;
   display: flex; align-items: center; gap: 10px; width: 100%;
-  padding: 8px; border-radius: 9px; border: 1px solid transparent;
+  padding: 8px 38px 8px 8px; border-radius: 9px; border: 1px solid transparent;
   background: none; text-align: left; transition: background 0.12s, border-color 0.12s;
 }
 .rv-rail-item .app-icon { width: 32px; height: 32px; border-radius: 8px; }
@@ -92,11 +92,14 @@
 .rv-rail-item.on .rv-rail-name { color: var(--accent); }
 .rv-rail-sub { font-size: 11px; color: var(--text-tertiary); }
 .rv-rail-x {
-  display: grid; place-items: center; width: 22px; height: 22px; border-radius: 6px;
-  color: var(--text-faint); opacity: 0; transition: opacity 0.12s, color 0.12s, background 0.12s; flex-shrink: 0;
+  position: absolute; top: 50%; right: 8px; transform: translateY(-50%);
+  display: grid; place-items: center; width: 24px; height: 24px; border-radius: 6px;
+  color: var(--text-faint); background: var(--surface-2); border: 1px solid var(--border-soft);
+  opacity: 0.55; transition: opacity 0.12s, color 0.12s, background 0.12s, border-color 0.12s;
+  z-index: 2;
 }
-.rv-rail-item:hover .rv-rail-x { opacity: 1; }
-.rv-rail-x:hover { color: var(--danger); background: var(--surface-2); }
+.rv-rail-li:hover .rv-rail-x { opacity: 1; }
+.rv-rail-x:hover { color: var(--danger); background: var(--surface-2); border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
 
 .rv-content { overflow-y: auto; padding: 20px 24px 56px; }
 .rv-selected { display: flex; align-items: center; gap: 13px; margin-bottom: 16px; }
@@ -117,8 +120,9 @@
   border: 1px solid var(--border); background: var(--surface); color: var(--text-secondary);
 }
 .rv-howto-close:hover { color: var(--text); background: var(--surface-2); }
-.rv-howto-title { font-size: 13.5px; font-weight: 650; margin-bottom: 13px; }
-.rv-howto-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.rv-howto-title { font-size: 13.5px; font-weight: 650; margin-bottom: 5px; }
+.rv-howto-intro { font-size: 12px; line-height: 1.5; color: var(--text-secondary); margin: 0 0 14px; max-width: 620px; }
+.rv-howto-steps { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px 18px; }
 .rv-howto-step { display: flex; gap: 11px; }
 .rv-howto-num {
   width: 23px; height: 23px; border-radius: 50%; flex-shrink: 0;
@@ -203,6 +207,142 @@
 .rv-tag i { width: 6px; height: 6px; border-radius: 50%; }
 .rv-tag-muted { color: var(--text-secondary); }
 
+/* ---- period / filter chips (semantics + improvements) ---- */
+.rv-period { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-bottom: 14px; }
+.rv-period-label { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-tertiary); margin-right: 3px; }
+.rv-period-spacer { flex: 1 1 16px; min-width: 8px; }
+.rv-chip {
+  font-size: 12px; font-weight: 580; color: var(--text-secondary);
+  padding: 5px 11px; border-radius: 8px; border: 1px solid var(--border-soft);
+  background: var(--surface); transition: all 0.12s; white-space: nowrap;
+}
+.rv-chip:hover { color: var(--text); border-color: var(--border-strong); }
+.rv-chip.on { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
+
+/* Refresh — "Fetch latest reviews for this app" (parity with appkittie) */
+.rv-refresh {
+  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+  font-size: 12px; font-weight: 580; color: var(--text-secondary);
+  padding: 5px 12px; border-radius: 8px; border: 1px solid var(--border-soft);
+  background: var(--surface); transition: all 0.12s;
+}
+.rv-refresh:hover:not(:disabled) { color: var(--text); border-color: var(--border-strong); }
+.rv-refresh:disabled { opacity: 0.65; cursor: default; }
+.rv-spin { animation: rv-spin 0.8s linear infinite; transform-origin: center; }
+@keyframes rv-spin { to { transform: rotate(360deg); } }
+
+/* ---- semantics: topics table ---- */
+.rv-topic-table { display: flex; flex-direction: column; }
+.rv-topic-h,
+.rv-topic-row {
+  display: grid; grid-template-columns: minmax(120px, 1.6fr) 110px 56px minmax(120px, 2fr);
+  align-items: center; gap: 12px; padding: 9px 4px;
+}
+.rv-topic-h { font-size: 10.5px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-faint); border-bottom: 1px solid var(--border-soft); }
+.rv-topic-row { border-bottom: 1px solid var(--border-soft); }
+.rv-topic-row:last-child { border-bottom: none; }
+.rv-topic-name { font-size: 13px; font-weight: 580; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rv-topic-sent { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; }
+.rv-topic-sent i { width: 7px; height: 7px; border-radius: 50%; }
+.rv-topic-rating { font-size: 12.5px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.rv-topic-bar { position: relative; display: flex; align-items: center; height: 20px; background: var(--surface-2); border-radius: 6px; overflow: hidden; }
+.rv-topic-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 6px; opacity: 0.55; }
+.rv-topic-n { position: relative; margin-left: auto; padding: 0 9px; font-size: 11.5px; font-weight: 650; font-variant-numeric: tabular-nums; }
+
+/* ---- semantics: topic timeline metric grid ---- */
+.rv-timeline { display: grid; gap: 3px 4px; overflow-x: auto; padding-top: 4px; align-items: center; }
+.rv-tl-corner, .rv-tl-h { font-size: 9.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-faint); padding-bottom: 6px; align-self: end; }
+.rv-tl-r { text-align: right; }
+.rv-tl-date { font-size: 9px; color: var(--text-faint); text-align: center; padding-bottom: 6px; white-space: nowrap; align-self: end; }
+.rv-tl-topic { font-size: 11.5px; color: var(--text-secondary); padding-right: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rv-tl-sent { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+.rv-tl-arrow { font-size: 12px; line-height: 1; }
+.rv-tl-num { font-size: 11.5px; font-variant-numeric: tabular-nums; text-align: right; color: var(--text-secondary); padding-right: 4px; }
+.rv-tl-total { font-weight: 680; color: var(--text); }
+.rv-tl-cell {
+  height: 22px; border-radius: 4px; display: grid; place-items: center;
+  font-size: 10px; font-weight: 600; font-variant-numeric: tabular-nums;
+  color: var(--text-tertiary);
+}
+
+/* ---- trend line chart (topic + improvement trends) ---- */
+.rv-trend { width: 100%; }
+.rv-trend-plot { position: relative; }
+.rv-trend-svg { width: 100%; height: auto; display: block; overflow: visible; }
+.rv-trend-axis { fill: var(--text-faint); font-size: 9px; font-variant-numeric: tabular-nums; }
+.rv-trend-cursor { stroke: var(--border-strong); stroke-width: 1; stroke-dasharray: 3 3; pointer-events: none; }
+
+/* hover tooltip — date + every visible series ranked by that day's value */
+.rv-trend-tip {
+  position: absolute; top: 6px; z-index: 5; pointer-events: none;
+  min-width: 150px; max-width: 230px;
+  background: var(--surface); border: 1px solid var(--border-strong);
+  border-radius: 10px; padding: 9px 11px; box-shadow: 0 8px 24px rgba(0,0,0,0.28);
+}
+.rv-trend-tip.right { transform: translateX(14px); }
+.rv-trend-tip.left { transform: translateX(-100%) translateX(-14px); }
+.rv-trend-tip-date { font-size: 11px; font-weight: 680; color: var(--text); margin-bottom: 6px; }
+.rv-trend-tip-row { display: flex; align-items: center; gap: 7px; font-size: 11px; line-height: 1.7; }
+.rv-trend-tip-row i { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+.rv-trend-tip-label { color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rv-trend-tip-val { margin-left: auto; font-weight: 680; color: var(--text); font-variant-numeric: tabular-nums; }
+.rv-trend-count { font-size: 11px; font-weight: 600; color: var(--text-faint); align-self: center; margin-right: 2px; font-variant-numeric: tabular-nums; }
+
+.rv-trend-legend { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+.rv-trend-toggle { font-size: 11px; font-weight: 600; color: var(--text-tertiary); padding: 3px 9px; border-radius: 7px; border: 1px solid var(--border-soft); background: var(--surface-2); }
+.rv-trend-toggle:hover { color: var(--text); border-color: var(--border-strong); }
+.rv-trend-key { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 560; color: var(--text-secondary); padding: 3px 9px; border-radius: 7px; border: 1px solid var(--border-soft); background: var(--surface); transition: all 0.12s; }
+.rv-trend-key i { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
+.rv-trend-key:hover { border-color: var(--border-strong); }
+.rv-trend-key.off { color: var(--text-faint); text-decoration: line-through; opacity: 0.7; }
+.rv-trend-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; text-align: center; padding: 40px 16px; border: 1px dashed var(--border); border-radius: 12px; }
+.rv-trend-empty-t { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+.rv-trend-empty-s { font-size: 12px; color: var(--text-tertiary); max-width: 420px; line-height: 1.5; }
+
+/* ---- improvements: area grid ---- */
+.rv-imp-head { font-size: 12px; color: var(--text-tertiary); margin-bottom: 13px; }
+.rv-area-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.rv-area { display: block; width: 100%; text-align: left; font: inherit; color: inherit; background: var(--surface); border: 1px solid var(--border-soft); border-radius: 12px; padding: 14px 15px; transition: border-color 0.14s, transform 0.14s; cursor: pointer; }
+.rv-area:hover { border-color: var(--border-strong); transform: translateY(-1px); }
+.rv-area-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.rv-area-name { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 620; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rv-area-pct { font-size: 12.5px; font-weight: 680; color: var(--text-secondary); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.rv-area-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.rv-area-bar { height: 6px; border-radius: 99px; background: var(--surface-2); overflow: hidden; margin-top: 11px; }
+.rv-area-bar span { display: block; height: 100%; border-radius: 99px; opacity: 0.85; }
+.rv-area-meta { display: flex; align-items: center; gap: 12px; font-size: 11.5px; color: var(--text-tertiary); }
+.rv-area-rating { display: inline-flex; align-items: center; gap: 4px; font-weight: 620; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.rv-area-sent { font-weight: 620; }
+.rv-area-mentions { margin-left: auto; font-variant-numeric: tabular-nums; }
+
+/* ---- overview KPI cards ---- */
+.rv-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 14px; }
+.rv-kpi { display: flex; align-items: center; gap: 13px; background: var(--surface); border: 1px solid var(--border-soft); border-radius: 13px; padding: 15px 17px; }
+.rv-kpi-ic { width: 40px; height: 40px; border-radius: 11px; flex-shrink: 0; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
+.rv-kpi-num { font-size: 23px; font-weight: 720; letter-spacing: -0.02em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.rv-kpi-label { font-size: 11.5px; color: var(--text-tertiary); margin-top: 2px; }
+
+/* ---- feed: sentiment-segment count + facet chip rows ---- */
+.rv-seg-n { margin-left: 5px; font-size: 10px; font-weight: 650; opacity: 0.7; font-variant-numeric: tabular-nums; }
+.rv-facets { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-bottom: 11px; }
+.rv-facet-label { font-size: 10.5px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-faint); margin-right: 4px; min-width: 78px; flex: 0 0 auto; }
+.rv-chip-n { margin-left: 6px; font-size: 10.5px; font-weight: 650; opacity: 0.65; font-variant-numeric: tabular-nums; }
+.rv-chip-more { font-style: italic; color: var(--text-tertiary); }
+
+/* Single-line scrollable facet lane — keeps the feed header from becoming a
+   multi-row wall of chips. The label pins; chips scroll horizontally with a
+   soft right-edge fade hinting there's more. */
+.rv-facets-scroll { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-bottom: 9px; -webkit-overflow-scrolling: touch; mask-image: linear-gradient(to right, #000 calc(100% - 26px), transparent); }
+.rv-facets-scroll::-webkit-scrollbar { display: none; }
+.rv-facets-scroll .rv-chip { flex: 0 0 auto; }
+.rv-facets-scroll .rv-facet-label { position: sticky; left: 0; background: var(--bg); z-index: 1; padding-right: 2px; }
+
+/* ---- feed: per-review tag badges ---- */
+.rv-rev-sent { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 620; }
+.rv-rev-sent i { width: 6px; height: 6px; border-radius: 50%; }
+.rv-rev-topic { font-size: 10.5px; font-weight: 580; color: var(--text-secondary); background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: 6px; padding: 2px 8px; transition: all 0.12s; }
+.rv-rev-topic:hover { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 38%, transparent); }
+
 /* app picker modal */
 .rv-modal-backdrop {
   position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,0.55);
@@ -217,9 +357,13 @@
 }
 .rv-modal-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px 12px; }
 .rv-modal-title { font-size: 15px; font-weight: 680; }
-.rv-modal-search { flex: none; margin: 0 18px 8px; }
+/* override the shared `.search` toolbar flex (0 1 420px → 420px tall on the
+   modal's vertical axis); higher specificity so it wins regardless of CSS order */
+.search.rv-modal-search { flex: 0 0 auto; margin: 0 18px 8px; }
 .rv-modal-list { overflow-y: auto; padding: 4px 10px 12px; }
 .rv-modal-empty { padding: 28px 16px; text-align: center; color: var(--text-tertiary); font-size: 12.5px; }
+.rv-modal-count { padding: 0 19px 7px; font-size: 11px; font-weight: 560; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.rv-pick-sentinel { text-align: center; padding: 12px 8px; font-size: 11px; color: var(--text-faint); min-height: 6px; }
 .rv-pick-row {
   display: flex; align-items: center; gap: 12px; width: 100%;
   padding: 9px 10px; border-radius: 10px; border: 1px solid transparent; background: none; text-align: left;
@@ -378,3 +522,47 @@
   .rv-rail { display: none; }
   .mcp-skill-grid, .mcp-setup, .rv-howto-steps { grid-template-columns: 1fr; }
 }
+
+/* ── On-add 5-stage sync modal ─────────────────────────────────── */
+.rv-sync {
+  width: min(440px, 94vw); background: var(--panel);
+  border: 1px solid var(--border); border-radius: 16px;
+  box-shadow: var(--shadow-pop); overflow: hidden; padding: 18px;
+  animation: lbpop 0.2s cubic-bezier(0.22,1,0.36,1);
+}
+.rv-sync-head { display: flex; align-items: center; gap: 11px; margin-bottom: 16px; }
+.rv-sync-head .app-icon { width: 38px; height: 38px; border-radius: 10px; }
+.rv-sync-head-meta { flex: 1; min-width: 0; }
+.rv-sync-title { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 680; }
+.rv-sync-sub { font-size: 11.5px; color: var(--text-tertiary); margin-top: 2px; }
+.rv-sync-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.rv-sync-step {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; border-radius: 9px; font-size: 12.5px;
+  color: var(--text-tertiary); transition: background 0.15s, color 0.15s;
+}
+.rv-sync-step.active { background: var(--surface); color: var(--text); }
+.rv-sync-step.done { color: var(--text-secondary); }
+.rv-sync-dot {
+  width: 18px; height: 18px; flex: 0 0 18px; display: flex; align-items: center; justify-content: center;
+  border-radius: 50%; color: var(--accent-ink);
+}
+.rv-sync-step.done .rv-sync-dot { background: var(--positive); color: #fff; }
+.rv-sync-step.active .rv-sync-dot { background: transparent; }
+.rv-sync-step.pending .rv-sync-dot { background: var(--surface); }
+.rv-sync-spin {
+  width: 13px; height: 13px; border-radius: 50%;
+  border: 2px solid var(--border-strong); border-top-color: var(--accent);
+  animation: rv-spin 0.7s linear infinite;
+}
+.rv-sync-label { flex: 1; }
+.rv-sync-detail { font-size: 11px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.rv-sync-err { margin-top: 12px; padding: 9px 11px; border-radius: 9px; background: var(--surface); color: var(--danger); font-size: 12px; }
+.rv-sync-cta { width: 100%; margin-top: 14px; justify-content: center; }
+
+/* ── All-apps rollup rail entry ────────────────────────────────── */
+.rv-rail-all-icon {
+  display: flex; align-items: center; justify-content: center;
+  background: var(--accent-soft); color: var(--accent-ink);
+}
+.rv-rail-all.on .rv-rail-all-icon { background: var(--accent); color: var(--accent-ink); }

@@ -129,6 +129,20 @@ export interface AppHistoricalPoint {
   revenueEstimate: number | null;
 }
 
+/** Four-way sentiment used across the Reviews surface. */
+export type Sentiment4 = "positive" | "neutral" | "negative" | "mixed";
+
+/** Per-review classification — produced once at ingest, persisted, then
+    aggregated cheaply by every surface. The classifier seam lives in
+    `@kittie/intelligence`. */
+export interface ReviewTags {
+  sentiment: Sentiment4;
+  /** Open-ish descriptive themes — what the review is *about*. */
+  topics: string[];
+  /** Fixed canonical taxonomy — what the app could *fix*. */
+  improvementAreas: string[];
+}
+
 export interface Review {
   id: string;
   appId: string;
@@ -139,6 +153,10 @@ export interface Review {
   body: string;
   author: string | null;
   reviewedAt: string;
+  /** Persisted classification (null on legacy rows ingested before tagging). */
+  sentiment?: Sentiment4 | null;
+  topics?: string[] | null;
+  improvementAreas?: string[] | null;
 }
 
 export interface KeywordDifficulty {

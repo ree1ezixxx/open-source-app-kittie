@@ -167,6 +167,9 @@ function mapRelations(
     body: r.body,
     author: r.author,
     reviewedAt: r.reviewedAt.toISOString(),
+    sentiment: r.sentiment ?? null,
+    topics: parseJsonArray(r.topics),
+    improvementAreas: parseJsonArray(r.improvementAreas),
   }));
 
   return { iaps, metaAds, creators, appleSearchAds, reviewList };

@@ -12,6 +12,7 @@ export {
   appsWithAppleAds,
   appsWithCreators,
   getAppById as getAppRowById,
+  listFreshSet,
   loadAppRelations,
 } from "./detail.js";
 export { enrichSnapshotScores } from "./scoring.js";

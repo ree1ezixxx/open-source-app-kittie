@@ -7,7 +7,9 @@ export const reviewsRouter = new Hono();
 const reviewRequestSchema = z.object({
   appId: z.string(),
   country: z.string().default("US"),
-  limit: z.number().min(1).max(100).default(20),
+  // Raised to 500 (our per-app sync depth) so the feed + period filters span
+  // real history, not just the newest ~100 reviews.
+  limit: z.number().min(1).max(500).default(20),
 });
 
 reviewsRouter.post("/", async (c) => {
