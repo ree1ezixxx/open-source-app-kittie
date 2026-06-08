@@ -5,6 +5,7 @@ import {
   batchKeywordDifficulty,
   getKeywordDifficulty,
   getKeywordSuggestions,
+  getRelatedKeywords,
 } from "../services/keyword-service.js";
 
 export const keywordsRouter = new Hono();
@@ -33,6 +34,19 @@ keywordsRouter.get("/difficulty", async (c) => {
   return c.json({ data: result, meta: { source: "store-search" } });
 });
 
+// Related keyword ideas for a seed (autocomplete only; client scores via batch).
+keywordsRouter.get("/related", async (c) => {
+  const keyword = c.req.query("keyword");
+  const country = c.req.query("country") ?? "US";
+  const store = (c.req.query("store") ?? "apple") as Store;
+  const limit = Math.min(Number(c.req.query("limit") ?? 20) || 20, 30);
+
+  if (!keyword) return c.json({ error: "keyword is required" }, 400);
+
+  const data = await getRelatedKeywords(keyword, country, store, limit);
+  return c.json({ data, meta: { source: "store-autocomplete", seed: keyword } });
+});
+
 const batchSchema = z.object({
   keywords: z
     .array(
@@ -43,7 +57,7 @@ const batchSchema = z.object({
       }),
     )
     .min(1)
-    .max(10),
+    .max(25),
 });
 
 keywordsRouter.post("/difficulty", async (c) => {

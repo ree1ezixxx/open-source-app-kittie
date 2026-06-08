@@ -5,7 +5,7 @@ import {
   listKeywordSuggestions,
   type KeywordSuggestion,
 } from "@kittie/db";
-import { syncKeyword } from "@kittie/ingest";
+import { suggestRelatedKeywords, syncKeyword } from "@kittie/ingest";
 import type { KeywordDifficulty, Store } from "@kittie/types";
 
 import { getDb } from "../lib/db.js";
@@ -53,8 +53,18 @@ export async function batchKeywordDifficulty(
   items: Array<{ keyword: string; country: string; store: Store }>,
 ): Promise<KeywordDifficulty[]> {
   const results: KeywordDifficulty[] = [];
-  for (const item of items.slice(0, 10)) {
+  for (const item of items.slice(0, 25)) {
     results.push(await getKeywordDifficulty(item.keyword, item.country, item.store));
   }
   return results.sort((a, b) => b.opportunityScore - a.opportunityScore);
+}
+
+/** Related keyword ideas for a seed (store search autocomplete; unscored). */
+export async function getRelatedKeywords(
+  keyword: string,
+  country: string,
+  store: Store,
+  limit = 20,
+): Promise<string[]> {
+  return suggestRelatedKeywords(keyword, country, store, limit);
 }
