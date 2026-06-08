@@ -244,7 +244,8 @@
 .rv-topic-h { font-size: 10.5px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-faint); border-bottom: 1px solid var(--border-soft); }
 .rv-topic-row { border-bottom: 1px solid var(--border-soft); }
 .rv-topic-row:last-child { border-bottom: none; }
-.rv-topic-name { font-size: 13px; font-weight: 580; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rv-topic-name { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 580; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rv-topic-swatch { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
 .rv-topic-sent { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; }
 .rv-topic-sent i { width: 7px; height: 7px; border-radius: 50%; }
 .rv-topic-rating { font-size: 12.5px; font-weight: 650; font-variant-numeric: tabular-nums; }

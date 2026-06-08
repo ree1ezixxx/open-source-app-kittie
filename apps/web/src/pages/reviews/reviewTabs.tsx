@@ -21,7 +21,6 @@ import {
   topicFacets,
   improvementFacets,
   withinPeriod,
-  SENTIMENT_LABEL,
   SERIES_PALETTE,
   GRANULARITY_LABEL,
   type TaggedReview,
@@ -63,12 +62,19 @@ function Sparkline({ values, color }: { values: number[]; color: string }) {
   );
 }
 
-const SENTIMENT_COLOR = {
-  positive: "var(--positive)",
-  neutral: "var(--text-tertiary)",
-  negative: "var(--negative)",
-  mixed: "#c8a8e9",
-} as const;
+/* Sentiment is a 3-way indicator: Positive (green), Negative (red), Mixed
+   (orange). The classifier's "neutral" folds into Mixed so there are exactly
+   three buckets, matching the reference. Topics get their OWN distinct colours
+   (SERIES_PALETTE) — sentiment colour and topic colour are separate systems. */
+type Sent3 = "positive" | "negative" | "mixed";
+function sent3(s: Sentiment4): Sent3 {
+  if (s === "positive") return "positive";
+  if (s === "negative") return "negative";
+  return "mixed"; // neutral + mixed
+}
+const SENT3_COLOR: Record<Sent3, string> = { positive: "#5fd08a", negative: "#ff7a6b", mixed: "#f5a623" };
+const SENT3_LABEL: Record<Sent3, string> = { positive: "Positive", negative: "Negative", mixed: "Mixed" };
+const topicColor = (i: number) => SERIES_PALETTE[i % SERIES_PALETTE.length] ?? "#888";
 
 const PERIODS: { label: string; days: number | null }[] = [
   { label: "All", days: null },
@@ -82,14 +88,16 @@ const PERIODS: { label: string; days: number | null }[] = [
 const INTERIM_NOTE =
   "Topics are tagged by an interim keyword classifier, so the surface is live — counts, sentiment and ratings are real aggregates over the loaded reviews. Categorisation accuracy sharpens once the AI model is enabled.";
 
-/** Convert a dimension time-series into multi-series trend-chart input. */
+/** Convert a dimension time-series into multi-series trend-chart input.
+    Each topic gets its own distinct colour (like the reference) so lines are
+    individually identifiable; sentiment is conveyed separately. */
 function toTrend(ts: DimensionTimeSeries): { periods: string[]; series: TrendSeries[] } {
   return {
     periods: ts.periods.map((p) => p.label),
     series: ts.rows.map((r, i) => ({
       key: r.label,
       label: r.label,
-      color: SERIES_PALETTE[i % SERIES_PALETTE.length] ?? "#888",
+      color: topicColor(i),
       values: ts.periods.map((p) => r.periodValues[p.key] ?? 0),
     })),
   };
@@ -180,14 +188,14 @@ export function OverviewTab({ tagged, appsMonitored }: { tagged: TaggedReview[];
             <div className="rv-net-label">Net sentiment score</div>
           </div>
           <div className="rv-sent-bar">
-            <span style={{ width: `${pos * 100}%`, background: "var(--positive)" }} />
-            <span style={{ width: `${neu * 100}%`, background: "var(--text-faint)" }} />
-            <span style={{ width: `${neg * 100}%`, background: "var(--negative)" }} />
+            <span style={{ width: `${pos * 100}%`, background: "#5fd08a" }} />
+            <span style={{ width: `${neu * 100}%`, background: "#f5a623" }} />
+            <span style={{ width: `${neg * 100}%`, background: "#ff7a6b" }} />
           </div>
           <div className="rv-sent-legend">
-            <span><i style={{ background: "var(--positive)" }} />Positive {Math.round(pos * 100)}%</span>
-            <span><i style={{ background: "var(--text-faint)" }} />Neutral {Math.round(neu * 100)}%</span>
-            <span><i style={{ background: "var(--negative)" }} />Negative {Math.round(neg * 100)}%</span>
+            <span><i style={{ background: "#5fd08a" }} />Positive {Math.round(pos * 100)}%</span>
+            <span><i style={{ background: "#f5a623" }} />Mixed {Math.round(neu * 100)}%</span>
+            <span><i style={{ background: "#ff7a6b" }} />Negative {Math.round(neg * 100)}%</span>
           </div>
         </section>
       </div>
@@ -225,7 +233,7 @@ export function ReviewsTab({ tagged }: { tagged: TaggedReview[] }) {
   const filtered = useMemo(() => {
     let list = periodSet;
     if (rating !== "all") list = list.filter((t) => Math.round(t.review.rating) === Number(rating));
-    if (sentiment !== "all") list = list.filter((t) => t.tags.sentiment === sentiment);
+    if (sentiment !== "all") list = list.filter((t) => sent3(t.tags.sentiment) === sentiment);
     if (topic) list = list.filter((t) => t.tags.topics.includes(topic));
     if (area) list = list.filter((t) => t.tags.improvementAreas.includes(area));
     if (q.trim()) {
@@ -244,8 +252,9 @@ export function ReviewsTab({ tagged }: { tagged: TaggedReview[] }) {
     return sorted;
   }, [periodSet, rating, sentiment, topic, area, q, sort]);
 
-  // "Mixed" intentionally omitted — too discretionary a bucket to filter on.
-  const SENTS: SentFilter[] = ["all", "positive", "negative", "neutral"];
+  const SENTS: SentFilter[] = ["all", "positive", "negative", "mixed"];
+  // 3-way counts: neutral folds into mixed.
+  const sFacet3 = { positive: sFacet.positive, negative: sFacet.negative, mixed: sFacet.mixed + sFacet.neutral };
 
   return (
     <div className="rv-reviews">
@@ -269,8 +278,8 @@ export function ReviewsTab({ tagged }: { tagged: TaggedReview[] }) {
         <div className="rv-rating-seg">
           {SENTS.map((s) => (
             <button key={s} className={`rv-seg-btn ${sentiment === s ? "on" : ""}`} onClick={() => setSentiment(s)}>
-              {s === "all" ? "All" : SENTIMENT_LABEL[s as Sentiment4]}
-              {s !== "all" && <span className="rv-seg-n">{sFacet[s as Sentiment4]}</span>}
+              {s === "all" ? "All" : SENT3_LABEL[s as Sent3]}
+              {s !== "all" && <span className="rv-seg-n">{sFacet3[s as Sent3]}</span>}
             </button>
           ))}
         </div>
@@ -334,8 +343,8 @@ export function ReviewsTab({ tagged }: { tagged: TaggedReview[] }) {
                 </div>
                 <p className="rv-review-body">{r.body}</p>
                 <div className="rv-review-foot">
-                  <span className="rv-rev-sent" style={{ color: SENTIMENT_COLOR[t.tags.sentiment] }}>
-                    <i style={{ background: SENTIMENT_COLOR[t.tags.sentiment] }} />{SENTIMENT_LABEL[t.tags.sentiment]}
+                  <span className="rv-rev-sent" style={{ color: SENT3_COLOR[sent3(t.tags.sentiment)] }}>
+                    <i style={{ background: SENT3_COLOR[sent3(t.tags.sentiment)] }} />{SENT3_LABEL[sent3(t.tags.sentiment)]}
                   </span>
                   {t.tags.topics.slice(0, 3).map((tp) => (
                     <button key={tp} className="rv-rev-topic" onClick={() => setParam("topic", tp)}>{tp}</button>
@@ -429,18 +438,18 @@ export function SemanticsTab({ tagged, onRefresh, refreshing }: { tagged: Tagged
               <div className="rv-topic-h">
                 <span>Topic</span><span>Trend</span><span>Sentiment</span><span>Rating</span><span>Mentions</span>
               </div>
-              {ts.rows.map((r) => (
+              {ts.rows.map((r, i) => (
                 <div className="rv-topic-row" key={r.label}>
-                  <span className="rv-topic-name">{r.label}</span>
+                  <span className="rv-topic-name"><i className="rv-topic-swatch" style={{ background: topicColor(i) }} />{r.label}</span>
                   <span className="rv-topic-spark">
-                    <Sparkline values={ts.periods.map((p) => r.periodValues[p.key] ?? 0)} color={SENTIMENT_COLOR[r.sentiment]} />
+                    <Sparkline values={ts.periods.map((p) => r.periodValues[p.key] ?? 0)} color={topicColor(i)} />
                   </span>
-                  <span className="rv-topic-sent" style={{ color: SENTIMENT_COLOR[r.sentiment] }}>
-                    <i style={{ background: SENTIMENT_COLOR[r.sentiment] }} />{SENTIMENT_LABEL[r.sentiment]}
+                  <span className="rv-topic-sent" style={{ color: SENT3_COLOR[sent3(r.sentiment)] }}>
+                    <i style={{ background: SENT3_COLOR[sent3(r.sentiment)] }} />{SENT3_LABEL[sent3(r.sentiment)]}
                   </span>
                   <span className="rv-topic-rating">{r.avgRating.toFixed(1)}</span>
                   <span className="rv-topic-bar">
-                    <span className="rv-topic-fill" style={{ width: `${(r.totalMentions / maxMentions) * 100}%`, background: SENTIMENT_COLOR[r.sentiment] }} />
+                    <span className="rv-topic-fill" style={{ width: `${(r.totalMentions / maxMentions) * 100}%`, background: topicColor(i) }} />
                     <span className="rv-topic-n">{r.totalMentions}</span>
                   </span>
                 </div>
