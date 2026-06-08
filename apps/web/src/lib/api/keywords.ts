@@ -77,6 +77,20 @@ export async function compareKeywords(
   return body.data.map(normalize).sort((a, b) => b.opportunityScore - a.opportunityScore);
 }
 
+/** Related keyword ideas for a seed (store autocomplete + competitor titles; unscored). */
+export async function fetchRelated(
+  keyword: string,
+  store: Store,
+  country = "US",
+  signal?: AbortSignal,
+): Promise<string[]> {
+  const q = new URLSearchParams({ keyword, country, store });
+  const res = await fetch(`${BASE}/keywords/related?${q}`, { signal });
+  if (!res.ok) throw new Error(`Related lookup failed (${res.status})`);
+  const body = (await res.json()) as { data: string[] };
+  return body.data;
+}
+
 // ── Suggestion chips ─────────────────────────────────────────────
 // Primary: GET /keywords/suggestions. Falls back to deriving from the live apps
 // database, then to a static ASO seed — so the empty state is never barren.

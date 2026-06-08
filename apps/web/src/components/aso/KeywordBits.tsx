@@ -1,4 +1,5 @@
 // Lane B — reusable keyword presentation bits (meters, badges, detail panel, list card).
+import type { ReactNode } from "react";
 import type { Store } from "@kittie/types";
 import { IconApple, IconGooglePlay, IconRank, IconSpark, IconStar, IconUsers } from "../../icons";
 import { computeInsights, type KeywordDifficulty } from "../../lib/api/keywords";
@@ -108,8 +109,9 @@ export function PendingCard({ keyword }: { keyword: string }) {
   );
 }
 
-/** Full keyword detail — insights + metrics + top ranking apps. Shared by both pages. */
-export function KeywordDetail({ kd }: { kd: KeywordDifficulty }) {
+/** Full keyword detail — insights + metrics + top ranking apps. Shared by both pages.
+ *  Optional `children` render inside the same scroll container (e.g. the related-ideas table). */
+export function KeywordDetail({ kd, children }: { kd: KeywordDifficulty; children?: ReactNode }) {
   const insights = computeInsights(kd);
   return (
     <div className="aso-detail-inner">
@@ -199,6 +201,8 @@ export function KeywordDetail({ kd }: { kd: KeywordDifficulty }) {
           ))}
         </div>
       )}
+
+      {children}
     </div>
   );
 }

@@ -4,7 +4,9 @@ import type { Store } from "@kittie/types";
 import { IconApple, IconChevron, IconClose, IconGooglePlay, IconInfo, IconMoon, IconSearch, IconSun } from "../../icons";
 import { IconKey, IconLayers } from "../../components/aso/icons";
 import { KeywordCard, KeywordDetail, PendingCard } from "../../components/aso/KeywordBits";
-import { compareKeywords, fetchSuggestions, lookupKeyword, type KeywordDifficulty } from "../../lib/api/keywords";
+import { IdeasTable } from "../../components/aso/IdeasTable";
+import { GenerateModal, type GenState } from "../../components/aso/GenerateModal";
+import { compareKeywords, fetchRelated, fetchSuggestions, lookupKeyword, type KeywordDifficulty } from "../../lib/api/keywords";
 import type { Theme } from "../../lib/theme";
 import "../../styles/aso.css";
 
@@ -33,7 +35,9 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
   const [store, setStore] = useState<Store>("apple");
   const [input, setInput] = useState("");
   const [results, setResults] = useState<KeywordDifficulty[]>([]);
+  const [ideas, setIdeas] = useState<Record<string, KeywordDifficulty[]>>({});
   const [pending, setPending] = useState<string[]>([]);
+  const [gen, setGen] = useState<GenState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("all");
   const [sort, setSort] = useState<Sort>("newest");
@@ -46,16 +50,14 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
     return () => { mounted.current = false; };
   }, []);
 
-  const runLookup = useCallback(
+  // Batch compare (2–10 pasted terms) — no idea generation.
+  const runCompare = useCallback(
     async (terms: string[], forStore: Store) => {
       if (terms.length === 0) return;
       setError(null);
       setPending((p) => [...new Set([...terms, ...p])]);
       try {
-        const fetched =
-          terms.length === 1
-            ? [await lookupKeyword(terms[0]!, forStore)]
-            : await compareKeywords(terms.map((keyword) => ({ keyword, store: forStore })));
+        const fetched = await compareKeywords(terms.map((keyword) => ({ keyword, store: forStore })));
         if (!mounted.current) return;
         setResults((prev) => {
           const incoming = new Map(fetched.map((f) => [keyOf(f), f]));
@@ -76,14 +78,66 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
     [],
   );
 
+  // Single seed → score it, discover related ideas, score those (staged progress modal).
+  const generate = useCallback(
+    async (seed: string, forStore: Store) => {
+      setError(null);
+      setGen({ seed, stage: 0, done: 0, total: 0 });
+      setPending((p) => [...new Set([seed, ...p])]);
+      try {
+        const seedKd = await lookupKeyword(seed, forStore);
+        if (!mounted.current) return;
+        const seedKey = keyOf(seedKd);
+        setResults((prev) => [seedKd, ...prev.filter((r) => keyOf(r) !== seedKey)]);
+        setSelectedKey(seedKey);
+        setTab("all");
+
+        setGen((g) => (g ? { ...g, stage: 1 } : g));
+        const related = await fetchRelated(seed, forStore);
+        if (!mounted.current) return;
+
+        setGen((g) => (g ? { ...g, stage: 2, total: related.length, done: 0 } : g));
+        const scored: KeywordDifficulty[] = [];
+        for (let i = 0; i < related.length; i += 5) {
+          const chunk = related.slice(i, i + 5).map((keyword) => ({ keyword, store: forStore }));
+          const part = await compareKeywords(chunk);
+          if (!mounted.current) return;
+          scored.push(...part);
+          setGen((g) => (g ? { ...g, done: scored.length } : g));
+        }
+
+        setGen((g) => (g ? { ...g, stage: 3 } : g));
+        scored.sort((a, b) => b.opportunityScore - a.opportunityScore);
+        setIdeas((prev) => ({ ...prev, [seedKey]: scored }));
+      } catch (e) {
+        if (mounted.current) setError(e instanceof Error ? e.message : "Generation failed");
+      } finally {
+        if (mounted.current) {
+          setPending((p) => p.filter((t) => t.toLowerCase() !== seed.toLowerCase()));
+          setGen(null);
+        }
+      }
+    },
+    [],
+  );
+
+  const explore = useCallback(
+    (terms: string[], forStore: Store) => {
+      if (terms.length === 0) return;
+      if (terms.length === 1) void generate(terms[0]!, forStore);
+      else void runCompare(terms, forStore);
+    },
+    [generate, runCompare],
+  );
+
   function submit() {
     const terms = parseTerms(input);
     if (terms.length === 0) return;
-    void runLookup(terms, store);
+    explore(terms, store);
     setInput("");
   }
 
-  // Deep link: /dashboard/aso/keywords?q=term → immediate lookup (from app detail "suggested keywords").
+  // Deep link: /dashboard/aso/keywords?q=term → immediate explore.
   const didDeepLink = useRef(false);
   useEffect(() => {
     if (didDeepLink.current) return;
@@ -93,7 +147,7 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
       const next = new URLSearchParams(sp);
       next.delete("q");
       setSp(next, { replace: true });
-      void runLookup(parseTerms(q), store);
+      explore(parseTerms(q), store);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -106,6 +160,12 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
       .catch(() => {});
     return () => { alive = false; };
   }, [store]);
+
+  const trackedKeys = useMemo(() => new Set(results.map(keyOf)), [results]);
+
+  const trackIdea = useCallback((kd: KeywordDifficulty) => {
+    setResults((prev) => (prev.some((r) => keyOf(r) === keyOf(kd)) ? prev : [...prev, kd]));
+  }, []);
 
   const counts = useMemo(
     () => ({
@@ -125,13 +185,11 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
     const sorted = [...list];
     if (sort === "opportunity") sorted.sort((a, b) => b.opportunityScore - a.opportunityScore);
     else if (sort === "difficulty") sorted.sort((a, b) => a.difficulty - b.difficulty);
-    // "newest" keeps insertion order (results are prepended newest-first)
     return sorted;
   }, [results, tab, sort]);
 
   const showPending = tab === "all" || tab === "pending";
 
-  // Keep a valid selection.
   useEffect(() => {
     if (visible.length === 0) return;
     if (!selectedKey || !visible.some((r) => keyOf(r) === selectedKey)) {
@@ -140,11 +198,8 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
   }, [visible, selectedKey]);
 
   const selected = results.find((r) => keyOf(r) === selectedKey) ?? null;
+  const selectedIdeas = selected ? ideas[keyOf(selected)] : undefined;
   const hasAnything = results.length > 0 || pending.length > 0;
-
-  function onChipTap(kw: string) {
-    void runLookup([kw], store);
-  }
 
   return (
     <main className="main">
@@ -155,7 +210,7 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
             <div className="page-icon"><IconKey style={{ width: 18, height: 18 }} /></div>
             <div>
               <div className="page-title">Keyword Workspace</div>
-              <div className="page-sub">Look up difficulty, compare terms, find openings</div>
+              <div className="page-sub">Explore a term, discover related ideas, find openings</div>
             </div>
             {results.length > 0 && <span className="count-chip">{results.length}</span>}
           </div>
@@ -186,11 +241,11 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
               <button className={store === "google" ? "on" : ""} onClick={() => setStore("google")}><IconGooglePlay /> Google Play</button>
             </div>
             <button className="btn btn-accent" onClick={submit} disabled={!input.trim()}>
-              {parseTerms(input).length > 1 ? <><IconLayers /> Compare</> : <><IconSearch /> Look up</>}
+              {parseTerms(input).length > 1 ? <><IconLayers /> Compare</> : <><IconSearch /> Explore</>}
             </button>
           </div>
           <div className="aso-hint">
-            <span className="kbd">⏎</span> look up · paste up to 10 lines to compare · ranked by opportunity · US only (v1)
+            <span className="kbd">⏎</span> explore one term for related ideas · paste up to 10 lines to compare · US only (v1)
           </div>
         </div>
 
@@ -220,7 +275,7 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
 
       {error && (
         <div className="notice" style={{ margin: "12px 22px 0" }}>
-          <IconInfo /> {error}. The API should be running on port 3007.
+          <IconInfo /> {error}. Check the API server is running.
           <button className="drawer-close" style={{ position: "static", marginLeft: "auto", width: 24, height: 24 }} onClick={() => setError(null)} aria-label="Dismiss"><IconClose /></button>
         </div>
       )}
@@ -230,13 +285,13 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
         <div className="aso-hero">
           <div className="aso-hero-mark"><IconKey /></div>
           <h2>Start with a keyword</h2>
-          <p>Type a term and hit enter for a single lookup, or paste up to 10 terms to compare them side by side — ranked by opportunity.</p>
+          <p>Explore one term to discover related keyword ideas — each scored for opportunity — or paste up to 10 terms to compare them side by side.</p>
           {chips.length > 0 && (
             <>
               <div className="aso-hero-seedlabel">Try one from your catalog</div>
               <div className="chip-rail">
                 {chips.map((c) => (
-                  <button key={c} className="chip" onClick={() => onChipTap(c)}><IconSearch />{c}</button>
+                  <button key={c} className="chip" onClick={() => explore([c], store)}><IconSearch />{c}</button>
                 ))}
               </div>
             </>
@@ -271,7 +326,16 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
           </div>
           <div className="aso-detail">
             {selected ? (
-              <KeywordDetail kd={selected} />
+              <KeywordDetail kd={selected}>
+                {selectedIdeas && (
+                  <IdeasTable
+                    seed={selected.keyword}
+                    ideas={selectedIdeas}
+                    trackedKeys={trackedKeys}
+                    onTrack={trackIdea}
+                  />
+                )}
+              </KeywordDetail>
             ) : (
               <div className="aso-placeholder">
                 <IconKey />
@@ -282,6 +346,8 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
           </div>
         </div>
       )}
+
+      {gen && <GenerateModal {...gen} />}
     </main>
   );
 }
