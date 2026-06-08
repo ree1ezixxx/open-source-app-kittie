@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import type { AppDetail, AppHistoricalPoint, Review } from "@kittie/types";
+import type { AppDetail, Review } from "@kittie/types";
 import { getApp, getReviews } from "../lib/api";
 import type { Theme } from "../lib/theme";
 import { categoryColor, pillStyle } from "../lib/palette";
 import { formatCompact, formatMoney, formatRating, formatDate } from "../lib/format";
-import { MetricCard, type MetricDelta } from "../components/MetricCard";
+import { MetricBar } from "../components/MetricBar";
 import { DetailCard, EmptyCard, Fact } from "../components/DetailCard";
 import { TrendPanel, type ChartMetric } from "../components/TrendPanel";
 import { SimilarApps } from "../components/SimilarApps";
@@ -20,7 +20,6 @@ import {
   IconInfo,
   IconChart,
   IconUsers,
-  IconCoin,
   IconSun,
   IconMoon,
   IconExternal,
@@ -31,18 +30,8 @@ import {
 
 const MIN_COLLECTION = 3;
 
-/** % change of a historical series, for the headline-card delta. Null until 2+ snapshots. */
-function pctDelta(historicals: AppHistoricalPoint[], key: keyof AppHistoricalPoint): MetricDelta | null {
-  const series = historicals
-    .map((p) => p[key])
-    .filter((v): v is number => typeof v === "number");
-  if (series.length < 2) return null;
-  const first = series[0]!;
-  const last = series[series.length - 1]!;
-  if (!first) return null;
-  const pct = ((last - first) / first) * 100;
-  return { label: `${Math.abs(pct).toFixed(1)}%`, dir: pct > 0.5 ? "up" : pct < -0.5 ? "down" : "flat" };
-}
+/** "+1.2K" style — accent-positive prefix for headline flow values; "—" when absent. */
+const plusVal = (s: string) => (s && s !== "—" && s !== "0" ? `+${s}` : s);
 
 export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => void }) {
   const { id } = useParams();
@@ -169,42 +158,34 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
               </div>
             </header>
 
-            {/* headline metrics — click to drive the chart */}
-            <div className="metric-row">
-              <MetricCard
-                icon={<IconChart />}
-                label="Downloads (30d)"
-                value={formatCompact(app.downloadsEstimate30d)}
-                delta={pctDelta(app.historicals, "downloadsEstimate")}
-                active={chartMetric === "downloadsEstimate"}
-                onClick={() => setChartMetric("downloadsEstimate")}
-              />
-              <MetricCard
-                icon={<IconCoin />}
-                label="MRR"
-                value={formatMoney(app.revenueEstimate30d)}
-                delta={pctDelta(app.historicals, "revenueEstimate")}
-                active={chartMetric === "revenueEstimate"}
-                onClick={() => setChartMetric("revenueEstimate")}
-              />
-              <MetricCard
-                icon={<IconStar />}
-                label="Rating"
-                value={formatRating(app.rating)}
-                sub={app.reviewCount ? `(${formatCompact(app.reviewCount)})` : undefined}
-                delta={pctDelta(app.historicals, "rating")}
-                active={chartMetric === "rating"}
-                onClick={() => setChartMetric("rating")}
-              />
-              <MetricCard
-                icon={<IconUsers />}
-                label="Reviews"
-                value={formatCompact(app.reviewCount)}
-                delta={pctDelta(app.historicals, "reviewCount")}
-                active={chartMetric === "reviewCount"}
-                onClick={() => setChartMetric("reviewCount")}
-              />
-            </div>
+            {/* headline metrics — connected bar, click a segment to drive the chart */}
+            <MetricBar
+              segments={[
+                {
+                  label: "Downloads (30D)",
+                  value: plusVal(formatCompact(app.downloadsEstimate30d)),
+                  active: chartMetric === "downloadsEstimate",
+                  onClick: () => setChartMetric("downloadsEstimate"),
+                },
+                {
+                  label: "MRR",
+                  value: plusVal(formatMoney(app.revenueEstimate30d)),
+                  active: chartMetric === "revenueEstimate",
+                  onClick: () => setChartMetric("revenueEstimate"),
+                },
+                {
+                  label: "Rating",
+                  value: (
+                    <>
+                      {formatRating(app.rating)} <IconStar />{" "}
+                      <span className="metric-seg-sub">({formatCompact(app.reviewCount)})</span>
+                    </>
+                  ),
+                  active: chartMetric === "rating",
+                  onClick: () => setChartMetric("rating"),
+                },
+              ]}
+            />
 
             {/* trend chart */}
             <TrendPanel app={app} metric={chartMetric} />
@@ -411,10 +392,8 @@ function DetailSkeleton() {
           <div className="skel" style={{ width: "55%", height: 22 }} />
         </div>
       </div>
-      <div className="metric-row">
-        {Array.from({ length: 4 }).map((_, i) => <div key={i} className="skel" style={{ height: 92, borderRadius: 14 }} />)}
-      </div>
-      <div className="skel" style={{ height: 200, borderRadius: 14 }} />
+      <div className="skel" style={{ height: 76, borderRadius: 14, marginTop: 16 }} />
+      <div className="skel" style={{ height: 372, borderRadius: 14, marginTop: 16 }} />
     </div>
   );
 }

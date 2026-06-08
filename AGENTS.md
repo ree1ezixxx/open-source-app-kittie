@@ -115,6 +115,14 @@ The explicit `DATABASE_URL` is the **shared** DB every lane's API reads — conf
 
 **Data completeness vs AppKittie's Database table (audited 2026-06-08):** their row = #·app·category·growth7d·rating·reviews·downloads·MRR·released·last-update·view. We capture **every underlying field** — rating/reviews from Lookup, downloads/revenue/growth **modeled at read-time** by `intelligence`, category/dates/icon/screenshots/description/price/contentRating/languages from Lookup. Not missing fundamental data. ~7% of apps legitimately have 0 US ratings (Apple returns 0 — not our bug).
 
+**Screenshots — iTunes API is incomplete; backfill from the web listing.** Apple's iTunes Lookup/Search API returns **empty `screenshotUrls` for ~36% of apps** (newer screenshot formats — e.g. HelloChinese, Duolingo). The App Store *web* listing still embeds them. After any bulk-seed, run the web backfill to fill the gap (idempotent — only touches apps still empty):
+```bash
+cd packages/ingest
+CONCURRENCY=6 DATABASE_URL=file:/Users/ellis/Documents/open-source-app-kittie/data/kittie.db \
+  pnpm exec tsx src/jobs/backfill-screenshots-web.ts
+```
+It scrapes `apps.apple.com/us/app/id<ID>` (browser User-Agent required — a bot UA returns 0 bytes), extracts `PurpleSource*` mzstatic templates (skipping `AppIcon`, `/Features` banners, and `Placeholder.mill` video posters), renders at 392×696, dedups by basename, writes ONLY the `screenshot_urls` column. ~96% fill rate, 0 failures observed. `apple/scrape.ts` + `jobs/backfill-screenshots-web.ts`. (The lookup-only `backfill-screenshots.ts` is superseded for these — iTunes returns nothing for them in any storefront.) Note the detail page then probes each URL in-browser and needs ≥3 working to render the collection.
+
 **Forward-compat — capture-now-or-refetch-2M-later:** Apple Lookup also returns fields we currently drop. To avoid re-fetching the whole catalog later, file a `docs/schema-requests.md` entry for `feat/foundation` to add columns for: **trackViewUrl** (App Store listing URL, for the View action), **version**, **fileSizeBytes**, **minimumOsVersion**, **primaryGenreId**, **price currency**. Then map them in `apple/lookup.ts` + `db/apps.ts`. Cheap now, expensive across 2M later.
 
 ## AppKittie Reference (not a dependency)

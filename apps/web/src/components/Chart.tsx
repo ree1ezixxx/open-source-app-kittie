@@ -1,94 +1,142 @@
-import { useId } from "react";
-import type { AppHistoricalPoint } from "@kittie/types";
-import { IconChart } from "../icons";
-import { formatMoney, formatCompact, formatDate } from "../lib/format";
+import { useId, useRef, useState } from "react";
+import type { SeriesPoint } from "../lib/series";
 
-type Metric = "revenueEstimate" | "reviewCount" | "downloadsEstimate" | "rating" | "chartRank";
+function niceTicks(min: number, max: number, count = 4): number[] {
+  if (max <= min) max = min + 1;
+  const raw = (max - min) / (count - 1);
+  const mag = Math.pow(10, Math.floor(Math.log10(raw || 1)));
+  const norm = raw / mag;
+  const step = (norm < 1.5 ? 1 : norm < 3 ? 2 : norm < 7 ? 5 : 10) * mag;
+  const lo = Math.floor(min / step) * step;
+  const hi = Math.ceil(max / step) * step;
+  const ticks: number[] = [];
+  for (let v = lo; v <= hi + step * 0.5; v += step) ticks.push(Math.round(v * 100) / 100);
+  return ticks;
+}
 
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function shortDate(iso: string): string {
+  const d = new Date(iso + "T00:00:00");
+  return `${MONTHS[d.getMonth()]} ${d.getDate()}`;
+}
+function longDate(iso: string): string {
+  const d = new Date(iso + "T00:00:00");
+  return `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+}
+
+/**
+ * Interactive area chart: y-axis ticks + dashed gridlines, x-axis date labels,
+ * lime line over a gradient fill, hover crosshair + tooltip, faint watermark.
+ */
 export function HistoryChart({
   points,
-  metric,
-  label,
+  fmt,
+  tickFmt,
+  zeroBased = true,
+  watermark,
 }: {
-  points: AppHistoricalPoint[];
-  metric: Metric;
-  label: string;
+  points: SeriesPoint[];
+  fmt: (n: number) => string;
+  tickFmt?: (n: number) => string;
+  zeroBased?: boolean;
+  watermark?: string;
 }) {
   const gradId = useId();
-  const series = points
-    .map((p) => ({ date: p.date, v: p[metric] }))
-    .filter((p): p is { date: string; v: number } => p.v != null);
+  const plotRef = useRef<HTMLDivElement>(null);
+  const [hover, setHover] = useState<number | null>(null);
 
-  const latest = series.length ? series[series.length - 1]!.v : null;
-  const fmt =
-    metric === "revenueEstimate"
-      ? formatMoney
-      : metric === "rating"
-        ? (v: number | null) => (v != null ? v.toFixed(2) : "—")
-        : formatCompact;
+  const n = points.length;
+  if (n < 2) return <div className="tp-plot tp-plot--empty" />;
 
-  if (series.length < 2) {
-    return (
-      <div className="chart-card">
-        <div className="chart-head">
-          <div className="big">{fmt(latest)}</div>
-          <div className="label">{label}</div>
-        </div>
-        <div className="chart-empty">
-          <IconChart />
-          <div className="t">Collecting history</div>
-          <div className="s">
-            Chart unlocks once 2+ daily snapshots exist. One point so far
-            {series[0] ? ` (${formatDate(series[0].date)})` : ""}.
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const vals = points.map((p) => p.value);
+  const dataMin = Math.min(...vals);
+  const dataMax = Math.max(...vals);
+  const ticks = niceTicks(zeroBased ? 0 : dataMin, dataMax);
+  const yMin = ticks[0]!;
+  const yMax = ticks[ticks.length - 1]!;
+  const span = yMax - yMin || 1;
 
-  const W = 480;
-  const H = 130;
-  const pad = { t: 8, r: 4, b: 4, l: 4 };
-  const vals = series.map((s) => s.v);
-  const min = Math.min(...vals);
-  const max = Math.max(...vals);
-  const span = max - min || 1;
-  const ix = (i: number) => pad.l + (i / (series.length - 1)) * (W - pad.l - pad.r);
-  const iy = (v: number) => pad.t + (1 - (v - min) / span) * (H - pad.t - pad.b);
+  const xAt = (i: number) => (i / (n - 1)) * 100;
+  const yAt = (v: number) => (1 - (v - yMin) / span) * 100;
 
-  const line = series.map((s, i) => `${i ? "L" : "M"}${ix(i).toFixed(1)} ${iy(s.v).toFixed(1)}`).join(" ");
-  const area = `${line} L${ix(series.length - 1).toFixed(1)} ${H - pad.b} L${ix(0).toFixed(1)} ${H - pad.b} Z`;
+  const line = points.map((p, i) => `${i ? "L" : "M"}${xAt(i).toFixed(2)} ${yAt(p.value).toFixed(2)}`).join(" ");
+  const area = `${line} L100 100 L0 100 Z`;
 
-  const first = series[0]!.v;
-  const change = first ? ((latest! - first) / first) * 100 : 0;
+  // ~7 evenly spaced date ticks
+  const xCount = Math.min(7, n);
+  const xIdx = Array.from({ length: xCount }, (_, k) => Math.round((k / (xCount - 1)) * (n - 1)));
+  const ftick = tickFmt ?? fmt;
+
+  const onMove = (e: React.MouseEvent) => {
+    const el = plotRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const frac = (e.clientX - rect.left) / rect.width;
+    setHover(Math.max(0, Math.min(n - 1, Math.round(frac * (n - 1)))));
+  };
+
+  const hp = hover != null ? points[hover]! : null;
+  const hx = hover != null ? xAt(hover) : 0;
 
   return (
-    <div className="chart-card">
-      <div className="chart-head">
-        <div>
-          <div className="big">{fmt(latest)}</div>
-          <div className="label">{label}</div>
-        </div>
-        <div
-          className={`delta ${change > 0.5 ? "up" : change < -0.5 ? "down" : "flat"}`}
-          style={{ fontSize: 12 }}
-        >
-          {change >= 0 ? "▲" : "▼"} {Math.abs(change).toFixed(1)}%
-        </div>
-      </div>
-      <svg className="chart-svg" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
-        <defs>
-          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.34" />
-            <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <path d={area} fill={`url(#${gradId})`} />
-        <path d={line} fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
-        {series.map((s, i) => (
-          <circle key={i} cx={ix(i)} cy={iy(s.v)} r={i === series.length - 1 ? 3.2 : 0} fill="var(--accent)" />
+    <div className="tp-chart">
+      <div className="tp-ticks">
+        {[...ticks].reverse().map((t) => (
+          <div key={t} className="tp-tick" style={{ top: `${yAt(t)}%` }}>
+            <span className="tp-ylabel">{ftick(t)}</span>
+            <span className="tp-gridline" />
+          </div>
         ))}
-      </svg>
+      </div>
+
+      <div
+        ref={plotRef}
+        className="tp-plot"
+        onMouseMove={onMove}
+        onMouseLeave={() => setHover(null)}
+      >
+        {watermark && <div className="tp-watermark">{watermark}</div>}
+        <svg className="tp-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+          <defs>
+            <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.28" />
+              <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          <path d={area} fill={`url(#${gradId})`} />
+          <path
+            d={line}
+            fill="none"
+            stroke="var(--accent)"
+            strokeWidth="2"
+            strokeLinejoin="round"
+            strokeLinecap="round"
+            vectorEffect="non-scaling-stroke"
+          />
+        </svg>
+
+        {hp && (
+          <>
+            <span className="tp-cross" style={{ left: `${hx}%` }} />
+            <span className="tp-dot" style={{ left: `${hx}%`, top: `${yAt(hp.value)}%` }} />
+            <div className={`tp-tip ${hx > 60 ? "flip" : ""}`} style={{ left: `${hx}%` }}>
+              <div className="tp-tip-date">{longDate(hp.date)}</div>
+              <div className="tp-tip-val">
+                <span className="tp-tip-dot" />
+                {fmt(hp.value)}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="tp-xaxis">
+        {xIdx.map((i) => (
+          <span key={i} className="tp-xlabel" style={{ left: `${xAt(i)}%` }}>
+            {shortDate(points[i]!.date)}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
