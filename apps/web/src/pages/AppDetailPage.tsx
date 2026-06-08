@@ -1,11 +1,16 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import type { AppDetail, Review } from "@kittie/types";
+import type { AppDetail, AppHistoricalPoint, Review } from "@kittie/types";
 import { getApp, getReviews } from "../lib/api";
 import type { Theme } from "../lib/theme";
 import { categoryColor, pillStyle } from "../lib/palette";
 import { formatCompact, formatMoney, formatRating, formatDate } from "../lib/format";
-import { HistoryChart } from "../components/Chart";
+import { MetricCard, type MetricDelta } from "../components/MetricCard";
+import { DetailCard, EmptyCard, Fact } from "../components/DetailCard";
+import { TrendPanel, type ChartMetric } from "../components/TrendPanel";
+import { SimilarApps } from "../components/SimilarApps";
+import { FavoriteToggle } from "../components/FavoriteToggle";
+import { Lightbox } from "../components/Lightbox";
 import {
   IconArrowLeft,
   IconStar,
@@ -16,25 +21,27 @@ import {
   IconChart,
   IconUsers,
   IconCoin,
-  IconTrending,
-  IconRank,
   IconSun,
   IconMoon,
   IconExternal,
   IconImage,
+  IconGlobe,
+  IconMessage,
 } from "../icons";
-import { Lightbox } from "../components/Lightbox";
 
-// A gallery must be a real collection of *working* images, not a lone/broken shot.
 const MIN_COLLECTION = 3;
 
-function Stat({ icon, label, children }: { icon: React.ReactNode; label: string; children: React.ReactNode }) {
-  return (
-    <div className="stat">
-      <div className="label">{icon}{label}</div>
-      <div className="value">{children}</div>
-    </div>
-  );
+/** % change of a historical series, for the headline-card delta. Null until 2+ snapshots. */
+function pctDelta(historicals: AppHistoricalPoint[], key: keyof AppHistoricalPoint): MetricDelta | null {
+  const series = historicals
+    .map((p) => p[key])
+    .filter((v): v is number => typeof v === "number");
+  if (series.length < 2) return null;
+  const first = series[0]!;
+  const last = series[series.length - 1]!;
+  if (!first) return null;
+  const pct = ((last - first) / first) * 100;
+  return { label: `${Math.abs(pct).toFixed(1)}%`, dir: pct > 0.5 ? "up" : pct < -0.5 ? "down" : "flat" };
 }
 
 export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => void }) {
@@ -45,6 +52,7 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<number | null>(null);
+  const [chartMetric, setChartMetric] = useState<ChartMetric>("downloadsEstimate");
   const [media, setMedia] = useState<{ status: "probing" | "ready"; working: string[] }>({
     status: "probing",
     working: [],
@@ -58,19 +66,18 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
     setApp(null);
     setLightbox(null);
     setReviews(null);
+    setChartMetric("downloadsEstimate");
     getApp(decodeURIComponent(id), ac.signal)
       .then((d) => !ac.signal.aborted && setApp(d))
       .catch((e) => !ac.signal.aborted && setError(e instanceof Error ? e.message : "Failed to load"))
       .finally(() => !ac.signal.aborted && setLoading(false));
-    // Reviews are a secondary load — never block or error the page on them.
     getReviews(decodeURIComponent(id), ac.signal)
       .then((r) => !ac.signal.aborted && setReviews(r))
       .catch(() => !ac.signal.aborted && setReviews([]));
     return () => ac.abort();
   }, [id]);
 
-  // Probe each screenshot in-browser (with no-referrer, matching how we render) and keep
-  // only the ones that actually load. A gallery shows only if it's a real working collection.
+  // Probe screenshots in-browser; only show a real working collection.
   useEffect(() => {
     if (!app) return;
     const urls = app.screenshotUrls;
@@ -104,7 +111,6 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
     };
   }, [app]);
 
-  // scroll the detail body to top on app change
   const scrollRef = useCallback((el: HTMLDivElement | null) => el?.scrollTo(0, 0), []);
 
   return (
@@ -114,6 +120,7 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
           <IconArrowLeft /> Back
         </button>
         <div className="topbar-spacer" />
+        {app && <FavoriteToggle id={app.id} kind="app" size={18} />}
         {app?.websiteUrl && (
           <a className="btn" href={app.websiteUrl} target="_blank" rel="noreferrer">
             <IconExternal /> Store page
@@ -162,29 +169,74 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
               </div>
             </header>
 
-            {/* metrics */}
-            <div className="stat-grid stat-grid-6">
-              <Stat icon={<IconRank />} label="Chart rank">
-                {(() => {
-                  const r = app.historicals.length ? app.historicals[app.historicals.length - 1]!.chartRank : null;
-                  return r != null ? <>#{r}</> : "—";
-                })()}
-              </Stat>
-              <Stat icon={<IconStar />} label="Rating">{formatRating(app.rating)}</Stat>
-              <Stat icon={<IconUsers />} label="Reviews">{formatCompact(app.reviewCount)}</Stat>
-              <Stat icon={<IconChart />} label="Downloads 30d">{formatCompact(app.downloadsEstimate30d)}</Stat>
-              <Stat icon={<IconCoin />} label="Revenue 30d">{formatMoney(app.revenueEstimate30d)}</Stat>
-              <Stat icon={<IconTrending />} label="Growth">{app.growthScore != null ? app.growthScore.toFixed(1) : "—"}</Stat>
+            {/* headline metrics — click to drive the chart */}
+            <div className="metric-row">
+              <MetricCard
+                icon={<IconChart />}
+                label="Downloads (30d)"
+                value={formatCompact(app.downloadsEstimate30d)}
+                delta={pctDelta(app.historicals, "downloadsEstimate")}
+                active={chartMetric === "downloadsEstimate"}
+                onClick={() => setChartMetric("downloadsEstimate")}
+              />
+              <MetricCard
+                icon={<IconCoin />}
+                label="MRR"
+                value={formatMoney(app.revenueEstimate30d)}
+                delta={pctDelta(app.historicals, "revenueEstimate")}
+                active={chartMetric === "revenueEstimate"}
+                onClick={() => setChartMetric("revenueEstimate")}
+              />
+              <MetricCard
+                icon={<IconStar />}
+                label="Rating"
+                value={formatRating(app.rating)}
+                sub={app.reviewCount ? `(${formatCompact(app.reviewCount)})` : undefined}
+                delta={pctDelta(app.historicals, "rating")}
+                active={chartMetric === "rating"}
+                onClick={() => setChartMetric("rating")}
+              />
+              <MetricCard
+                icon={<IconUsers />}
+                label="Reviews"
+                value={formatCompact(app.reviewCount)}
+                delta={pctDelta(app.historicals, "reviewCount")}
+                active={chartMetric === "reviewCount"}
+                onClick={() => setChartMetric("reviewCount")}
+              />
             </div>
 
-            {/* Listing media — first-class; only a working collection is shown */}
-            <section>
-              <div className="section-head">
-                <div className="section-label" style={{ margin: 0 }}>Listing media</div>
-                {media.status === "ready" && media.working.length >= MIN_COLLECTION && (
-                  <span className="section-count">{media.working.length} screenshots</span>
-                )}
+            {/* trend chart */}
+            <TrendPanel app={app} metric={chartMetric} />
+
+            {/* quick facts — componentised, never loose text */}
+            <DetailCard title="Details">
+              <div className="facts-grid">
+                <Fact label="Chart rank">
+                  {(() => {
+                    const r = app.historicals.length ? app.historicals[app.historicals.length - 1]!.chartRank : null;
+                    return r != null ? `#${r}` : "—";
+                  })()}
+                </Fact>
+                <Fact label="Category">{app.category ?? "—"}</Fact>
+                <Fact label="Price">{app.price ? `$${app.price}` : "Free"}</Fact>
+                <Fact label="Content rating">{app.contentRating ?? "—"}</Fact>
+                <Fact label="Languages">{app.languages.length || "—"}</Fact>
+                <Fact label="Released">{formatDate(app.releasedAt)}</Fact>
+                <Fact label="Updated">{formatDate(app.updatedAt)}</Fact>
+                <Fact label="Store ID">{app.storeAppId}</Fact>
               </div>
+            </DetailCard>
+
+            {/* listing media */}
+            <DetailCard
+              title="Listing media"
+              action={
+                media.status === "ready" && media.working.length >= MIN_COLLECTION ? (
+                  <span className="dcard-count">{media.working.length} screenshots</span>
+                ) : undefined
+              }
+            >
               {media.status === "probing" ? (
                 <div className="media-grid">
                   {Array.from({ length: Math.min(6, app.screenshotUrls.length || 6) }).map((_, i) => (
@@ -200,37 +252,67 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
                   ))}
                 </div>
               ) : (
-                <div className="media-empty">
-                  <IconImage />
-                  <div className="t">No screenshot collection</div>
-                  <div className="s">
-                    This app doesn’t have a full set of working store screenshots
-                    {app.screenshotUrls.length > 0 ? " — only a stray or broken image, so none are shown." : "."}
-                    {" "}Preview videos aren’t collected yet.
-                  </div>
-                </div>
+                <EmptyCard
+                  icon={<IconImage />}
+                  title="No screenshot collection"
+                  sub="This app has no full set of working store screenshots. Preview videos aren’t collected yet."
+                />
               )}
-            </section>
+            </DetailCard>
 
-            {/* trends */}
-            <div className="trend-grid">
-              <div>
-                <div className="section-label">Revenue trend</div>
-                <HistoryChart points={app.historicals} metric="revenueEstimate" label="Est. monthly revenue" />
-              </div>
-              <div>
-                <div className="section-label">Reviews trend</div>
-                <HistoryChart points={app.historicals} metric="reviewCount" label="Total reviews" />
-              </div>
-            </div>
+            {/* about */}
+            {app.description && (
+              <DetailCard title="About">
+                <p className="desc">{app.description}</p>
+              </DetailCard>
+            )}
 
-            {/* recent reviews — up to 50, US, newest first */}
-            {reviews && reviews.length > 0 && (
-              <section className="reviews">
-                <div className="section-head">
-                  <div className="section-label" style={{ margin: 0 }}>Recent reviews</div>
-                  <span className="section-count">{reviews.length} shown · US</span>
+            {/* contact & links */}
+            <DetailCard title="Contact & links">
+              <div className="links-row">
+                <LinkRow icon={<IconUsers />} label="Developer" value={app.developer} />
+                {app.websiteUrl ? (
+                  <a className="link-row clickable" href={app.websiteUrl} target="_blank" rel="noreferrer">
+                    <span className="lr-icon"><IconGlobe /></span>
+                    <span className="lr-label">Website</span>
+                    <span className="lr-value">{app.websiteUrl.replace(/^https?:\/\//, "")}</span>
+                    <IconExternal />
+                  </a>
+                ) : (
+                  <LinkRow icon={<IconGlobe />} label="Website" value="—" />
+                )}
+                <LinkRow icon={<IconMessage />} label="Support email" value={app.supportEmail ?? "Not collected"} />
+              </div>
+            </DetailCard>
+
+            {/* in-app purchases */}
+            {app.iaps.length > 0 && (
+              <DetailCard title="In-app purchases" count={app.iaps.length}>
+                <div className="iap-list">
+                  {app.iaps.map((p, i) => (
+                    <div key={i} className="iap-row">
+                      <span>{p.name}</span>
+                      <span className="price">{p.price != null ? `${p.currency ?? "$"}${p.price}` : "—"}</span>
+                    </div>
+                  ))}
                 </div>
+              </DetailCard>
+            )}
+
+            {/* reviews */}
+            <DetailCard
+              title="User reviews"
+              action={reviews && reviews.length ? <span className="dcard-count">{reviews.length} · US</span> : undefined}
+            >
+              {reviews == null ? (
+                <div className="review-list">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="skel" style={{ height: 70, borderRadius: 10 }} />
+                  ))}
+                </div>
+              ) : reviews.length === 0 ? (
+                <EmptyCard icon={<IconMessage />} title="No reviews collected" sub="No recent US reviews for this app yet." />
+              ) : (
                 <div className="review-list">
                   {[...reviews]
                     .sort((a, b) => +new Date(b.reviewedAt) - +new Date(a.reviewedAt))
@@ -252,58 +334,43 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
                       </article>
                     ))}
                 </div>
-              </section>
-            )}
+              )}
+            </DetailCard>
 
-            {/* about + details two-column */}
-            <div className="detail-cols">
-              <div>
-                {app.description && (
-                  <>
-                    <div className="section-label">About</div>
-                    <p className="desc">{app.description}</p>
-                  </>
+            {/* similar apps */}
+            <DetailCard title="Similar apps">
+              <SimilarApps category={app.category} excludeId={app.id} />
+            </DetailCard>
+
+            {/* intelligence — data not ingested yet (honest empty-states) */}
+            <div className="intel-grid">
+              <DetailCard title="Meta ads" count={app.metaAds.length || undefined}>
+                {app.metaAds.length === 0 ? (
+                  <EmptyCard icon={<IconImage />} title="No Meta ads" sub="Ad-library ingestion pending." />
+                ) : (
+                  <div className="facts-grid">{app.metaAds.map((ad) => <Fact key={ad.id} label={ad.status ?? "Ad"}>{ad.adCopy ?? "—"}</Fact>)}</div>
                 )}
-                {app.iaps.length > 0 && (
-                  <>
-                    <div className="section-label">In-app purchases</div>
-                    <div>
-                      {app.iaps.map((p, i) => (
-                        <div key={i} className="iap-row">
-                          <span>{p.name}</span>
-                          <span className="price">{p.price != null ? `${p.currency ?? "$"}${p.price}` : "—"}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </>
+              </DetailCard>
+              <DetailCard title="Apple Search Ads" count={app.appleSearchAds.length || undefined}>
+                {app.appleSearchAds.length === 0 ? (
+                  <EmptyCard icon={<IconChart />} title="No Apple ads" sub="Apple Search Ads ingestion pending." />
+                ) : (
+                  <div className="facts-grid">{app.appleSearchAds.map((ad, i) => <Fact key={i} label={ad.keyword}>{ad.country}{ad.rank != null ? ` · #${ad.rank}` : ""}</Fact>)}</div>
                 )}
-              </div>
-              <div>
-                <div className="section-label">Details</div>
-                <dl className="kv">
-                  <dt>Developer</dt><dd>{app.developer}</dd>
-                  <dt>Category</dt><dd>{app.category ?? "—"}</dd>
-                  <dt>Content rating</dt><dd>{app.contentRating ?? "—"}</dd>
-                  <dt>Price</dt><dd>{app.price ? `$${app.price}` : "Free"}</dd>
-                  <dt>Released</dt><dd>{formatDate(app.releasedAt)}</dd>
-                  <dt>Updated</dt><dd>{formatDate(app.updatedAt)}</dd>
-                </dl>
-                {app.languages.length > 0 && (
-                  <>
-                    <div className="section-label">Languages ({app.languages.length})</div>
-                    <div className="lang-chips">
-                      {app.languages.slice(0, 30).map((l) => <span key={l} className="lang-chip">{l}</span>)}
-                      {app.languages.length > 30 && <span className="lang-chip">+{app.languages.length - 30}</span>}
-                    </div>
-                  </>
+              </DetailCard>
+              <DetailCard title="Creators" count={app.creators.length || undefined}>
+                {app.creators.length === 0 ? (
+                  <EmptyCard icon={<IconUsers />} title="No creators" sub="Creator-partnership ingestion pending." />
+                ) : (
+                  <div className="facts-grid">{app.creators.map((c, i) => <Fact key={i} label={c.platform}>{c.handle}</Fact>)}</div>
                 )}
-              </div>
+              </DetailCard>
             </div>
 
             {app.historicals.length < 2 && (
               <div className="notice">
                 <IconInfo />
-                <span>Trend charts and growth score fill in as daily snapshots accumulate — only one snapshot exists so far.</span>
+                <span>Trend charts and deltas fill in as daily snapshots accumulate — only one snapshot exists so far.</span>
               </div>
             )}
           </div>
@@ -323,6 +390,16 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
   );
 }
 
+function LinkRow({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
+  return (
+    <div className="link-row">
+      <span className="lr-icon">{icon}</span>
+      <span className="lr-label">{label}</span>
+      <span className="lr-value">{value}</span>
+    </div>
+  );
+}
+
 function DetailSkeleton() {
   return (
     <div className="detail-inner">
@@ -334,12 +411,10 @@ function DetailSkeleton() {
           <div className="skel" style={{ width: "55%", height: 22 }} />
         </div>
       </div>
-      <div className="stat-grid stat-grid-6">
-        {Array.from({ length: 6 }).map((_, i) => <div key={i} className="skel" style={{ height: 74, borderRadius: 11 }} />)}
+      <div className="metric-row">
+        {Array.from({ length: 4 }).map((_, i) => <div key={i} className="skel" style={{ height: 92, borderRadius: 14 }} />)}
       </div>
-      <div className="media-grid">
-        {Array.from({ length: 6 }).map((_, i) => <div key={i} className="skel" style={{ aspectRatio: "9/19", borderRadius: 14 }} />)}
-      </div>
+      <div className="skel" style={{ height: 200, borderRadius: 14 }} />
     </div>
   );
 }

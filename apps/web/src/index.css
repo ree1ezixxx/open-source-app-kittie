@@ -887,6 +887,93 @@ thead .col-app { z-index: 6; }
 .rank-th, .rank-cell { width: 46px; }
 .rank-cell { color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
 
+/* ============================================================
+   App detail page — components (no loose text)
+   ============================================================ */
+
+/* headline metric cards */
+.metric-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.metric-card {
+  display: flex; flex-direction: column; gap: 6px; text-align: left;
+  padding: 14px 16px; border-radius: var(--radius-lg);
+  background: var(--panel); border: 1px solid var(--border-soft); color: var(--text);
+  transition: border-color 0.12s, background 0.12s;
+}
+.metric-card.clickable { cursor: pointer; }
+.metric-card.clickable:hover { border-color: var(--border-strong); }
+.metric-card.active { border-color: color-mix(in srgb, var(--accent) 55%, transparent); background: var(--accent-soft); }
+.metric-label { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-tertiary); }
+.metric-label svg { width: 13px; height: 13px; }
+.metric-value { font-size: 23px; font-weight: 680; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.metric-sub { margin-left: 6px; font-size: 12px; font-weight: 500; color: var(--text-tertiary); }
+.metric-delta { font-size: 11.5px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.metric-delta.up { color: var(--positive); }
+.metric-delta.down { color: var(--negative); }
+.metric-delta.flat { color: var(--text-tertiary); }
+
+/* detail card wrapper */
+.dcard { background: var(--panel); border: 1px solid var(--border-soft); border-radius: var(--radius-lg); overflow: hidden; }
+.dcard-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 16px 12px; border-bottom: 1px solid var(--border-soft); }
+.dcard-title { display: inline-flex; align-items: center; gap: 9px; margin: 0; font-size: 14px; font-weight: 650; }
+.dcard-count { font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 99px; background: var(--surface-2); color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.dcard-body { padding: 16px; }
+.dcard-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 26px 16px; color: var(--text-tertiary); }
+.dcard-empty svg { width: 22px; height: 22px; opacity: 0.7; }
+.dcard-empty .t { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+.dcard-empty .s { font-size: 11.5px; max-width: 280px; }
+
+/* quick facts grid */
+.facts-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 14px 18px; }
+.fact { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.fact-label { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-tertiary); }
+.fact-value { font-size: 13.5px; font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* chart range selector */
+.seg-range { display: inline-flex; gap: 2px; padding: 2px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+.seg-range button { height: 24px; padding: 0 9px; border: none; background: none; cursor: pointer; border-radius: 6px; font-size: 11px; font-weight: 600; color: var(--text-tertiary); transition: color 0.12s, background 0.12s; }
+.seg-range button:hover { color: var(--text); }
+.seg-range button.on { background: var(--surface-2); color: var(--text); }
+
+/* similar apps */
+.similar-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+.similar-card { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 10px; border: 1px solid var(--border-soft); background: var(--surface); transition: border-color 0.12s, background 0.12s; }
+.similar-card:hover { border-color: var(--border-strong); background: var(--surface-2); }
+.similar-card img, .similar-ph { width: 38px; height: 38px; border-radius: 9px; flex: none; object-fit: cover; }
+.similar-ph { display: grid; place-items: center; background: var(--surface-2); color: var(--text-tertiary); font-weight: 600; }
+.similar-meta { min-width: 0; }
+.similar-title { font-size: 12.5px; font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.similar-sub { font-size: 11px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+
+/* contact & links */
+.links-row { display: flex; flex-direction: column; gap: 2px; }
+.link-row { display: flex; align-items: center; gap: 10px; padding: 9px 6px; border-radius: 8px; }
+.link-row.clickable { cursor: pointer; }
+.link-row.clickable:hover { background: var(--surface-hover); }
+.link-row + .link-row { border-top: 1px solid var(--border-soft); }
+.lr-icon { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 7px; background: var(--surface-2); color: var(--text-secondary); flex: none; }
+.lr-icon svg { width: 14px; height: 14px; }
+.lr-label { font-size: 12.5px; color: var(--text-tertiary); width: 110px; flex: none; }
+.lr-value { font-size: 12.5px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.link-row.clickable .lr-value { color: var(--accent); }
+.link-row svg:last-child { width: 13px; height: 13px; color: var(--text-tertiary); flex: none; }
+
+/* iaps */
+.iap-list { display: flex; flex-direction: column; }
+
+/* intelligence empty-state grid */
+.intel-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+
+/* spacing between detail sections */
+.detail-inner > .metric-row,
+.detail-inner > .dcard,
+.detail-inner > .intel-grid,
+.detail-inner > .notice { margin-top: 16px; }
+
+@media (max-width: 1000px) {
+  .metric-row { grid-template-columns: repeat(2, 1fr); }
+  .intel-grid { grid-template-columns: 1fr; }
+}
+
 /* active filter chips */
 .active-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; min-width: 0; }
 .achip {

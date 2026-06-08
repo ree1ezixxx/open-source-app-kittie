@@ -17,6 +17,12 @@ Not a commercial product (for now). Ship fast: **days, not months**.
 - **Punctual.** State what changed or what to do next. Skip "What changed" diff narration — the user can see the diff.
 - **Clear over clever.** Plain language. One idea per sentence.
 
+## UI Conventions
+
+- **Never loose text in a page — everything lives in a component.** Wrap sections in cards (`DetailCard`), facts in `Fact`, headline metrics in `MetricCard`; honest empty-states via `EmptyCard` for data not ingested yet. Loose `<p>`/`<dl>` blobs read as unfinished.
+- The **app detail template is uniform** across every app — build it once (`pages/AppDetailPage.tsx`) and it repeats. Match AppKittie's section set: headline metric cards (clickable → drive chart) → trend chart (range selector) → details → listing media → about → contact & links → reviews → similar apps → intelligence (Meta/Apple ads, creators — empty-state until ingested).
+- Reusable detail components: `MetricCard`, `DetailCard`/`EmptyCard`/`Fact`, `TrendPanel`, `SimilarApps`.
+
 ## Read First
 
 | File | When |

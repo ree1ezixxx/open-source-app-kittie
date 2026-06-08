@@ -3,7 +3,7 @@ import type { AppHistoricalPoint } from "@kittie/types";
 import { IconChart } from "../icons";
 import { formatMoney, formatCompact, formatDate } from "../lib/format";
 
-type Metric = "revenueEstimate" | "reviewCount";
+type Metric = "revenueEstimate" | "reviewCount" | "downloadsEstimate" | "rating" | "chartRank";
 
 export function HistoryChart({
   points,
@@ -20,7 +20,12 @@ export function HistoryChart({
     .filter((p): p is { date: string; v: number } => p.v != null);
 
   const latest = series.length ? series[series.length - 1]!.v : null;
-  const fmt = metric === "revenueEstimate" ? formatMoney : formatCompact;
+  const fmt =
+    metric === "revenueEstimate"
+      ? formatMoney
+      : metric === "rating"
+        ? (v: number | null) => (v != null ? v.toFixed(2) : "—")
+        : formatCompact;
 
   if (series.length < 2) {
     return (
