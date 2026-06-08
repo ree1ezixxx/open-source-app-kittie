@@ -17,6 +17,13 @@ const TEMPLATE_RE =
 /** The image's basename, e.g. "ios6-5_08.jpg" — used to dedup the same shot across device servers. */
 const BASENAME_RE = /\/([^/]+)\/\{w\}x\{h\}\{c\}\.\{f\}$/;
 
+/**
+ * App-Store app links on a listing page: `…/app/<slug>/id<digits>`. These cover the
+ * "You Might Also Like" and "More By This Developer" shelves — the seam the related-apps
+ * crawl expands on (each page surfaces ~30 other apps, many by developers we've never seen).
+ */
+const APP_LINK_RE = /\/app\/[^/"\\ ]*\/id(\d{5,12})/g;
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 function parseScreenshots(html: string): string[] {
@@ -59,6 +66,45 @@ export async function scrapeAppStoreScreenshots(
     if (res.ok) {
       const shots = parseScreenshots(await res.text());
       if (shots.length > 0) return shots;
+    } else {
+      await res.body?.cancel().catch(() => {});
+    }
+    if (i < attempts - 1) await sleep(400 + i * 600); // back off before retry
+  }
+  return [];
+}
+
+function parseRelatedAppIds(html: string, selfId: string): string[] {
+  const ids = new Set<string>();
+  for (const m of html.replace(/\\\//g, "/").matchAll(APP_LINK_RE)) {
+    const id = m[1]!;
+    if (id !== selfId) ids.add(id);
+  }
+  return [...ids];
+}
+
+/**
+ * Other app IDs referenced on an app's web listing — the related/also-by shelves.
+ * Same stripped-page hazard as screenshots, so retry on an empty parse before giving up.
+ * Returns [] on a hard failure; the crawler treats that as "no new fuel from this page".
+ */
+export async function scrapeRelatedAppIds(
+  storeAppId: string,
+  country = "us",
+  attempts = 3,
+): Promise<string[]> {
+  const url = `https://apps.apple.com/${country}/app/id${storeAppId}`;
+  for (let i = 0; i < attempts; i++) {
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent": UA,
+        Accept: "text/html,application/xhtml+xml,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+      },
+    });
+    if (res.ok) {
+      const ids = parseRelatedAppIds(await res.text(), storeAppId);
+      if (ids.length > 0) return ids;
     } else {
       await res.body?.cancel().catch(() => {});
     }
