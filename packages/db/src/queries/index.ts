@@ -14,6 +14,7 @@ export {
   getAppById as getAppRowById,
   listFreshSet,
   loadAppRelations,
+  updateAppListingFacts,
   reviewCountsByApp,
 } from "./detail.js";
 export { enrichSnapshotScores } from "./scoring.js";
@@ -31,8 +32,25 @@ export {
 } from "./keyword-suggestions.js";
 export {
   isKeywordTracked,
+  listStaleTrackedKeywords,
   listTrackedKeywords,
   trackKeyword,
   untrackKeyword,
   type TrackedKeywordEntry,
 } from "./tracked-keywords.js";
+export { getAiGeneration, saveAiGeneration } from "./ai-generations.js";
+export { getSweepState, listSweepStates, recordSweepRun } from "./sweep-state.js";
+export {
+  countIdeas,
+  countSnapshotDays,
+  getIdeaByStoreAppId,
+  insertIdea,
+  listComplaintSnippets,
+  listIdeaCandidates,
+  listIdeaFacets,
+  listIdeas,
+  listSimilarIdeas,
+  type IdeaCandidate,
+  type IdeaListQuery,
+  type IdeaSort,
+} from "./ideas.js";

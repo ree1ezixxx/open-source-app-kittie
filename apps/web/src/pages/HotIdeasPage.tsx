@@ -2,10 +2,10 @@ import { useEffect, useState } from "react";
 import "../styles/aistudio.css";
 import { aiService } from "../lib/aiService";
 import {
-  SOURCE_CATEGORIES,
-  IDEA_CATEGORIES,
   blueprintLabel,
+  fetchIdeaFacets,
   type BlueprintTag,
+  type IdeaSort,
   type IdeasPage,
 } from "../lib/api/ideas";
 import { StudioHeader } from "../components/aistudio/StudioHeader";
@@ -15,10 +15,15 @@ import { FavoriteToggle } from "../components/FavoriteToggle";
 import { IconSearch, IconChevron, IconArrowDown, IconArrowUp } from "../icons";
 import { IconBulb } from "../components/aistudio/icons";
 
-const SORTS: { value: "created" | "reviews" | "rating"; label: string }[] = [
+/** Live-parity sort metrics — all absolute, never growth (ADR 0005). */
+const SORTS: { value: IdeaSort; label: string }[] = [
   { value: "created", label: "Created" },
+  { value: "released", label: "Released" },
   { value: "reviews", label: "Reviews" },
+  { value: "downloads", label: "Downloads" },
+  { value: "revenue", label: "Revenue" },
   { value: "rating", label: "Rating" },
+  { value: "price", label: "Price" },
 ];
 const BLUEPRINTS: BlueprintTag[] = ["backend", "database", "ai"];
 const PAGE_SIZE = 12;
@@ -28,12 +33,26 @@ export function HotIdeasPage() {
   const [sourceCategory, setSourceCategory] = useState("");
   const [ideaCategory, setIdeaCategory] = useState("");
   const [blueprint, setBlueprint] = useState<BlueprintTag[]>([]);
-  const [sort, setSort] = useState<"created" | "reviews" | "rating">("created");
+  const [sort, setSort] = useState<IdeaSort>("created");
   const [order, setOrder] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
 
   const [result, setResult] = useState<IdeasPage | null>(null);
   const [loading, setLoading] = useState(true);
+  const [facets, setFacets] = useState<{ sourceCategories: string[]; ideaCategories: string[] }>({
+    sourceCategories: [],
+    ideaCategories: [],
+  });
+
+  useEffect(() => {
+    let alive = true;
+    fetchIdeaFacets()
+      .then((f) => alive && setFacets(f))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   // reset to page 1 whenever a filter (not the page itself) changes
   useEffect(() => {
@@ -80,7 +99,7 @@ export function HotIdeasPage() {
         <div className="select">
           <select value={sourceCategory} onChange={(e) => setSourceCategory(e.target.value)}>
             <option value="">All app categories</option>
-            {SOURCE_CATEGORIES.map((c) => (
+            {facets.sourceCategories.map((c) => (
               <option key={c} value={c}>{c}</option>
             ))}
           </select>
@@ -90,7 +109,7 @@ export function HotIdeasPage() {
         <div className="select">
           <select value={ideaCategory} onChange={(e) => setIdeaCategory(e.target.value)}>
             <option value="">All idea types</option>
-            {IDEA_CATEGORIES.map((c) => (
+            {facets.ideaCategories.map((c) => (
               <option key={c} value={c}>{c}</option>
             ))}
           </select>
@@ -155,14 +174,19 @@ export function HotIdeasPage() {
               // display:grid wrapper keeps the card stretching like a direct grid item.
               <div key={idea.id} style={{ position: "relative", display: "grid" }}>
                 <IdeaCard idea={idea} />
-                <div style={{ position: "absolute", right: 12, bottom: 12 }}>
+                <div
+                  style={{ position: "absolute", right: 12, bottom: 12 }}
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <FavoriteToggle
                     type="hotIdea"
                     id={idea.id}
                     snapshot={{
                       title: idea.title,
                       subtitle: `${idea.ideaCategory} · ${idea.sourceCategory}`,
-                      href: "/dashboard/hot-ideas",
+                      href: idea.storeAppId
+                        ? `/dashboard/hot-ideas/app-${idea.slug}-id${idea.storeAppId}`
+                        : "/dashboard/hot-ideas",
                     }}
                   />
                 </div>

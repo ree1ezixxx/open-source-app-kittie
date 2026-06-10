@@ -175,6 +175,19 @@ a { color: inherit; text-decoration: none; }
 }
 .sidebar-foot { margin-top: auto; padding: 12px 8px 4px; border-top: 1px solid var(--border-soft); }
 .sidebar-foot .nav-item { padding: 7px 8px; }
+.freshness-foot { font-size: 11px; color: var(--text-tertiary); }
+.freshness-line { display: flex; align-items: center; gap: 6px; }
+.freshness-pulse {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent, #7c6cf0);
+  animation: freshness-pulse 1.4s ease-in-out infinite;
+}
+@keyframes freshness-pulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
 
 /* ============================================================ Main */
 .main {

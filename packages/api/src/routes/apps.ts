@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { parseAppSearchParams } from "../lib/params.js";
+import { getAppAbout } from "../services/app-about-service.js";
 import { getAppById, getAppHistoricals, searchApps } from "../services/app-service.js";
 import { syncAppReviews } from "../services/review-sync-service.js";
 
@@ -16,6 +17,17 @@ appsRouter.get("/:id", async (c) => {
   const app = await getAppById(c.req.param("id"));
   if (!app) return c.json({ error: "App not found" }, 404);
   return c.json({ data: app });
+});
+
+/** AI About narrative — lazy on first view, cached forever in ai_generations. */
+appsRouter.get("/:id/about", async (c) => {
+  try {
+    const result = await getAppAbout(c.req.param("id"));
+    if (!result) return c.json({ error: "About unavailable" }, 404);
+    return c.json({ data: result });
+  } catch (e) {
+    return c.json({ error: e instanceof Error ? e.message : "generation failed" }, 502);
+  }
 });
 
 appsRouter.get("/:id/historicals", async (c) => {

@@ -1,35 +1,72 @@
 import { serve } from "@hono/node-server";
 import { loadEnv } from "@kittie/core";
+import { runGoogleExpand, runScore, runSnapshotBulk } from "@kittie/ingest";
 import { createApp } from "./app.js";
+import { registerSweep, startFreshness } from "./services/freshness-service.js";
+import { sweepHotIdeas } from "./services/idea-sweep-service.js";
 import { sweepFreshSet } from "./services/review-sweep-service.js";
 
 const env = loadEnv();
 const app = createApp();
 
-serve({ fetch: app.fetch, port: env.PORT }, (info) => {
-  console.log(`Kittie API listening on http://localhost:${info.port}`);
-  startContinuousRefresh();
+/* Freshness scheduler (ADR 0004): every derived dataset registers here.
+   Sweeps run serialized in registration order — fastest-cadence first so a
+   long daily sweep never starves the cheap delta sweeps at boot. */
+
+registerSweep({
+  name: "reviews-delta",
+  cadenceHours: 6,
+  async run() {
+    const r = await sweepFreshSet();
+    return `refreshed ${r.refreshed}/${r.scanned} apps, +${r.newReviews} reviews`;
+  },
 });
 
-/**
- * In-process continuous refresh. No hosted server / OS cron: a catch-up sweep
- * shortly after boot, then an interval while the API is up. Naps when the
- * process is down; catches up on next start. Paced + delta inside the sweep.
- */
-function startContinuousRefresh(): void {
-  const SWEEP_INTERVAL_MS = 6 * 60 * 60 * 1000; // every 6h while up
-  const runSweep = () => {
-    void sweepFreshSet()
-      .then((r) => {
-        if (r.refreshed > 0 || r.newReviews > 0) {
-          console.log(`[sweep] refreshed ${r.refreshed}/${r.scanned} apps, +${r.newReviews} reviews`);
-        }
-      })
-      .catch((e) => console.warn("[sweep] failed:", e instanceof Error ? e.message : e));
-  };
-  // Delay the boot sweep so server startup isn't competing with network I/O.
-  setTimeout(runSweep, 15_000);
-  setInterval(runSweep, SWEEP_INTERVAL_MS);
-}
+registerSweep({
+  name: "snapshots-daily",
+  cadenceHours: 24,
+  async run() {
+    // CONTEXT.md "Daily cadence": snapshot then score, once per calendar day.
+    // snapshot-bulk also captures chart ranks; same-day reruns overwrite.
+    await runSnapshotBulk();
+    await runScore();
+    return "snapshots + chart ranks + scores refreshed";
+  },
+});
+
+registerSweep({
+  name: "keyword-rescore",
+  cadenceHours: 24,
+  async run() {
+    const { sweepStaleTrackedKeywords } = await import("./services/keyword-rescore-service.js");
+    const r = await sweepStaleTrackedKeywords();
+    return `re-scored ${r.rescored}/${r.stale} stale tracked keywords`;
+  },
+});
+
+registerSweep({
+  name: "hot-ideas",
+  cadenceHours: 6,
+  async run() {
+    const r = await sweepHotIdeas();
+    return `${r.existing}/${r.target} ideas (+${r.generated} this run, ${r.failed} failed)`;
+  },
+});
+
+// Registered LAST (post-parity priority): grows Google coverage to ~5K apps
+// in paced slices, then becomes a no-op once the target is reached.
+registerSweep({
+  name: "google-expand",
+  cadenceHours: 24,
+  async run() {
+    const r = await runGoogleExpand();
+    return `${r.totalGoogle}/${r.target} google apps (+${r.added} this run)`;
+  },
+});
+
+serve({ fetch: app.fetch, port: env.PORT }, (info) => {
+  console.log(`Kittie API listening on http://localhost:${info.port}`);
+  startFreshness();
+});
 
 export { createApp };

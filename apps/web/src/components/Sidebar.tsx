@@ -1,4 +1,5 @@
 import { NavLink, useNavigate } from "react-router-dom";
+import { FreshnessFooter } from "./FreshnessFooter";
 import {
   IconDatabase,
   IconSpark,
@@ -111,6 +112,8 @@ export function Sidebar({ total = 0 }: { total?: number }) {
           })}
         </nav>
       ))}
+
+      <FreshnessFooter />
     </aside>
   );
 }

@@ -23,6 +23,11 @@ export const apps = sqliteTable(
     updatedAt: integer("updated_at", { mode: "timestamp" }),
     firstSeenAt: integer("first_seen_at", { mode: "timestamp" }).notNull(),
     lastIngestedAt: integer("last_ingested_at", { mode: "timestamp" }),
+    // Listing facts (App Detail parity) — lazily backfilled from Apple lookup
+    // on first detail view; null until then and always null for Google apps.
+    fileSizeBytes: integer("file_size_bytes"),
+    minOsVersion: text("min_os_version"),
+    sellerName: text("seller_name"),
   },
   (t) => [
     uniqueIndex("apps_store_app_id_idx").on(t.store, t.storeAppId),
@@ -201,6 +206,91 @@ export const trackedKeywords = sqliteTable(
   (t) => [uniqueIndex("tracked_keywords_keyword_idx").on(t.keywordId)],
 );
 
+/**
+ * Cache of AI-generated artifacts (Gemini). One row per generated output, keyed
+ * by kind + subject + a hash of the generation input. Generated once, read
+ * forever — per-view regeneration is never allowed (ADR 0005); user-triggered
+ * kinds (translation, art direction) re-use the row when the same input recurs.
+ */
+export const aiGenerations = sqliteTable(
+  "ai_generations",
+  {
+    id: text("id").primaryKey(),
+    /** e.g. 'app_about' | 'art_direction' | 'translation' | 'idea_blueprint' */
+    kind: text("kind").notNull(),
+    /** What the output is about — usually an app id. */
+    subjectId: text("subject_id").notNull(),
+    /** Hash of the generation input so changed inputs produce a new row. */
+    inputHash: text("input_hash").notNull(),
+    /** JSON or plain-text model output. */
+    output: text("output").notNull(),
+    model: text("model").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  },
+  (t) => [
+    uniqueIndex("ai_generations_unique_idx").on(t.kind, t.subjectId, t.inputHash),
+    index("ai_generations_subject_idx").on(t.subjectId),
+  ],
+);
+
+/**
+ * Last-run bookkeeping for the freshness scheduler (ADR 0004). One row per
+ * registered sweep; persisted so the boot catch-up sweep knows what is stale
+ * across API restarts.
+ */
+export const sweepState = sqliteTable("sweep_state", {
+  name: text("name").primaryKey(),
+  lastRunAt: integer("last_run_at", { mode: "timestamp" }).notNull(),
+  /** Short human summary of the last run (e.g. "refreshed 12, +340 reviews"). */
+  lastSummary: text("last_summary"),
+});
+
+/**
+ * Hot ideas (ADR 0005): one AI-generated app concept per source App,
+ * pre-generated in batch and stored — never generated per view. Sort metrics
+ * are denormalized from the source App at generation time because the display
+ * sort is always absolute (Created/Released/Reviews/Downloads/Revenue/Rating/
+ * Price), never growth.
+ */
+export const appIdeas = sqliteTable(
+  "app_ideas",
+  {
+    id: text("id").primaryKey(),
+    sourceAppId: text("source_app_id")
+      .notNull()
+      .references(() => apps.id),
+    /** URL slug for /dashboard/hot-ideas/app-<slug>-id<storeAppId>. */
+    slug: text("slug").notNull(),
+    title: text("title").notNull(),
+    summary: text("summary").notNull(),
+    /** App-Store category of the source App (denormalized). */
+    sourceCategory: text("source_category").notNull(),
+    /** What kind of product the idea itself is (e.g. "AI Tool"). */
+    ideaCategory: text("idea_category").notNull(),
+    needsBackend: integer("needs_backend", { mode: "boolean" }).notNull(),
+    needsDatabase: integer("needs_database", { mode: "boolean" }).notNull(),
+    needsAi: integer("needs_ai", { mode: "boolean" }).notNull(),
+    /** Full Blueprint JSON: difficulty, timeline, features, architecture, … */
+    blueprint: text("blueprint").notNull(),
+    // Denormalized sort metrics from the source App's latest Snapshot.
+    reviewCount: integer("review_count").notNull().default(0),
+    rating: real("rating"),
+    downloadsEstimate: integer("downloads_estimate"),
+    revenueEstimate: integer("revenue_estimate"),
+    price: real("price"),
+    releasedAt: integer("released_at", { mode: "timestamp" }),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  },
+  (t) => [
+    uniqueIndex("app_ideas_source_app_idx").on(t.sourceAppId),
+    index("app_ideas_source_category_idx").on(t.sourceCategory),
+    index("app_ideas_created_idx").on(t.createdAt),
+  ],
+);
+
 export type App = typeof apps.$inferSelect;
 export type AppSnapshot = typeof appSnapshots.$inferSelect;
 export type TrackedKeyword = typeof trackedKeywords.$inferSelect;
+export type AiGeneration = typeof aiGenerations.$inferSelect;
+export type SweepState = typeof sweepState.$inferSelect;
+export type AppIdea = typeof appIdeas.$inferSelect;

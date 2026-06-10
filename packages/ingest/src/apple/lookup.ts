@@ -18,6 +18,10 @@ export interface AppleLookupResult {
   updatedAt: Date | null;
   reviewCount: number;
   rating: number | null;
+  /** Listing facts for App Detail parity. */
+  fileSizeBytes: number | null;
+  minOsVersion: string | null;
+  sellerName: string | null;
 }
 
 interface ItunesLookupResponse {
@@ -44,6 +48,9 @@ interface ItunesLookupResponse {
     currentVersionReleaseDate?: string;
     userRatingCount?: number;
     averageUserRating?: number;
+    fileSizeBytes?: string;
+    minimumOsVersion?: string;
+    sellerName?: string;
   }>;
 }
 
@@ -113,5 +120,8 @@ function mapLookupResult(item: NonNullable<ItunesLookupResponse["results"]>[numb
     updatedAt: parseAppleDate(item.currentVersionReleaseDate),
     reviewCount: item.userRatingCount ?? 0,
     rating: item.averageUserRating ?? null,
+    fileSizeBytes: item.fileSizeBytes != null ? Number(item.fileSizeBytes) || null : null,
+    minOsVersion: item.minimumOsVersion ?? null,
+    sellerName: item.sellerName ?? null,
   };
 }

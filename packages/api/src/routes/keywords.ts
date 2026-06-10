@@ -1,5 +1,6 @@
 import type { Store } from "@kittie/types";
 import { Hono } from "hono";
+import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 import {
   addTrackedKeyword,
@@ -94,6 +95,61 @@ keywordsRouter.get("/markets", async (c) => {
 
   const data = await getKeywordMarkets(keyword, store, countries);
   return c.json({ data, meta: { source: "store-search", keyword, markets: SUPPORTED_MARKETS } });
+});
+
+/**
+ * Streaming cross-market analysis (Keyword Explorer exact-clone async path):
+ * the keyword shows instantly as Pending client-side; each market's score is
+ * emitted the moment it's computed (market → … → done), paced sequentially so
+ * 26 markets never hammer the stores. Each result is persisted by the
+ * underlying lookup cache, so a dropped stream loses nothing.
+ */
+keywordsRouter.get("/markets/stream", (c) => {
+  const keyword = c.req.query("keyword");
+  const store = (c.req.query("store") ?? "apple") as Store;
+  const countriesParam = c.req.query("countries");
+  const valid = new Set<string>(SUPPORTED_MARKETS);
+  const countries = (countriesParam ? countriesParam.split(",") : [...SUPPORTED_MARKETS])
+    .map((s) => s.trim().toUpperCase())
+    .filter((s) => valid.has(s))
+    .slice(0, SUPPORTED_MARKETS.length);
+
+  return streamSSE(c, async (stream) => {
+    if (!keyword) {
+      await stream.writeSSE({ event: "error", data: JSON.stringify({ message: "keyword is required" }) });
+      return;
+    }
+    await stream.writeSSE({
+      event: "start",
+      data: JSON.stringify({ keyword, store, total: countries.length }),
+    });
+    let done = 0;
+    for (const country of countries) {
+      try {
+        const kd = await getKeywordDifficulty(keyword, country, store);
+        done++;
+        await stream.writeSSE({
+          event: "market",
+          data: JSON.stringify({
+            country,
+            popularity: kd.popularity,
+            difficulty: kd.difficulty,
+            competingAppCount: kd.competingAppCount,
+            opportunityScore: kd.opportunityScore,
+            done,
+            total: countries.length,
+          }),
+        });
+      } catch {
+        done++;
+        await stream.writeSSE({
+          event: "market_failed",
+          data: JSON.stringify({ country, done, total: countries.length }),
+        });
+      }
+    }
+    await stream.writeSSE({ event: "done", data: JSON.stringify({ done, total: countries.length }) });
+  });
 });
 
 const batchSchema = z.object({

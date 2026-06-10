@@ -20,6 +20,18 @@ export const MARKETS: Market[] = [
   { code: "BR", name: "Brazil", flag: "🇧🇷" },
   { code: "MX", name: "Mexico", flag: "🇲🇽" },
   { code: "IN", name: "India", flag: "🇮🇳" },
+  { code: "NL", name: "Netherlands", flag: "🇳🇱" },
+  { code: "SE", name: "Sweden", flag: "🇸🇪" },
+  { code: "NO", name: "Norway", flag: "🇳🇴" },
+  { code: "DK", name: "Denmark", flag: "🇩🇰" },
+  { code: "FI", name: "Finland", flag: "🇫🇮" },
+  { code: "PL", name: "Poland", flag: "🇵🇱" },
+  { code: "PT", name: "Portugal", flag: "🇵🇹" },
+  { code: "CH", name: "Switzerland", flag: "🇨🇭" },
+  { code: "AT", name: "Austria", flag: "🇦🇹" },
+  { code: "BE", name: "Belgium", flag: "🇧🇪" },
+  { code: "KR", name: "South Korea", flag: "🇰🇷" },
+  { code: "TR", name: "Türkiye", flag: "🇹🇷" },
 ];
 
 const BY_CODE = new Map(MARKETS.map((m) => [m.code, m]));

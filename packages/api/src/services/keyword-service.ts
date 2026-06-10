@@ -108,6 +108,7 @@ export async function getRelatedKeywords(
 /** Markets we score a keyword across (cross-market opportunity finder). */
 export const SUPPORTED_MARKETS = [
   "US", "GB", "CA", "AU", "IE", "NZ", "DE", "FR", "IT", "ES", "JP", "BR", "MX", "IN",
+  "NL", "SE", "NO", "DK", "FI", "PL", "PT", "CH", "AT", "BE", "KR", "TR",
 ] as const;
 
 export interface KeywordMarket {
@@ -142,7 +143,7 @@ export async function getKeywordMarkets(
   store: Store,
   countries: readonly string[] = SUPPORTED_MARKETS,
 ): Promise<KeywordMarket[]> {
-  const results = await mapPool(countries.slice(0, 16), 4, async (country) => {
+  const results = await mapPool(countries.slice(0, SUPPORTED_MARKETS.length), 4, async (country) => {
     try {
       const kd = await getKeywordDifficulty(keyword, country, store);
       return {

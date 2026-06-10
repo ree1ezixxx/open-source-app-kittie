@@ -204,6 +204,15 @@ export function ScreenshotTranslationPage() {
                         <div className="studio-shot" key={img.id} title={img.name}>
                           <img src={img.dataUrl} alt={img.name} />
                           <div className="cap">{img.name}</div>
+                          {img.translatedLines && img.translatedLines.length > 0 && (
+                            <div className="tr-lines">
+                              {img.translatedLines.map((l, i) => (
+                                <div className="tr-line" key={i} title={l.source}>
+                                  {l.translated}
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -213,8 +222,9 @@ export function ScreenshotTranslationPage() {
                 <div className="notice">
                   <IconInfo />
                   <span>
-                    <strong>Preview translation</strong> — frames are grouped and tagged per country. On-image text
-                    localization lands with the OCR + translate backend; the service contract is already in place.
+                    <strong>Live translation</strong> — Gemini reads each frame's marketing text and translates it
+                    per country (shown under the frame). Source frames stay untouched; paste the copy into the
+                    Screenshot generator to produce localized art.
                   </span>
                 </div>
               </>

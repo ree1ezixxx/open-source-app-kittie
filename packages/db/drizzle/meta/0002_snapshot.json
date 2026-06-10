@@ -2,7 +2,7 @@
   "version": "6",
   "dialect": "sqlite",
   "id": "2ea70c40-d51a-4915-90c3-608ce40d1a50",
-  "prevId": "d7237ef8-e800-44ae-b7d4-2760a58f9c47",
+  "prevId": "115b6a0c-6ff3-4853-8f32-d2a3293e8fc2",
   "tables": {
     "app_snapshots": {
       "name": "app_snapshots",
@@ -871,6 +871,27 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "sentiment": {
+          "name": "sentiment",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "topics": {
+          "name": "topics",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "improvement_areas": {
+          "name": "improvement_areas",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         }
       },

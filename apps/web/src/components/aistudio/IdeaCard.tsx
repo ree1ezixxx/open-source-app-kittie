@@ -1,12 +1,24 @@
+import { useNavigate } from "react-router-dom";
 import type { AppIdea } from "../../lib/api/ideas";
-import { blueprintLabel } from "../../lib/api/ideas";
+import { blueprintLabel, ideaHref } from "../../lib/api/ideas";
 import { IconStar } from "../../icons";
 import { compact } from "./util";
+import { IdeaMockup } from "./IdeaMockup";
 
-/** A single hot-idea card: title, description, source category, reviews, rating, blueprint tags. */
+/** A single hot-idea card: mockup, title, description, source category, reviews, rating, blueprint tags. */
 export function IdeaCard({ idea }: { idea: AppIdea }) {
+  const nav = useNavigate();
+  const href = idea.storeAppId ? ideaHref(idea) : null;
+
   return (
-    <article className="idea-card">
+    <article
+      className={`idea-card${href ? " idea-card-link" : ""}`}
+      onClick={href ? () => nav(href) : undefined}
+      role={href ? "link" : undefined}
+      tabIndex={href ? 0 : undefined}
+      onKeyDown={href ? (e) => e.key === "Enter" && nav(href) : undefined}
+    >
+      <IdeaMockup idea={idea} />
       <div className="idea-card-top">
         <h3 className="idea-title">{idea.title}</h3>
         <span className="idea-rating">

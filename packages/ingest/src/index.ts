@@ -5,6 +5,8 @@ export { syncGoogleReviews } from "./google/reviews.js";
 export { syncAppleReviews, type SyncOpts } from "./apple/reviews.js";
 export { runSeed } from "./jobs/seed.js";
 export { runSnapshot } from "./jobs/snapshot.js";
+export { runSnapshotBulk } from "./jobs/snapshot-bulk.js";
+export { runGoogleExpand, GOOGLE_TARGET_TOTAL } from "./jobs/google-expand.js";
 export { runScore } from "./jobs/score.js";
 export { upsertApp, upsertSnapshot, listTrackedApps } from "./db/apps.js";
 export { upsertReviews, backfillReviewTags, type ReviewUpsertInput } from "./db/reviews.js";

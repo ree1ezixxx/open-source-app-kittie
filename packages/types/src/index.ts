@@ -83,6 +83,10 @@ export interface AppDetail extends AppListItem {
   price: number | null;
   contentRating: string | null;
   languages: string[];
+  /** Listing facts — lazily backfilled from Apple lookup; null for Google apps. */
+  fileSizeBytes: number | null;
+  minOsVersion: string | null;
+  sellerName: string | null;
   iaps: AppIap[];
   metaAds: MetaAdCreative[];
   appleSearchAds: AppleSearchAd[];

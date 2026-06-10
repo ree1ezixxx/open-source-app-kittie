@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, lt } from "drizzle-orm";
 import type { KeywordDifficulty, Store } from "@kittie/types";
 
 import type { Db } from "../client.js";
@@ -41,6 +41,24 @@ export async function isKeywordTracked(db: Db, keywordId: string): Promise<boole
     .where(eq(trackedKeywords.keywordId, keywordId))
     .limit(1);
   return rows.length > 0;
+}
+
+/**
+ * Tracked keywords whose lookup row is older than `maxAgeDays` — the
+ * freshness scheduler's re-score sweep feeds these back through the lookup
+ * path, which refetches on stale TTL (Greece-safe: works after any downtime).
+ */
+export async function listStaleTrackedKeywords(
+  db: Db,
+  maxAgeDays = 7,
+): Promise<Array<{ keyword: string; country: string; store: Store }>> {
+  const cutoff = new Date(Date.now() - maxAgeDays * 86_400_000);
+  const rows = await db
+    .select({ keyword: keywords.keyword, country: keywords.country, store: keywords.store })
+    .from(trackedKeywords)
+    .innerJoin(keywords, eq(trackedKeywords.keywordId, keywords.id))
+    .where(lt(keywords.computedAt, cutoff));
+  return rows.map((r) => ({ ...r, store: r.store as Store }));
 }
 
 /** The full shortlist with current metrics, newest tracked first. */

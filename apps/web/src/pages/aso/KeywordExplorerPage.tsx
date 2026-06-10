@@ -6,15 +6,18 @@ import { IconKey, IconLayers } from "../../components/aso/icons";
 import { KeywordCard, KeywordDetail, PendingCard } from "../../components/aso/KeywordBits";
 import { IdeasTable } from "../../components/aso/IdeasTable";
 import { GenerateModal, type GenState } from "../../components/aso/GenerateModal";
+import { MarketsModal } from "../../components/aso/MarketsModal";
 import {
   compareKeywords,
   fetchRelated,
   fetchSuggestions,
   fetchTracked,
   lookupKeyword,
+  streamKeywordMarkets,
   trackKeyword,
   untrackKeyword,
   type KeywordDifficulty,
+  type KeywordMarket,
   type TrackedKeyword,
 } from "../../lib/api/keywords";
 import { MARKETS, MARKET_COUNT, market } from "../../lib/markets";
@@ -83,6 +86,11 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
   // Durable shortlist, server-persisted — keyed by keyOf. See ADR 0003.
   const [tracked, setTracked] = useState<Map<string, TrackedKeyword>>(new Map());
   const [refreshing, setRefreshing] = useState(false);
+  // Store + Markets modal (live-parity Explore flow) + streamed market fills.
+  const [marketsModal, setMarketsModal] = useState<string[] | null>(null);
+  const [liveMarkets, setLiveMarkets] = useState<Record<string, KeywordMarket[]>>({});
+  const [marketsProgress, setMarketsProgress] = useState<Record<string, { done: number; total: number } | "done">>({});
+  const streamCancel = useRef<(() => void) | null>(null);
   const mounted = useRef(true);
 
   useEffect(() => {
@@ -173,9 +181,42 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
   function submit() {
     const terms = parseTerms(input);
     if (terms.length === 0) return;
-    explore(terms, store, country);
-    setInput("");
+    setMarketsModal(terms); // Store + Markets modal first — live-parity flow
   }
+
+  /** Modal confirm: explore on the primary market, stream the rest live. */
+  const startExplore = useCallback(
+    (terms: string[], forStore: Store, countries: string[]) => {
+      const primary = countries.includes(country) ? country : countries[0]!;
+      setMarketsModal(null);
+      setInput("");
+      setStore(forStore);
+      setCountry(primary);
+      explore(terms, forStore, primary);
+
+      // Multi-market: per-market analysis streams in the background and the
+      // Markets card fills live. The keyword itself is already Pending above.
+      if (countries.length > 1 && terms.length === 1) {
+        const seed = terms[0]!;
+        const key = `${forStore}:${seed.toLowerCase()}`;
+        streamCancel.current?.();
+        setLiveMarkets((m) => ({ ...m, [key]: [] }));
+        setMarketsProgress((p) => ({ ...p, [key]: { done: 0, total: countries.length } }));
+        streamCancel.current = streamKeywordMarkets(seed, forStore, countries, {
+          onMarket: (m) => {
+            if (!mounted.current) return;
+            setLiveMarkets((prev) => ({ ...prev, [key]: [...(prev[key] ?? []), m] }));
+            setMarketsProgress((p) => ({ ...p, [key]: { done: m.done, total: m.total } }));
+          },
+          onDone: () => mounted.current && setMarketsProgress((p) => ({ ...p, [key]: "done" })),
+          onError: () => mounted.current && setMarketsProgress((p) => ({ ...p, [key]: "done" })),
+        });
+      }
+    },
+    [country, explore],
+  );
+
+  useEffect(() => () => streamCancel.current?.(), []);
 
   // Deep link: /dashboard/aso/keywords?q=term → immediate explore.
   const didDeepLink = useRef(false);
@@ -493,6 +534,12 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
                   trackedKeys.has(keyOf(selected)) ? untrackIdea(selected) : trackIdea(selected)
                 }
               >
+                {liveMarkets[keyOf(selected)] && (
+                  <LiveMarketsCard
+                    markets={liveMarkets[keyOf(selected)]!}
+                    progress={marketsProgress[keyOf(selected)] ?? "done"}
+                  />
+                )}
                 {selectedIdeas && (
                   <IdeasTable
                     seed={selected.keyword}
@@ -518,6 +565,52 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
       )}
 
       {gen && <GenerateModal {...gen} />}
+
+      {marketsModal && (
+        <MarketsModal
+          terms={marketsModal}
+          initialStore={store}
+          initialCountry={country}
+          onConfirm={(s, countries) => startExplore(marketsModal, s, countries)}
+          onClose={() => setMarketsModal(null)}
+        />
+      )}
     </main>
+  );
+}
+
+/** Cross-market scores for the selected keyword, filling live off the SSE stream. */
+function LiveMarketsCard({
+  markets,
+  progress,
+}: {
+  markets: KeywordMarket[];
+  progress: { done: number; total: number } | "done";
+}) {
+  return (
+    <div className="km-live">
+      <div className="km-live-head">
+        <span className="km-live-title">Markets</span>
+        {progress === "done" ? (
+          <span className="km-live-count">{markets.length} analysed</span>
+        ) : (
+          <span className="km-live-count km-live-running">
+            analysing {progress.done}/{progress.total}…
+          </span>
+        )}
+      </div>
+      <div className="km-live-grid">
+        {markets.map((m) => (
+          <div key={m.country} className="km-live-row">
+            <span className="km-flag">{market(m.country).flag}</span>
+            <span className="km-live-cc">{m.country}</span>
+            <span className="km-live-stat" title="Popularity">P {m.popularity}</span>
+            <span className="km-live-stat" title="Difficulty">D {m.difficulty}</span>
+            <span className="km-live-opp" title="Opportunity">{m.opportunityScore}</span>
+          </div>
+        ))}
+        {progress !== "done" && <div className="km-live-row km-live-pending">…</div>}
+      </div>
+    </div>
   );
 }

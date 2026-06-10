@@ -17,7 +17,7 @@
 ### AI engine
 - **Free Gemini** (`gemini-2.5-flash`), server-side in `packages/api`. Key in `.env` as `GEMINI_API_KEY` (`.env.example` gets a placeholder, never the real key). SDK `@google/genai`.
 - **Copy AppKittie's architecture:** batch-generate → store in DB → refresh on cadence. Never generate per-view (except App About, below).
-- ⚠️ **Key format flag:** the key Rhodri supplied starts `AQ.Ab8RN6Ik…` — NOT the usual Google AI Studio `AIza…` format. **First build step = one test call.** If it 401s, Rhodri grabs a free `AIza…` key from aistudio.google.com. Whole AI plan hinges on this.
+- ⚠️ **Key reality (verified 2026-06-10):** the `AQ.…` key WORKS (200) but its project free tier is **20 requests/day/model** — not the assumed ~250. Mitigations built: batch sweeps run on `gemini-2.5-flash-lite` (separate daily bucket), user-facing calls fall back flash→flash-lite, per-day quota errors fail fast and sweeps pause+resume. **Rhodri: grab a free `AIza…` key from aistudio.google.com for ~10× headroom** — drop into `.env` `GEMINI_API_KEY`, everything lights up (1,200 ideas ≈ 2 days on flash-lite).
 
 ### Hot Ideas (biggest gap — currently 30 mock cards in `apps/web/src/lib/api/ideas.ts`)
 - Match live **~1,200 ideas**, each derived from one real fast-growing **source App**.
@@ -57,12 +57,14 @@ Single registry of paced sweeps, boot catch-up + interval while API up:
 - **Creators (TikTok/IG) real data** — hardest free-data item, high fake-data risk. UI + empty state only; real social ingestion = separate spike. NEVER fabricate handles.
 - Auth (Google OAuth), Stripe billing, real-domain deploy, Meta-ads data (blocked on Meta ID verification). All Rhodri's call, all out of this scope.
 
-## OPEN grill items (resume with Rhodri before/while building)
-1. **Unified freshness service** — posed, not explicitly confirmed. Likely yes.
-2. **Screenshots + Translation real AI** — now Gemini is available, wire real art-direction/translation, or keep deterministic/mock? Currently deterministic (screenshots real on render, mock on art-direction; translation = typed mock).
-3. **Hot Ideas source-app selection** while growth data is thin (3 snapshot days).
-4. **Google Play scale** — 85 → thousands (scraper exists, `google-play-scraper`). Target + when. Buildable, no creds.
-5. Final parity build sequencing.
+## Grill items — ALL RESOLVED + BUILT (2026-06-10, /goal run)
+1. **Unified freshness service** — ✅ BUILT. One registry (`freshness-service.ts`), 5 sweeps live (reviews-delta 6h, snapshots-daily 24h, keyword-rescore 24h, hot-ideas 6h, google-expand 24h), `sweep_state` persists last-runs, `GET /api/v1/freshness` + sidebar footer ("data as of <date>" + sweep spinner). ADR 0004.
+2. **Screenshots + Translation real AI** — ✅ BOTH REAL. `POST /api/v1/ai/art-direction` (Gemini copy, deterministic fallback) + `POST /api/v1/ai/translate-screenshot` (Gemini vision reads + translates on-image text, honest no-image-editing). Both cache-through `ai_generations`.
+3. **Hot Ideas** — ✅ BUILT + LIVE. Selection gate = rising+recency+low-fruit blend (growth weight scales with snapshot-history depth); display sorts = exact live 7 (Created/Released/Reviews/Downloads/Revenue/Rating/Price) + blueprint toggles; `app_ideas` table; batch sweep on flash-lite (24/1,200 generated, paused on day-quota, auto-resumes); detail page `/dashboard/hot-ideas/app-<slug>-id<id>` with Building/Opportunity/Marketing tabs + export-as-prompt + deterministic CSS mockups. ADR 0005.
+4. **Google Play scale** — ✅ BUILT. `google-expand` sweep: top-free+grossing × all Play categories, 400 new apps/run, target 5,000 (485 after first run), idempotent.
+5. **Sequencing** — executed: Gemini seam → scheduler → Hot Ideas → App Detail (breadcrumb, SEO title, Size/Compatibility/Provider lazy-backfilled from Apple lookup, lazy AI About cached forever) → Keyword Explorer (26 markets, Store+Markets modal, SSE live market fill, re-score sweep) → AI Studio real → Google expand.
+
+Verification: `pnpm -r typecheck` 9/9 clean, 15 unit tests green (scheduler due-selection + idea gate), zero console errors on every touched route, all 5 sweeps observed running live against the real DB. Work is uncommitted on `integrate/full-clone` — commit when ready.
 
 ## Verification protocol
 - `pnpm typecheck` clean; both servers boot; zero console errors per route.

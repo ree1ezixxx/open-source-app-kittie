@@ -29,6 +29,34 @@
       "when": 1780929314141,
       "tag": "0002_deep_black_tarantula",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1781096196545,
+      "tag": "0004_bent_squadron_sinister",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1781096673533,
+      "tag": "0005_mysterious_nicolaos",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1781097551376,
+      "tag": "0006_rainy_sinister_six",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1781099215904,
+      "tag": "0007_white_victor_mancha",
+      "breakpoints": true
     }
   ]
 }

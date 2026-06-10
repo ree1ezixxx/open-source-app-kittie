@@ -144,6 +144,37 @@ export interface KeywordMarket {
   opportunityScore: number;
 }
 
+/**
+ * Streaming cross-market analysis: each market's score arrives the moment the
+ * server computes it (SSE), so the UI fills live instead of blocking on all
+ * 26. Returns a cancel function.
+ */
+export function streamKeywordMarkets(
+  keyword: string,
+  store: Store,
+  countries: string[],
+  handlers: {
+    onMarket: (m: KeywordMarket & { done: number; total: number }) => void;
+    onDone?: () => void;
+    onError?: () => void;
+  },
+): () => void {
+  const q = new URLSearchParams({ keyword, store, countries: countries.join(",") });
+  const es = new EventSource(`${BASE}/keywords/markets/stream?${q}`);
+  es.addEventListener("market", (e) => {
+    handlers.onMarket(JSON.parse((e as MessageEvent).data) as KeywordMarket & { done: number; total: number });
+  });
+  es.addEventListener("done", () => {
+    handlers.onDone?.();
+    es.close();
+  });
+  es.onerror = () => {
+    handlers.onError?.();
+    es.close();
+  };
+  return () => es.close();
+}
+
 /** The same keyword scored across markets — the cross-market opportunity finder. */
 export async function fetchKeywordMarkets(
   keyword: string,

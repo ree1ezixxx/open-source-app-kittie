@@ -75,6 +75,14 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
     if (window.location.pathname !== canonical) navigate(canonical, { replace: true });
   }, [app, navigate]);
 
+  // SEO title (live parity).
+  useEffect(() => {
+    if (app) document.title = `${app.title} — Revenue, Downloads & ASO · Kittie`;
+    return () => {
+      document.title = "Kittie";
+    };
+  }, [app]);
+
   // Probe screenshots in-browser; only show a real working collection.
   useEffect(() => {
     if (!app) return;
@@ -153,6 +161,15 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
           <DetailSkeleton />
         ) : (
           <div className="detail-inner">
+            {/* breadcrumb (live parity) */}
+            <nav className="breadcrumb">
+              <Link to="/dashboard/explore">Home</Link>
+              <span>/</span>
+              <Link to="/dashboard/explore">Apps</Link>
+              <span>/</span>
+              <span className="current">{app.title}</span>
+            </nav>
+
             {/* hero */}
             <header className="hero">
               {app.iconUrl ? (
@@ -224,6 +241,11 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
                 <Fact label="Price">{app.price ? `$${app.price}` : "Free"}</Fact>
                 <Fact label="Content rating">{app.contentRating ?? "—"}</Fact>
                 <Fact label="Languages">{app.languages.length || "—"}</Fact>
+                <Fact label="Size">{formatBytes(app.fileSizeBytes)}</Fact>
+                <Fact label="Compatibility">
+                  {app.minOsVersion ? `${app.store === "apple" ? "iOS" : "Android"} ${app.minOsVersion}+` : "—"}
+                </Fact>
+                <Fact label="Provider">{app.sellerName ?? app.developer}</Fact>
                 <Fact label="Released">{formatDate(app.releasedAt)}</Fact>
                 <Fact label="Updated">{formatDate(app.updatedAt)}</Fact>
                 <Fact label="Store ID">{app.storeAppId}</Fact>
@@ -262,12 +284,11 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
               )}
             </DetailCard>
 
-            {/* about */}
-            {app.description && (
-              <DetailCard title="About">
-                <p className="desc">{app.description}</p>
-              </DetailCard>
-            )}
+            {/* about — AI narrative first (lazy, cached forever server-side), then the listing text */}
+            <DetailCard title="About">
+              <AiAbout appId={app.id} />
+              {app.description && <p className="desc">{app.description}</p>}
+            </DetailCard>
 
             {/* contact & links */}
             <DetailCard title="Contact & links">
@@ -389,6 +410,52 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
         />
       )}
     </main>
+  );
+}
+
+function formatBytes(bytes: number | null): string {
+  if (!bytes) return "—";
+  if (bytes >= 1_073_741_824) return `${(bytes / 1_073_741_824).toFixed(1)} GB`;
+  return `${(bytes / 1_048_576).toFixed(1)} MB`;
+}
+
+/**
+ * AI About narrative: fetched lazily on view; the server generates once with
+ * Gemini and caches forever, so only the first-ever open of an app costs a call.
+ */
+function AiAbout({ appId }: { appId: string }) {
+  const [about, setAbout] = useState<string | null>(null);
+  const [state, setState] = useState<"loading" | "ready" | "off">("loading");
+
+  useEffect(() => {
+    const ac = new AbortController();
+    setState("loading");
+    setAbout(null);
+    fetch(`/api/v1/apps/${encodeURIComponent(appId)}/about`, { signal: ac.signal })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(String(res.status));
+        const body = (await res.json()) as { data: { about: string } };
+        setAbout(body.data.about);
+        setState("ready");
+      })
+      .catch(() => !ac.signal.aborted && setState("off"));
+    return () => ac.abort();
+  }, [appId]);
+
+  if (state === "off") return null; // no key / generation failed — listing text still shows
+  if (state === "loading") {
+    return (
+      <div className="ai-about">
+        <span className="ai-about-tag">AI summary</span>
+        <div className="skel" style={{ height: 48, borderRadius: 8 }} />
+      </div>
+    );
+  }
+  return (
+    <div className="ai-about">
+      <span className="ai-about-tag">AI summary</span>
+      <p className="desc">{about}</p>
+    </div>
   );
 }
 

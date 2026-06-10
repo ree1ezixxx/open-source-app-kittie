@@ -9,8 +9,10 @@ import {
   listSnapshotContexts,
   loadAppRelations,
   parseJsonArray,
+  updateAppListingFacts,
   type SnapshotContext,
 } from "@kittie/db";
+import { lookupAppleApp } from "@kittie/ingest";
 import { scoreApp, signalsFromContext } from "@kittie/intelligence";
 import type {
   AppDetail,
@@ -213,10 +215,43 @@ function mapRelations(
   return { iaps, metaAds, creators, appleSearchAds, reviewList };
 }
 
+/**
+ * Lazy listing-facts backfill: the bulk pipeline never fetches size/min-OS/
+ * seller, so the first detail view fills them from one Apple lookup and the
+ * row keeps them forever. Apple-only; failures degrade to nulls silently.
+ */
+async function backfillListingFacts<
+  T extends {
+    id: string;
+    store: string;
+    storeAppId: string;
+    fileSizeBytes: number | null;
+    minOsVersion: string | null;
+    sellerName: string | null;
+  },
+>(db: ReturnType<typeof getDb>, app: T): Promise<T> {
+  const attempted = app.fileSizeBytes !== null || app.minOsVersion !== null || app.sellerName !== null;
+  if (app.store !== "apple" || attempted) return app;
+  try {
+    const lookup = await lookupAppleApp(app.storeAppId);
+    if (!lookup) return app;
+    const facts = {
+      fileSizeBytes: lookup.fileSizeBytes,
+      minOsVersion: lookup.minOsVersion,
+      sellerName: lookup.sellerName,
+    };
+    await updateAppListingFacts(db, app.id, facts);
+    return { ...app, ...facts };
+  } catch {
+    return app; // listing facts are decoration — never fail the detail view
+  }
+}
+
 export async function getAppByIdFromDb(id: string): Promise<AppDetail | null> {
   const db = getDb();
-  const app = await getAppRowById(db, id);
-  if (!app) return null;
+  const row = await getAppRowById(db, id);
+  if (!row) return null;
+  const app = await backfillListingFacts(db, row);
 
   const ctx = await getSnapshotContext(db, id, "7d");
   if (!ctx) return null;
@@ -250,6 +285,9 @@ export async function getAppByIdFromDb(id: string): Promise<AppDetail | null> {
     price: app.price,
     contentRating: app.contentRating,
     languages: parseJsonArray(app.languages),
+    fileSizeBytes: app.fileSizeBytes,
+    minOsVersion: app.minOsVersion,
+    sellerName: app.sellerName,
     iaps: mapped.iaps,
     metaAds: mapped.metaAds,
     appleSearchAds: mapped.appleSearchAds,

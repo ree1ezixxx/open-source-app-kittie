@@ -18,6 +18,7 @@ import { ApiKeysPage } from "./pages/ApiKeysPage";
 import { DocsPage } from "./pages/DocsPage";
 import { ScreenshotGeneratorPage } from "./pages/ScreenshotGeneratorPage";
 import { HotIdeasPage } from "./pages/HotIdeasPage";
+import { IdeaDetailPage } from "./pages/IdeaDetailPage";
 import { PricingCalculatorPage } from "./pages/PricingCalculatorPage";
 import { useTheme } from "./lib/theme";
 
@@ -51,6 +52,7 @@ export function App() {
         <Route path="/dashboard/aso/screenshots" element={<ScreenshotGeneratorPage />} />
         <Route path="/dashboard/aso/screenshot-translation" element={<ScreenshotTranslationPage />} />
         <Route path="/dashboard/hot-ideas" element={<HotIdeasPage />} />
+        <Route path="/dashboard/hot-ideas/:slug" element={<IdeaDetailPage />} />
         <Route path="/tools/pricing-calculator" element={<PricingCalculatorPage />} />
 
         {/* Reviews & Meta */}

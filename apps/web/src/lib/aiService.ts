@@ -1,7 +1,7 @@
 /**
  * aiService — the single typed contract the AI Studio surfaces consume.
  *
- * Hot Ideas remains a deterministic offline MOCK (flagged in AI_INTEGRATION_POINTS).
+ * Hot Ideas is LIVE: read from /api/v1/ideas (batch-generated server-side, ADR 0005).
  *
  * Screenshot generation is REAL on render + export, with a deterministic DESIGN
  * layer (ported engine + brand palette, designed backgrounds, fonts, copy derived
@@ -96,7 +96,7 @@ export const AI_INTEGRATION_POINTS = [
     method: "listIdeas",
     title: "Hot-ideas generation pipeline",
     needs:
-      "A job that mines fast-growing Apps (Snapshots + review clustering) and an LLM that drafts concepts + blueprint tags into an ideas store. Mock returns a static sample set.",
+      "LIVE — the API's hot-ideas sweep batch-generates concepts + Blueprints with Gemini from fast-growing source Apps and stores them; this client only reads /api/v1/ideas.",
   },
 ] as const;
 
@@ -104,7 +104,7 @@ let warned = false;
 function flagMockOnce(method: string) {
   if (warned || typeof console === "undefined") return;
   warned = true;
-  console.info(`[aiService] ${method}: ideas are MOCK; screenshot render+export+design are live.`);
+  console.info(`[aiService] ${method}: screenshot render+export+design are live; art direction is deterministic.`);
 }
 
 /* ============================================================ Design defaults per style */
@@ -263,12 +263,47 @@ function delay(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+/**
+ * Real Gemini art direction: the server writes the slide copy (cached by
+ * input). Falls back to the deterministic derived-phrase copy on any failure
+ * (no key, daily quota, network) — generation must never block on the model.
+ */
+async function fetchArtDirection(
+  input: GenerateScreenshotsInput,
+  style: ScreenshotStyle,
+  count: number,
+): Promise<Array<{ headline: string; label: string }> | null> {
+  try {
+    const res = await fetch("/api/v1/ai/art-direction", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        appId: input.appId,
+        appName: input.appName,
+        category: input.category,
+        description: input.description,
+        prompt: input.prompt,
+        targetAudience: input.targetAudience,
+        brandKeywords: input.brandKeywords ?? [],
+        appStoreKeywords: input.appStoreKeywords ?? [],
+        style,
+        count,
+      }),
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { data: { slides: Array<{ headline: string; label: string }> } };
+    const slides = body.data.slides.filter((s) => s.headline && s.label);
+    return slides.length === count ? slides : null;
+  } catch {
+    return null;
+  }
+}
+
 /* ============================================================ Service */
 
 export const mockAiService: AiService = {
   async generateScreenshots(input) {
     flagMockOnce("generateScreenshots");
-    await delay(700);
 
     const style = input.style ?? "bold";
     const count = Math.min(Math.max(input.count ?? 4, 1), 8);
@@ -284,7 +319,7 @@ export const mockAiService: AiService = {
     };
 
     const layouts = flowLayouts(design.flow, count);
-    const copy = buildCopy(input, style, count);
+    const copy = (await fetchArtDirection(input, style, count)) ?? buildCopy(input, style, count);
     const sources = input.sourceImages;
     const stamp = Date.now();
 
@@ -329,8 +364,7 @@ export const mockAiService: AiService = {
   },
 
   async listIdeas(query) {
-    flagMockOnce("listIdeas");
-    await delay(250);
+    // LIVE: /api/v1/ideas — batch-generated server-side (ADR 0005).
     return queryIdeas(query);
   },
 };

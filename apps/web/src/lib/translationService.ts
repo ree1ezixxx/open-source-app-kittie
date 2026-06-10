@@ -62,6 +62,8 @@ export interface TranslatedImage extends UploadedImage {
   sourceId: string;
   countryCode: string;
   language: string;
+  /** Real Gemini-vision translations of the frame's marketing text (live mode). */
+  translatedLines?: Array<{ source: string; translated: string }>;
 }
 
 export interface CountryTranslationGroup {
@@ -87,7 +89,7 @@ export interface TranslationService {
 
 /* ============================================================ Integration flag */
 
-export const TRANSLATION_SERVICE_MODE: "mock" | "live" = "mock";
+export const TRANSLATION_SERVICE_MODE: "mock" | "live" = "live";
 
 let warned = false;
 function flagMockOnce() {
@@ -145,8 +147,71 @@ export const mockTranslationService: TranslationService = {
   },
 };
 
-/** Active service. Swap to a live impl when the OCR + translate backend lands. */
-export const translationService: TranslationService = mockTranslationService;
+/* ============================================================ Live service */
+
+/** One frame → one country: Gemini vision reads + translates the on-image text. */
+async function translateFrame(
+  dataUrl: string,
+  language: string,
+  countryCode: string,
+): Promise<Array<{ source: string; translated: string }> | null> {
+  try {
+    const res = await fetch("/api/v1/ai/translate-screenshot", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ imageDataUrl: dataUrl, language, countryCode }),
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { data: { lines: Array<{ source: string; translated: string }> } };
+    return body.data.lines;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * LIVE translation: real Gemini-vision translation of each frame's marketing
+ * text per target country, attached as translatedLines. Frames themselves are
+ * never fake-edited — we show honest translated copy alongside the source
+ * frame. Falls back to tag-only grouping when the model is unavailable.
+ */
+export const liveTranslationService: TranslationService = {
+  async translateScreenshots(input) {
+    const stamp = Date.now();
+    const groups: CountryTranslationGroup[] = [];
+    for (const code of input.countries) {
+      const country = countryByCode(code);
+      if (!country) continue;
+      const images: TranslatedImage[] = [];
+      for (const [i, img] of input.images.entries()) {
+        const lines = await translateFrame(img.dataUrl, country.language, country.code);
+        images.push({
+          id: `tr-${stamp}-${country.code.toLowerCase()}-${i}`,
+          name: localizedName(img.name, country.code),
+          dataUrl: img.dataUrl,
+          sourceId: img.id,
+          countryCode: country.code,
+          language: country.language,
+          ...(lines ? { translatedLines: lines } : {}),
+        });
+      }
+      groups.push({ country, images });
+    }
+
+    return {
+      id: `trans-${stamp}`,
+      appId: input.appId ?? null,
+      appName: input.appName?.trim() || "Manual upload",
+      createdAt: new Date(stamp).toISOString(),
+      status: "done",
+      sourceCount: input.images.length,
+      groups,
+    };
+  },
+};
+
+/** Active service — LIVE (Gemini vision); falls back per-frame to tag-only. */
+export const translationService: TranslationService = liveTranslationService;
 
 /* ============================================================ History (localStorage) */
 

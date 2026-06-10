@@ -14,6 +14,15 @@ export async function getAppById(db: Db, id: string) {
   return app ?? null;
 }
 
+/** Persist lazily-fetched listing facts (size, min OS, seller). */
+export async function updateAppListingFacts(
+  db: Db,
+  id: string,
+  facts: { fileSizeBytes: number | null; minOsVersion: string | null; sellerName: string | null },
+): Promise<void> {
+  await db.update(apps).set(facts).where(eq(apps.id, id));
+}
+
 export async function loadAppRelations(db: Db, appId: string) {
   const [iapRows, metaRows, creatorRows, adRows, reviewRows] = await Promise.all([
     db.select().from(iaps).where(eq(iaps.appId, appId)),
