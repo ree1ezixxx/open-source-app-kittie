@@ -1,17 +1,22 @@
 import { IconHeart } from "../icons";
-import { useFavorites, type FavKind } from "../lib/favorites";
+import { useFavorites, type FavoriteSnapshot, type FavoriteType } from "../lib/favorites";
 
-/** Heart toggle wired to the local favorites store. Drop onto any app/ad/creator/idea row. */
+/**
+ * Heart toggle wired to the local favorites store. Drop onto any app/ad/creator/idea row.
+ * `snapshot` is the small display payload the Favorites page renders from without refetching.
+ */
 export function FavoriteToggle({
+  type,
   id,
-  kind = "app",
+  snapshot,
   size = 16,
 }: {
+  type: FavoriteType;
   id: string;
-  kind?: FavKind;
+  snapshot: FavoriteSnapshot;
   size?: number;
 }) {
-  const { has, toggle } = useFavorites(kind);
+  const { has, toggle } = useFavorites(type);
   const on = has(id);
   return (
     <button
@@ -22,7 +27,7 @@ export function FavoriteToggle({
       onClick={(e) => {
         e.stopPropagation();
         e.preventDefault();
-        toggle(id);
+        toggle(id, snapshot);
       }}
     >
       <IconHeart style={{ width: size, height: size }} />

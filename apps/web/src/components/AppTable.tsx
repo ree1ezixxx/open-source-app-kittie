@@ -9,6 +9,7 @@ import {
 } from "../icons";
 import { categoryColor, pillStyle } from "../lib/palette";
 import { formatCompact, formatMoney, formatRating, relativeTime } from "../lib/format";
+import { FavoriteToggle } from "./FavoriteToggle";
 
 type Col = {
   key: string;
@@ -73,6 +74,9 @@ function SkeletonRow() {
           />
         </td>
       ))}
+      <td className="num">
+        <div className="skel" style={{ height: 11, width: 16, marginLeft: "auto" }} />
+      </td>
     </tr>
   );
 }
@@ -117,6 +121,7 @@ export function AppTable({
               </span>
             </th>
           ))}
+          <th className="num" aria-label="Favorite" />
         </tr>
       </thead>
       <tbody>
@@ -197,6 +202,18 @@ export function AppTable({
                   </td>
                   <td className="num cell-sub">{relativeTime(a.releasedAt)}</td>
                   <td className="num cell-sub">{relativeTime(a.updatedAt)}</td>
+                  <td className="num">
+                    <FavoriteToggle
+                      type="app"
+                      id={a.id}
+                      snapshot={{
+                        title: a.title,
+                        subtitle: a.developer,
+                        icon: a.iconUrl ?? undefined,
+                        href: `/apps/${a.id}`,
+                      }}
+                    />
+                  </td>
                 </tr>
               );
             })}

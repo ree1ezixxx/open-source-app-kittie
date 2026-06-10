@@ -109,7 +109,19 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
           <IconArrowLeft /> Back
         </button>
         <div className="topbar-spacer" />
-        {app && <FavoriteToggle id={app.id} kind="app" size={18} />}
+        {app && (
+          <FavoriteToggle
+            type="app"
+            id={app.id}
+            snapshot={{
+              title: app.title,
+              subtitle: app.developer,
+              icon: app.iconUrl ?? undefined,
+              href: `/apps/${app.id}`,
+            }}
+            size={18}
+          />
+        )}
         {app?.websiteUrl && (
           <a className="btn" href={app.websiteUrl} target="_blank" rel="noreferrer">
             <IconExternal /> Store page

@@ -11,6 +11,7 @@ import {
 import { StudioHeader } from "../components/aistudio/StudioHeader";
 import { StudioEmptyState } from "../components/aistudio/StudioEmptyState";
 import { IdeaCard } from "../components/aistudio/IdeaCard";
+import { FavoriteToggle } from "../components/FavoriteToggle";
 import { IconSearch, IconChevron, IconArrowDown, IconArrowUp } from "../icons";
 import { IconBulb } from "../components/aistudio/icons";
 
@@ -151,7 +152,21 @@ export function HotIdeasPage() {
         ) : (
           <div className="ideas-grid">
             {ideas.map((idea) => (
-              <IdeaCard key={idea.id} idea={idea} />
+              // display:grid wrapper keeps the card stretching like a direct grid item.
+              <div key={idea.id} style={{ position: "relative", display: "grid" }}>
+                <IdeaCard idea={idea} />
+                <div style={{ position: "absolute", right: 12, bottom: 12 }}>
+                  <FavoriteToggle
+                    type="hotIdea"
+                    id={idea.id}
+                    snapshot={{
+                      title: idea.title,
+                      subtitle: `${idea.ideaCategory} · ${idea.sourceCategory}`,
+                      href: "/dashboard/hot-ideas",
+                    }}
+                  />
+                </div>
+              </div>
             ))}
           </div>
         )}
