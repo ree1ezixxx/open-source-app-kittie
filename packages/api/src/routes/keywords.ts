@@ -2,12 +2,45 @@ import type { Store } from "@kittie/types";
 import { Hono } from "hono";
 import { z } from "zod";
 import {
+  addTrackedKeyword,
   batchKeywordDifficulty,
   getKeywordDifficulty,
+  getKeywordMarkets,
   getKeywordSuggestions,
+  getRelatedKeywords,
+  listTracked,
+  removeTrackedKeyword,
+  SUPPORTED_MARKETS,
 } from "../services/keyword-service.js";
 
 export const keywordsRouter = new Hono();
+
+// The durable tracked-keyword shortlist (survives reload). See ADR 0003.
+keywordsRouter.get("/tracked", async (c) => {
+  const data = await listTracked();
+  return c.json({ data, meta: { source: "tracked-shortlist", count: data.length } });
+});
+
+keywordsRouter.post("/tracked", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const keyword = typeof body.keyword === "string" ? body.keyword.trim() : "";
+  const country = (typeof body.country === "string" && body.country) || "US";
+  const store = (body.store === "google" ? "google" : "apple") as Store;
+  if (!keyword) return c.json({ error: "keyword is required" }, 400);
+
+  const data = await addTrackedKeyword(keyword, country, store);
+  return c.json({ data, meta: { source: "tracked-shortlist" } });
+});
+
+keywordsRouter.delete("/tracked", async (c) => {
+  const keyword = c.req.query("keyword");
+  const country = c.req.query("country") ?? "US";
+  const store = (c.req.query("store") ?? "apple") as Store;
+  if (!keyword) return c.json({ error: "keyword is required" }, 400);
+
+  await removeTrackedKeyword(keyword, country, store);
+  return c.json({ data: { removed: true }, meta: { source: "tracked-shortlist" } });
+});
 
 keywordsRouter.get("/suggestions", async (c) => {
   const storeParam = c.req.query("store");
@@ -29,8 +62,38 @@ keywordsRouter.get("/difficulty", async (c) => {
 
   if (!keyword) return c.json({ error: "keyword is required" }, 400);
 
-  const result = await getKeywordDifficulty(keyword, country, store);
-  return c.json({ data: result, meta: { source: "store-search" } });
+  const forceRefresh = c.req.query("refresh") === "true" || c.req.query("refresh") === "1";
+  const result = await getKeywordDifficulty(keyword, country, store, { forceRefresh });
+  return c.json({ data: result, meta: { source: "store-search", refreshed: forceRefresh } });
+});
+
+// Related keyword ideas for a seed (autocomplete only; client scores via batch).
+keywordsRouter.get("/related", async (c) => {
+  const keyword = c.req.query("keyword");
+  const country = c.req.query("country") ?? "US";
+  const store = (c.req.query("store") ?? "apple") as Store;
+  const limit = Math.min(Number(c.req.query("limit") ?? 20) || 20, 30);
+
+  if (!keyword) return c.json({ error: "keyword is required" }, 400);
+
+  const data = await getRelatedKeywords(keyword, country, store, limit);
+  return c.json({ data, meta: { source: "store-autocomplete", seed: keyword } });
+});
+
+// Cross-market metrics for one keyword (the opportunity finder behind row-expand).
+keywordsRouter.get("/markets", async (c) => {
+  const keyword = c.req.query("keyword");
+  const store = (c.req.query("store") ?? "apple") as Store;
+  const countriesParam = c.req.query("countries");
+
+  if (!keyword) return c.json({ error: "keyword is required" }, 400);
+
+  const countries = countriesParam
+    ? countriesParam.split(",").map((s) => s.trim().toUpperCase()).filter(Boolean).slice(0, 16)
+    : SUPPORTED_MARKETS;
+
+  const data = await getKeywordMarkets(keyword, store, countries);
+  return c.json({ data, meta: { source: "store-search", keyword, markets: SUPPORTED_MARKETS } });
 });
 
 const batchSchema = z.object({
@@ -43,7 +106,7 @@ const batchSchema = z.object({
       }),
     )
     .min(1)
-    .max(10),
+    .max(25),
 });
 
 keywordsRouter.post("/difficulty", async (c) => {

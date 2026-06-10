@@ -8,9 +8,9 @@ import { HighlightsPage } from "./pages/HighlightsPage";
 import { TrendingPage } from "./pages/TrendingPage";
 import { RisingPage } from "./pages/RisingPage";
 import { FavoritesPage } from "./pages/FavoritesPage";
+import { AppTrackingPage } from "./pages/aso/AppTrackingPage";
+import { KeywordExplorerPage } from "./pages/aso/KeywordExplorerPage";
 import {
-  IconGrid,
-  IconSearch,
   IconImage,
   IconGlobe,
   IconMessage,
@@ -27,8 +27,6 @@ type Stub = { path: string; title: string; sub: string; lane: string; icon: Reac
 
 // Routes owned by other lanes (B/C/D) + Lane-A pages not yet built. Each lane swaps its stub.
 const STUBS: Stub[] = [
-  { path: "/dashboard/aso/apps", title: "App Keyword Tracking", sub: "Track apps & discover keyword opportunities", lane: "Lane B (ASO Keywords)", icon: <IconGrid /> },
-  { path: "/dashboard/aso/keywords", title: "Keyword Explorer", sub: "Difficulty, popularity & related keywords", lane: "Lane B (ASO Keywords)", icon: <IconSearch /> },
   { path: "/dashboard/aso/screenshots", title: "AI Screenshot Generator", sub: "Generate optimized App Store visuals", lane: "Lane C (AI Studio)", icon: <IconImage /> },
   { path: "/dashboard/aso/screenshot-translation", title: "Screenshot Translation", sub: "Localize screenshots for any market", lane: "Lane C (AI Studio)", icon: <IconGlobe /> },
   { path: "/dashboard/reviews", title: "Reviews", sub: "Monitor reviews, sentiment & AI insights", lane: "Lane D (Reviews & Meta)", icon: <IconMessage /> },
@@ -60,6 +58,9 @@ export function App() {
         <Route path="/dashboard/rising" element={<RisingPage theme={theme} onToggleTheme={toggleTheme} />} />
         <Route path="/dashboard/favorites" element={<FavoritesPage theme={theme} onToggleTheme={toggleTheme} />} />
         <Route path="/dashboard/favorites/apps" element={<FavoritesPage theme={theme} onToggleTheme={toggleTheme} />} />
+
+        <Route path="/dashboard/aso/apps" element={<AppTrackingPage theme={theme} onToggleTheme={toggleTheme} />} />
+        <Route path="/dashboard/aso/keywords" element={<KeywordExplorerPage theme={theme} onToggleTheme={toggleTheme} />} />
 
         {STUBS.map((s) => (
           <Route

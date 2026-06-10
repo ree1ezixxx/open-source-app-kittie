@@ -15,6 +15,13 @@
       "when": 1780840000000,
       "tag": "0001_keyword_top_results",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1780929314141,
+      "tag": "0002_deep_black_tarantula",
+      "breakpoints": true
     }
   ]
 }

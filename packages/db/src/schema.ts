@@ -178,5 +178,24 @@ export const keywordRankings = sqliteTable(
   (t) => [index("keyword_rankings_keyword_idx").on(t.keywordId)],
 );
 
+/**
+ * The user's durable keyword shortlist. A tracked keyword references its lookup
+ * row for current metrics but persists independently — never cache-evicted. One
+ * row per tracked keyword (unique on keywordId). See ADR 0003.
+ */
+export const trackedKeywords = sqliteTable(
+  "tracked_keywords",
+  {
+    id: text("id").primaryKey(),
+    keywordId: text("keyword_id")
+      .notNull()
+      .references(() => keywords.id),
+    note: text("note"),
+    trackedAt: integer("tracked_at", { mode: "timestamp" }).notNull(),
+  },
+  (t) => [uniqueIndex("tracked_keywords_keyword_idx").on(t.keywordId)],
+);
+
 export type App = typeof apps.$inferSelect;
 export type AppSnapshot = typeof appSnapshots.$inferSelect;
+export type TrackedKeyword = typeof trackedKeywords.$inferSelect;
