@@ -86,7 +86,7 @@ export function McpLandingPage({ theme, onToggleTheme }: { theme: Theme; onToggl
             <span className="mcp-eyebrow"><IconSpark style={{ width: 13, height: 13 }} /> Model Context Protocol</span>
             <h1 className="mcp-h1">App Store intelligence<br />in your IDE</h1>
             <p className="mcp-lede">
-              Give Claude, Cursor or any MCP-aware agent live access to 283+ tracked apps, keyword
+              Give Claude, Cursor or any MCP-aware agent live access to 100,000+ tracked apps, keyword
               difficulty, revenue estimates and real review streams — without leaving your editor.
             </p>
             <CopyCommand cmd={INSTALL_CMD} />

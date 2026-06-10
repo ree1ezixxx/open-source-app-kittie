@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import type { AppSortField } from "@kittie/types";
 import { Topbar } from "../components/Topbar";
 import { AppTable } from "../components/AppTable";
-import { ExploreFilterRail } from "../components/ExploreFilterRail";
+import { ExploreFilterRail, type CategoryMode } from "../components/ExploreFilterRail";
 import { ActiveFilters } from "../components/ActiveFilters";
 import { Pagination } from "../components/Pagination";
 import { useApps } from "../hooks/useApps";
@@ -34,16 +34,46 @@ export function ExplorePage({
   const spStr = sp.toString();
 
   const filters = useMemo<ExploreFilters>(() => parseFilters(sp), [spStr]);
-  const apiParams = useMemo(() => toApiParams(filters), [spStr]);
+
+  // Rail extras that live outside ExploreFilters (URL stays the single source
+  // of truth): category include/exclude mode + app-language multi-select.
+  const catMode: CategoryMode = sp.get("catmode") === "exclude" ? "exclude" : "include";
+  const langs = useMemo(() => sp.get("langs")?.split(",").filter(Boolean) ?? [], [spStr]);
+
+  const apiParams = useMemo(() => {
+    const base = toApiParams(filters);
+    if (catMode === "exclude" && base.categories) {
+      base.excludedCategories = base.categories;
+      base.categories = undefined;
+    }
+    if (langs.length) base.languages = langs.join(",");
+    return base;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spStr]);
 
   const [searchInput, setSearchInput] = useState(filters.q);
   const [categories, setCategories] = useState<string[]>([]);
 
   // apply a partial filter change → URL (replace, so filter tweaks don't spam history).
   // functional updater reads the *latest* params, so rapid successive clicks compose
-  // instead of clobbering each other.
-  function patch(p: Partial<ExploreFilters>) {
-    setSp((prev) => writeFilters({ ...parseFilters(prev), ...p }), { replace: true });
+  // instead of clobbering each other. writeFilters only knows ExploreFilters keys, so
+  // the extra rail params are carried over from prev (or overridden via `extras`).
+  const EXTRA_KEYS = ["catmode", "langs"] as const;
+  function patch(
+    p: Partial<ExploreFilters>,
+    extras?: Partial<Record<(typeof EXTRA_KEYS)[number], string | undefined>>,
+  ) {
+    setSp(
+      (prev) => {
+        const next = writeFilters({ ...parseFilters(prev), ...p });
+        for (const k of EXTRA_KEYS) {
+          const v = extras && k in extras ? extras[k] : (prev.get(k) ?? undefined);
+          if (v) next.set(k, v);
+        }
+        return next;
+      },
+      { replace: true },
+    );
   }
 
   // debounce search input → q
@@ -109,6 +139,8 @@ export function ExplorePage({
   }
 
   function clearChip(chip: Chip) {
+    if (chip.id === "langs") return patch({}, { langs: undefined });
+    if (chip.id === "cats") return patch(chip.clear, { catmode: undefined });
     patch(chip.clear);
   }
 
@@ -146,7 +178,16 @@ export function ExplorePage({
     URL.revokeObjectURL(url);
   }
 
-  const chips = activeChips(filters);
+  const chips: Chip[] = activeChips(filters).map((c) =>
+    c.id === "cats" && catMode === "exclude" ? { ...c, label: `Exclude: ${c.label}` } : c,
+  );
+  if (langs.length) {
+    chips.push({
+      id: "langs",
+      label: langs.length === 1 ? `Language: ${langs[0]!.toUpperCase()}` : `${langs.length} languages`,
+      clear: {},
+    });
+  }
 
   return (
     <main className="main">
@@ -154,6 +195,7 @@ export function ExplorePage({
         title="Explore Apps"
         subtitle="Search and filter the app database"
         total={total}
+        showing={apps.length}
         loading={loading}
         theme={theme}
         onToggleTheme={onToggleTheme}
@@ -168,12 +210,21 @@ export function ExplorePage({
         <ExploreFilterRail
           filters={filters}
           categories={categories}
+          catMode={catMode}
+          onCatMode={(m) => patch({}, { catmode: m === "exclude" ? "exclude" : undefined })}
+          langs={langs}
+          onLangs={(next) => patch({}, { langs: next.length ? next.join(",") : undefined })}
           onPatch={patch}
           onClear={clearFilters}
         />
 
         <div className="explore-main">
           <div className="explore-bar">
+            {chips.length > 0 && (
+              <span className="cell-sub" style={{ flex: "none", whiteSpace: "nowrap" }}>
+                {chips.length} filter{chips.length === 1 ? "" : "s"} active
+              </span>
+            )}
             <ActiveFilters
               chips={chips}
               query={filters.q}
@@ -200,7 +251,7 @@ export function ExplorePage({
               <div className="center-state">
                 <IconSearch />
                 <div className="title">Couldn’t load apps</div>
-                <div className="sub">{error}. Make sure the API is running on port 3007.</div>
+                <div className="sub">{error}. Start the API server and retry.</div>
                 <button className="btn" onClick={refresh}>Retry</button>
               </div>
             ) : !loading && apps.length === 0 ? (

@@ -7,6 +7,8 @@ export interface AppFilterMeta {
   hasEmail: boolean;
   hasWebsite: boolean;
   price: number | null;
+  /** Supported ISO language codes, pre-lowercased ("en", "fr", …). */
+  languages: string[];
 }
 
 export interface ScoredAppRow {
@@ -73,6 +75,16 @@ export function matchesSearch(row: ScoredAppRow, params: AppSearchParams): boole
 
   if (params.developer) {
     if (!item.developer.toLowerCase().includes(params.developer.toLowerCase())) return false;
+  }
+
+  // App language — comma list of ISO codes; match if the app supports ANY of them.
+  // meta.languages is pre-lowercased at row-build time, so compare lowercase.
+  if (params.languages) {
+    const want = params.languages
+      .split(",")
+      .map((l) => l.trim().toLowerCase())
+      .filter(Boolean);
+    if (want.length && !want.some((l) => row.meta.languages.includes(l))) return false;
   }
 
   if (params.priceType === "free" && row.meta.price != null && row.meta.price > 0) return false;

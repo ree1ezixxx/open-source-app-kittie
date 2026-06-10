@@ -6,7 +6,8 @@ export interface RangeQuick {
   max?: number;
 }
 
-/** Quick-select pills + an optional custom min/max reveal. One control per metric. */
+/** Quick-select pills + custom min/max inputs (behind a "Custom" pill, or always
+    visible with `alwaysOpen` — the live Explore rail shows the "–" range inline). */
 export function RangeFilter({
   quick,
   min,
@@ -14,6 +15,7 @@ export function RangeFilter({
   onChange,
   prefix,
   suffix,
+  alwaysOpen = false,
 }: {
   quick: RangeQuick[];
   min?: number;
@@ -21,11 +23,13 @@ export function RangeFilter({
   onChange: (next: { min?: number; max?: number }) => void;
   prefix?: string;
   suffix?: string;
+  alwaysOpen?: boolean;
 }) {
   const matches = (q: RangeQuick) => q.min === min && q.max === max;
   const hasValue = min != null || max != null;
   const matchedQuick = quick.some(matches);
-  const [custom, setCustom] = useState(hasValue && !matchedQuick);
+  const [customOpen, setCustomOpen] = useState(hasValue && !matchedQuick);
+  const custom = alwaysOpen || customOpen;
 
   return (
     <div className="frange">
@@ -39,12 +43,14 @@ export function RangeFilter({
             {q.label}
           </button>
         ))}
-        <button
-          className={`fpill ghost ${custom ? "on" : ""}`}
-          onClick={() => setCustom((c) => !c)}
-        >
-          Custom
-        </button>
+        {!alwaysOpen && (
+          <button
+            className={`fpill ghost ${customOpen ? "on" : ""}`}
+            onClick={() => setCustomOpen((c) => !c)}
+          >
+            Custom
+          </button>
+        )}
       </div>
       {custom && (
         <div className="frange-inputs">

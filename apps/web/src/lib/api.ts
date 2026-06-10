@@ -8,6 +8,13 @@ import type {
 
 const BASE = "/api/v1";
 
+/**
+ * List row plus Explore-only extras the list endpoint attaches:
+ * `sparkline` = last ≤7 daily reviewCount values (oldest→newest).
+ * Optional so rows from older callers / fixtures still typecheck.
+ */
+export type AppListItemEx = AppListItem & { sparkline?: number[] };
+
 function toQuery(params: AppSearchParams): string {
   const q = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {

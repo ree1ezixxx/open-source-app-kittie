@@ -58,7 +58,7 @@ export function AppPicker({
           </div>
           <div className="s" style={{ fontSize: 11.5 }}>
             {failed
-              ? "Start the API on :3007 to pick a tracked app — or describe a new app above."
+              ? "Start the API server to pick a tracked app — or describe a new app above."
               : "Describe a new app above to generate from scratch."}
           </div>
         </div>

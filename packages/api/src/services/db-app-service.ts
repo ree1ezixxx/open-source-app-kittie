@@ -1,4 +1,5 @@
 import {
+  appSnapshots,
   appsWithAppleAds,
   appsWithCreators,
   countApps,
@@ -71,6 +72,7 @@ function filterMetaFromContext(ctx: SnapshotContext): ScoredAppRow["meta"] {
     hasEmail: Boolean(ctx.app.supportEmail),
     hasWebsite: Boolean(ctx.app.websiteUrl),
     price: ctx.app.price,
+    languages: parseJsonArray(ctx.app.languages).map((l) => l.toLowerCase()),
   };
 }
 
@@ -109,6 +111,33 @@ export async function dbHasApps(): Promise<boolean> {
   return (await countApps(getDb())) > 0;
 }
 
+// Sparkline cache — appId → last ≤7 daily reviewCount values (oldest→newest).
+// Built from ONE grouped query over app_snapshots (no per-app N+1), with the
+// same process-lifetime cache semantics as cachedRows above: page handlers
+// just pick out the ids they're returning.
+let cachedSparklines: Map<string, number[]> | null = null;
+
+async function getSparklines(): Promise<Map<string, number[]>> {
+  if (cachedSparklines) return cachedSparklines;
+  const rows = await getDb()
+    .select({ appId: appSnapshots.appId, reviewCount: appSnapshots.reviewCount })
+    .from(appSnapshots)
+    .orderBy(appSnapshots.appId, appSnapshots.snapshotDate);
+
+  const map = new Map<string, number[]>();
+  for (const row of rows) {
+    const list = map.get(row.appId);
+    if (!list) {
+      map.set(row.appId, [row.reviewCount]);
+    } else {
+      list.push(row.reviewCount);
+      if (list.length > 7) list.shift();
+    }
+  }
+  cachedSparklines = map;
+  return map;
+}
+
 export async function searchAppsFromDb(params: AppSearchParams): Promise<PaginatedResponse<AppListItem>> {
   const period = params.growthPeriod ?? "7d";
   const rows = await getScoredRows(period);
@@ -116,8 +145,15 @@ export async function searchAppsFromDb(params: AppSearchParams): Promise<Paginat
   const sorted = sortApps(filtered, params);
   const { data, nextCursor, totalCount } = paginateApps(sorted, params);
 
+  // Attach mini review-count trend per returned row only.
+  const sparklines = await getSparklines();
+  const withSparkline = data.map((item) => ({
+    ...item,
+    sparkline: sparklines.get(item.id) ?? [],
+  }));
+
   return {
-    data,
+    data: withSparkline,
     pagination: { nextCursor, totalCount },
   };
 }

@@ -423,7 +423,7 @@ export function AdsLibraryPage({
               <EmptyState
                 icon={<IconImage />}
                 title="Couldn’t load ads"
-                sub={`${error}. Make sure the API is running on port 3007.`}
+                sub={`${error}. Start the API server and retry.`}
               />
             ) : loading ? (
               <div style={gridStyle}>

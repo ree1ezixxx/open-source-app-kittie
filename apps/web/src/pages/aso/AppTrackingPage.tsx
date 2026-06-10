@@ -256,7 +256,7 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
 
               {oppError && (
                 <div className="notice" style={{ marginBottom: 12 }}>
-                  <IconInfo /> {oppError}. The API should be running on port 3007.
+                  <IconInfo /> {oppError}. Start the API server and retry.
                 </div>
               )}
 
