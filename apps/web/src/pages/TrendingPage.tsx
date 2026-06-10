@@ -62,7 +62,7 @@ export function TrendingPage({ theme, onToggleTheme }: { theme: Theme; onToggleT
         </select>
       </div>
       <span className="pill" style={pillStyle("#9a9aa3")}>🇺🇸 United States</span>
-      <span className="toolbar-meta">24h change builds once daily snapshots accrue</span>
+      <span className="toolbar-meta">Live top charts · ranked by the latest daily snapshot</span>
     </div>
   );
 
@@ -86,7 +86,6 @@ export function TrendingPage({ theme, onToggleTheme }: { theme: Theme; onToggleT
             <thead>
               <tr>
                 <th className="num" style={{ width: 56 }}>Rank</th>
-                <th className="num" style={{ width: 64 }}>24h</th>
                 <th className="col-app">App</th>
                 <th className="num">Downloads</th>
                 <th className="num">MRR</th>
@@ -96,7 +95,6 @@ export function TrendingPage({ theme, onToggleTheme }: { theme: Theme; onToggleT
               {apps.map((a, i) => (
                 <tr key={a.id} onClick={() => nav(`/apps/${a.id}`)}>
                   <td className="num num-strong">{i + 1}</td>
-                  <td className="num num-muted">—</td>
                   <td className="col-app">
                     <div className="app-cell">
                       {a.iconUrl ? (

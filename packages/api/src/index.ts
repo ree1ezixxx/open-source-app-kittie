@@ -4,6 +4,7 @@ import { createApp } from "./app.js";
 import { sweepFreshSet } from "./services/review-sweep-service.js";
 /* additive lane (feat/additive) — append-only block */
 import { sweepTrackedApps } from "./services/capture-sweep-service.js";
+import { runIdeaGeneration } from "./services/idea-generator-service.js";
 /* end additive lane */
 
 const env = loadEnv();
@@ -51,6 +52,25 @@ function startContinuousRefresh(): void {
   };
   setTimeout(runCapture, 30_000);
   setInterval(runCapture, CAPTURE_INTERVAL_MS);
+
+  /* Autonomous Hot Ideas generator: clones AppKittie's logic — picks today's
+     rising-but-low-rated proven apps, mines their reviews, drafts grounded
+     concepts into app_ideas so the feed stays live as markets move. Dormant
+     no-op without GEMINI_API_KEY. Daily cadence; quota-frugal per run. */
+  const IDEA_GEN_INTERVAL_MS = 24 * 60 * 60 * 1000;
+  const runIdeaGen = () => {
+    void runIdeaGeneration()
+      .then((r) => {
+        if (r.ran && r.generated > 0) {
+          console.log(`[ideas] generated ${r.generated} idea(s) from ${r.scanned} scanned apps`);
+        } else if (!r.ran && r.reason) {
+          console.log(`[ideas] dormant: ${r.reason}`);
+        }
+      })
+      .catch((e) => console.warn("[ideas] failed:", e instanceof Error ? e.message : e));
+  };
+  setTimeout(runIdeaGen, 45_000);
+  setInterval(runIdeaGen, IDEA_GEN_INTERVAL_MS);
   /* end additive lane */
 }
 

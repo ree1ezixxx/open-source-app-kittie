@@ -173,6 +173,22 @@ a { color: inherit; text-decoration: none; }
   color: var(--text-tertiary);
   font-variant-numeric: tabular-nums;
 }
+/* Red-! badge: a sidebar surface that needs an API key or is still mock. */
+.nav-item .nav-flag {
+  margin-left: auto;
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 99px;
+  background: #e0654e;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.nav-item .nav-flag + .nav-count { margin-left: 6px; }
 .sidebar-foot { margin-top: auto; padding: 12px 8px 4px; border-top: 1px solid var(--border-soft); }
 .sidebar-foot .nav-item { padding: 7px 8px; }
 

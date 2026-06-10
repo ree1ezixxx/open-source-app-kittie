@@ -8,7 +8,6 @@
  * from the app name/brief, narrative flow). The one remaining AI gap is model-
  * driven art direction (see AI_INTEGRATION_POINTS).
  */
-import { queryIdeas, type IdeasPage, type IdeasQuery } from "./api/ideas";
 import {
   type BackgroundStyle,
   type Device,
@@ -76,7 +75,6 @@ export interface ScreenshotGeneration {
 
 export interface AiService {
   generateScreenshots(input: GenerateScreenshotsInput): Promise<ScreenshotGeneration>;
-  listIdeas(query?: IdeasQuery): Promise<IdeasPage>;
 }
 
 /* ============================================================ Integration flags */
@@ -91,20 +89,13 @@ export const AI_INTEGRATION_POINTS = [
     needs:
       "Render, export, and a deterministic design layer (backgrounds, brand palette, fonts, derived copy, flow) are REAL. A vision/LLM model could still upgrade art direction — reading the live App Store listing to write sharper copy and pick palette/layout per app.",
   },
-  {
-    id: "ideas-pipeline",
-    method: "listIdeas",
-    title: "Hot-ideas generation pipeline",
-    needs:
-      "A job that mines fast-growing Apps (Snapshots + review clustering) and an LLM that drafts concepts + blueprint tags into an ideas store. Mock returns a static sample set.",
-  },
 ] as const;
 
 let warned = false;
 function flagMockOnce(method: string) {
   if (warned || typeof console === "undefined") return;
   warned = true;
-  console.info(`[aiService] ${method}: ideas are MOCK; screenshot render+export+design are live.`);
+  console.info(`[aiService] ${method}: screenshot render+export+design are live; art-direction model is the one gap.`);
 }
 
 /* ============================================================ Design defaults per style */
@@ -326,12 +317,6 @@ export const mockAiService: AiService = {
       status: "done",
       slides,
     };
-  },
-
-  async listIdeas(query) {
-    flagMockOnce("listIdeas");
-    await delay(250);
-    return queryIdeas(query);
   },
 };
 

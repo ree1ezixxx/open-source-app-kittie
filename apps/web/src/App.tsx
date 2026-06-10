@@ -27,7 +27,6 @@ import { NicheMiningPage } from "./pages/intel/NicheMiningPage";
 import { KeywordGapPage } from "./pages/intel/KeywordGapPage";
 import { LocalizationGapPage } from "./pages/intel/LocalizationGapPage";
 import { ResearchChatPage } from "./pages/intel/ResearchChatPage";
-import { IdeaPrdPage } from "./pages/intel/IdeaPrdPage";
 /* end additive lane */
 import { useTheme } from "./lib/theme";
 
@@ -80,7 +79,8 @@ export function App() {
         <Route path="/dashboard/intel/keyword-gap" element={<KeywordGapPage theme={theme} onToggleTheme={toggleTheme} />} />
         <Route path="/dashboard/intel/localization" element={<LocalizationGapPage theme={theme} onToggleTheme={toggleTheme} />} />
         <Route path="/dashboard/intel/chat" element={<ResearchChatPage theme={theme} onToggleTheme={toggleTheme} />} />
-        <Route path="/dashboard/intel/idea-prd" element={<IdeaPrdPage theme={theme} onToggleTheme={toggleTheme} />} />
+        {/* Idea → PRD folded into Hot Ideas — each idea card opens its PRD inline. */}
+        <Route path="/dashboard/intel/idea-prd" element={<Navigate to="/dashboard/hot-ideas" replace />} />
         {/* end additive lane */}
 
         <Route path="*" element={<Navigate to="/dashboard/explore" replace />} />

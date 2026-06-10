@@ -307,3 +307,85 @@ table.ppp-table tbody tr:last-child td { border-bottom: none; }
   .studio-rail { display: none; }
   .studio-steps { flex-wrap: wrap; }
 }
+
+/* ============================================================
+   Hot Ideas — live freshness banner, build chips, PRD modal
+   (additive lane: autonomous idea generator surface)
+   ============================================================ */
+.ideas-freshness {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  margin: 0 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+}
+.ideas-fresh-left { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; min-width: 0; }
+.ideas-live, .ideas-dormant { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; }
+.ideas-live { color: var(--text); }
+.ideas-dormant { color: var(--text-tertiary); max-width: 640px; }
+.ideas-notice { font-size: 12px; color: var(--accent); }
+.ideas-dot { width: 8px; height: 8px; border-radius: 99px; flex-shrink: 0; }
+.ideas-dot.ok { background: #2ecc71; box-shadow: 0 0 0 3px rgba(46, 204, 113, 0.18); }
+.ideas-dot.warn { background: #e0a82e; box-shadow: 0 0 0 3px rgba(224, 168, 46, 0.18); }
+
+.idea-diff { text-transform: capitalize; font-weight: 600; }
+.idea-diff.diff-low { color: #2ecc71; }
+.idea-diff.diff-medium { color: #e0a82e; }
+.idea-diff.diff-high { color: #e0654e; }
+
+.idea-prd-btn {
+  margin-top: 10px;
+  align-self: flex-start;
+  border: 1px solid var(--border);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 11px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+.idea-prd-btn:hover { background: var(--accent); color: var(--accent-ink); }
+
+.prd-overlay {
+  position: fixed; inset: 0; z-index: 60;
+  background: rgba(0, 0, 0, 0.45);
+  display: grid; place-items: center;
+  padding: 24px;
+}
+.prd-modal {
+  width: min(820px, 94vw);
+  max-height: 88vh;
+  display: flex; flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow-pop);
+  overflow: hidden;
+}
+.prd-modal-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  padding: 16px 18px; border-bottom: 1px solid var(--border);
+}
+.prd-modal-title { font-size: 16px; font-weight: 700; color: var(--text); }
+.prd-modal-sub { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
+.prd-modal-body { padding: 16px 18px; overflow: auto; }
+.prd-pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text);
+}
+.prd-modal-actions {
+  display: flex; gap: 10px; justify-content: flex-end;
+  padding: 12px 18px; border-top: 1px solid var(--border);
+}

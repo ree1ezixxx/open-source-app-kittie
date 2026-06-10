@@ -39,6 +39,78 @@ export async function listIdeas(
   };
 }
 
+/* ----------------------------------------------------- rich card data */
+
+/** A Hot Ideas card: the concept plus its real provenance (source-app
+    metrics) and a build-effort preview pulled from the stored blueprint.
+    Everything here is real or omitted — never fabricated. */
+export interface IdeaCard {
+  id: string;
+  slug: string | null;
+  title: string;
+  summary: string | null;
+  sourceCategory: string | null;
+  ideaCategory: string | null;
+  rating: number | null;
+  reviewCount: number;
+  needsBackend: boolean;
+  needsDatabase: boolean;
+  needsAi: boolean;
+  difficulty: string | null;
+  timelineWeeks: number | null;
+  createdAt: number | null;
+  sourceAppId: string | null;
+}
+
+function numOrNull(v: unknown): number | null {
+  if (v == null) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function blueprintObject(row: IdeaRow): Record<string, unknown> {
+  const raw = row.extra.blueprint;
+  if (typeof raw === "string" && raw.trim().startsWith("{")) {
+    try {
+      return JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      return {};
+    }
+  }
+  return raw != null && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+}
+
+function rowToCard(row: IdeaRow): IdeaCard {
+  const bp = blueprintObject(row);
+  return {
+    id: row.id,
+    slug: row.slug,
+    title: row.title,
+    summary: row.summary,
+    sourceCategory: row.sourceCategory,
+    ideaCategory: row.ideaCategory,
+    rating: numOrNull(row.extra.rating),
+    reviewCount: numOrNull(row.extra.review_count) ?? 0,
+    needsBackend: Boolean(numOrNull(row.extra.needs_backend)),
+    needsDatabase: Boolean(numOrNull(row.extra.needs_database)),
+    needsAi: Boolean(numOrNull(row.extra.needs_ai)),
+    difficulty: typeof bp.difficulty === "string" ? bp.difficulty : null,
+    timelineWeeks: numOrNull(bp.timelineWeeks),
+    createdAt: numOrNull(row.extra.created_at),
+    sourceAppId: typeof row.extra.source_app_id === "string" ? row.extra.source_app_id : null,
+  };
+}
+
+export async function listIdeaCards(
+  search?: string,
+  limit = 120,
+): Promise<{ available: boolean; ideas: IdeaCard[] }> {
+  const db = getDb();
+  if (!(await ideasTableExists(db))) return { available: false, ideas: [] };
+  const rows = await listIdeaRows(db, { search, limit });
+  return { available: true, ideas: rows.map(rowToCard) };
+}
+
 /* ----------------------------------------------------- templating */
 
 /** Pull a usable string/array out of the idea's blueprint JSON, whatever
@@ -64,6 +136,7 @@ function blueprintField(idea: IdeaRow, names: string[]): string | null {
         for (const key of names) {
           const v = obj[key];
           if (typeof v === "string" && v.trim()) return v.trim();
+          if (typeof v === "number" && Number.isFinite(v)) return String(v);
           if (Array.isArray(v) && v.length > 0) return v.map((x) => `- ${String(x)}`).join("\n");
         }
       } catch {
@@ -80,7 +153,14 @@ function section(heading: string, body: string | null): string {
 
 function buildTemplatePrd(idea: IdeaRow): string {
   const difficulty = blueprintField(idea, ["difficulty", "difficulty_reasoning", "difficultyReasoning"]);
-  const timeline = blueprintField(idea, ["timeline", "estimated_timeline", "estimatedTimeline"]);
+  const timelineRaw = blueprintField(idea, [
+    "timeline",
+    "estimated_timeline",
+    "estimatedTimeline",
+    "timelineWeeks",
+    "timeline_weeks",
+  ]);
+  const timeline = timelineRaw && /^\d+$/.test(timelineRaw) ? `${timelineRaw} weeks` : timelineRaw;
   const requirements = blueprintField(idea, ["requirements", "needs"]);
   const mvp = blueprintField(idea, ["mvp_features", "mvpFeatures", "mvp_scope", "mvpScope", "mvp"]);
   const keyFeatures = blueprintField(idea, ["key_features", "keyFeatures", "features"]);

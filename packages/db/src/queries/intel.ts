@@ -158,3 +158,105 @@ export async function listSnapshotSeries(db: Db, appId: string) {
     .where(eq(appSnapshots.appId, appId))
     .orderBy(asc(appSnapshots.snapshotDate));
 }
+
+/* ============================================================
+   Autonomous idea generator — source-app selection + review
+   evidence. Clones AppKittie's "$50k/mo, sort rating low→high,
+   read the reviews" playbook against our live snapshots.
+   ============================================================ */
+
+export interface IdeaCandidateApp {
+  id: string;
+  title: string;
+  category: string | null;
+  releasedAt: number | null;
+  price: number | null;
+  rating: number | null;
+  reviewCount: number;
+  downloadsEstimate: number | null;
+  revenueEstimate: number | null;
+  growthScore: number | null;
+}
+
+/** Proven-demand-but-flawed apps from the latest snapshot per App: rising
+    (growthScore > 50), real review volume, and a low-ish rating (the unmet
+    need), ranked by revenue then growth. This is the live, self-updating
+    sourcing list — next week's risers replace today's. */
+export async function listIdeaCandidateApps(
+  db: Db,
+  opts: { ratingCeiling?: number; minReviews?: number; limit?: number } = {},
+): Promise<IdeaCandidateApp[]> {
+  const ceiling = opts.ratingCeiling ?? 4.0;
+  const minReviews = opts.minReviews ?? 200;
+  const limit = Math.min(opts.limit ?? 40, 500);
+  const rows = db.all<{
+    id: string;
+    title: string;
+    category: string | null;
+    releasedAt: number | null;
+    price: number | null;
+    rating: number | null;
+    reviewCount: number;
+    downloadsEstimate: number | null;
+    revenueEstimate: number | null;
+    growthScore: number | null;
+  }>(sql`
+    SELECT a.id AS id, a.title AS title, a.category AS category,
+           a.released_at AS releasedAt, a.price AS price,
+           s.rating AS rating, s.review_count AS reviewCount,
+           s.downloads_estimate AS downloadsEstimate,
+           s.revenue_estimate AS revenueEstimate, s.growth_score AS growthScore
+    FROM apps a
+    JOIN app_snapshots s ON s.app_id = a.id
+    JOIN (
+      SELECT app_id, MAX(snapshot_date) AS md FROM app_snapshots GROUP BY app_id
+    ) m ON m.app_id = a.id AND m.md = s.snapshot_date
+    WHERE s.rating IS NOT NULL AND s.rating <= ${ceiling}
+      AND s.review_count >= ${minReviews}
+      AND s.growth_score IS NOT NULL AND s.growth_score > 50
+      AND s.revenue_estimate IS NOT NULL
+    ORDER BY s.revenue_estimate DESC, s.growth_score DESC
+    LIMIT ${limit}
+  `);
+  return rows.map((r) => ({
+    id: String(r.id),
+    title: String(r.title),
+    category: r.category == null ? null : String(r.category),
+    releasedAt: r.releasedAt == null ? null : Number(r.releasedAt),
+    price: r.price == null ? null : Number(r.price),
+    rating: r.rating == null ? null : Number(r.rating),
+    reviewCount: Number(r.reviewCount ?? 0),
+    downloadsEstimate: r.downloadsEstimate == null ? null : Number(r.downloadsEstimate),
+    revenueEstimate: r.revenueEstimate == null ? null : Number(r.revenueEstimate),
+    growthScore: r.growthScore == null ? null : Number(r.growthScore),
+  }));
+}
+
+export interface ReviewEvidence {
+  id: string;
+  title: string | null;
+  body: string | null;
+  rating: number;
+}
+
+/** Verbatim text for a set of review ids — the complaint snippets the
+    generator hands the model so concepts are grounded in real words,
+    never invented. */
+export async function reviewTextByIds(db: Db, ids: string[]): Promise<ReviewEvidence[]> {
+  if (ids.length === 0) return [];
+  const rows = await db
+    .select({
+      id: reviews.id,
+      title: reviews.title,
+      body: reviews.body,
+      rating: reviews.rating,
+    })
+    .from(reviews)
+    .where(inArray(reviews.id, ids));
+  return rows.map((r) => ({
+    id: r.id,
+    title: r.title ?? null,
+    body: r.body ?? null,
+    rating: r.rating,
+  }));
+}

@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import {
   IconDatabase,
@@ -25,8 +26,21 @@ import {
   /* end additive lane */
 } from "../icons";
 
-type Item = { to: string; label: string; icon: typeof IconDatabase; badge?: "total" };
+type Item = {
+  to: string;
+  label: string;
+  icon: typeof IconDatabase;
+  badge?: "total";
+  /** "key": needs GEMINI_API_KEY (red-! clears live once set).
+      "mock": surface still backed by mock data (always flagged). */
+  flag?: "key" | "mock";
+};
 type Group = { label: string; items: Item[] };
+
+const FLAG_TITLE: Record<"key" | "mock", string> = {
+  key: "Needs a Gemini API key — set one in API Keys to activate",
+  mock: "Mock data — not yet wired to a live source",
+};
 
 const GROUPS: Group[] = [
   {
@@ -49,16 +63,16 @@ const GROUPS: Group[] = [
       { to: "/dashboard/aso/apps", label: "App Tracking", icon: IconGrid },
       { to: "/dashboard/aso/keywords", label: "Keyword Explorer", icon: IconSearch },
       { to: "/dashboard/aso/screenshots", label: "Screenshots", icon: IconImage },
-      { to: "/dashboard/aso/screenshot-translation", label: "Translations", icon: IconGlobe },
+      { to: "/dashboard/aso/screenshot-translation", label: "Translations", icon: IconGlobe, flag: "mock" },
     ],
   },
   {
     label: "Analytics",
-    items: [{ to: "/dashboard/reviews", label: "Reviews", icon: IconMessage }],
+    items: [{ to: "/dashboard/reviews", label: "Reviews", icon: IconMessage, flag: "mock" }],
   },
   {
     label: "App Ideas",
-    items: [{ to: "/dashboard/hot-ideas", label: "Hot ideas", icon: IconBulb }],
+    items: [{ to: "/dashboard/hot-ideas", label: "Hot ideas", icon: IconBulb, flag: "key" }],
   },
   /* additive lane (feat/additive) — append-only block */
   {
@@ -75,8 +89,7 @@ const GROUPS: Group[] = [
       { to: "/dashboard/intel/mining", label: "Niche Mining", icon: IconFilter },
       { to: "/dashboard/intel/keyword-gap", label: "Keyword Gap", icon: IconRank },
       { to: "/dashboard/intel/localization", label: "Localization", icon: IconGlobe },
-      { to: "/dashboard/intel/chat", label: "Research Chat", icon: IconMessage },
-      { to: "/dashboard/intel/idea-prd", label: "Idea → PRD", icon: IconBulb },
+      { to: "/dashboard/intel/chat", label: "Research Chat", icon: IconMessage, flag: "key" },
     ],
   },
   /* end additive lane */
@@ -99,6 +112,24 @@ const GROUPS: Group[] = [
 
 export function Sidebar({ total = 0 }: { total?: number }) {
   const nav = useNavigate();
+
+  // Live key gating: a "key"-flagged item shows the red-! only while the seam
+  // is off, so the warning clears the moment a Gemini key is set.
+  const [seamEnabled, setSeamEnabled] = useState<boolean | null>(null);
+  useEffect(() => {
+    const ac = new AbortController();
+    fetch("/api/v1/assist/status", { signal: ac.signal })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((b) => setSeamEnabled(Boolean(b?.data?.enabled)))
+      .catch(() => setSeamEnabled(false));
+    return () => ac.abort();
+  }, []);
+
+  const showFlag = (flag?: "key" | "mock"): boolean => {
+    if (flag === "mock") return true;
+    if (flag === "key") return seamEnabled === false; // hide until we know it's off
+    return false;
+  };
 
   return (
     <aside className="sidebar">
@@ -130,6 +161,15 @@ export function Sidebar({ total = 0 }: { total?: number }) {
               >
                 <Icon />
                 <span>{it.label}</span>
+                {showFlag(it.flag) && (
+                  <span
+                    className="nav-flag"
+                    title={FLAG_TITLE[it.flag!]}
+                    aria-label={FLAG_TITLE[it.flag!]}
+                  >
+                    !
+                  </span>
+                )}
                 {it.badge === "total" && total > 0 && (
                   <span className="nav-count">{total.toLocaleString()}</span>
                 )}
