@@ -1,0 +1,38 @@
+name: data-sweeps
+
+# Always-on data substrate (free tier): GitHub runs the due sweeps every
+# 6 hours against the hosted Turso DB. sweep_state in the DB enforces real
+# cadences (daily sweeps still run once/day even though this fires 4x/day).
+on:
+  schedule:
+    - cron: "23 */6 * * *" # off the hour — GitHub drops jobs at :00 spikes
+  workflow_dispatch: {}
+
+concurrency:
+  group: data-sweeps
+  cancel-in-progress: false
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: integrate/full-clone
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Run due sweeps
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: pnpm --filter @kittie/api exec tsx src/scripts/run-sweeps-once.ts

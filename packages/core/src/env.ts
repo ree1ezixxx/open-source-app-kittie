@@ -8,6 +8,9 @@ const envSchema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   META_ACCESS_TOKEN: z.string().optional(),
   GEMINI_API_KEY: z.string().optional(),
+  /** Hosted Turso DB — set in CI/cloud; absent locally (file: DB is used). */
+  TURSO_DATABASE_URL: z.string().optional(),
+  TURSO_AUTH_TOKEN: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -39,5 +42,11 @@ function loadDotenvFile(): Record<string, string> {
 }
 
 export function loadEnv(overrides?: Partial<Env>): Env {
-  return envSchema.parse({ ...loadDotenvFile(), ...process.env, ...overrides });
+  const fromFile = loadDotenvFile();
+  // Backfill process.env so modules that read it directly (e.g. the DB client
+  // picking TURSO_DATABASE_URL/TURSO_AUTH_TOKEN) see .env values too.
+  for (const [key, value] of Object.entries(fromFile)) {
+    process.env[key] ??= value;
+  }
+  return envSchema.parse({ ...fromFile, ...process.env, ...overrides });
 }
