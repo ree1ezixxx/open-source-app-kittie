@@ -36,3 +36,48 @@ export {
   untrackKeyword,
   type TrackedKeywordEntry,
 } from "./tracked-keywords.js";
+/* Additive lane — Monitor layer (tracked apps / changes / alerts). */
+export {
+  countUnreadAlerts,
+  ensureDefaultAlertRules,
+  getCaptureBaseline,
+  getJobCursor,
+  insertAlerts,
+  insertAppChanges,
+  isAppTracked,
+  listAlertRules,
+  listAlertsFeed,
+  listAppChanges,
+  listRecentAlertsForApp,
+  listRecentChanges,
+  listTrackedAppEntries,
+  markAlertsRead,
+  saveCaptureBaseline,
+  saveJobCursor,
+  trackApp,
+  untrackApp,
+  updateAlertRule,
+  updateTrackedNote,
+  type AlertFeedEntry,
+  type AlertInput,
+  type AlertRuleEntry,
+  type AppChangeEntry,
+  type AppChangeInput,
+  type RecentChangeEntry,
+  type TrackedAppEntry,
+} from "./monitor.js";
+export {
+  listAppIdsByCategory,
+  listAppsByIds,
+  listKeywordIndexRows,
+  listMinableReviews,
+  listSnapshotSeries,
+  type KeywordIndexRowRaw,
+  type MinableReviewRow,
+} from "./intel.js";
+export {
+  getIdeaRow,
+  ideasTableExists,
+  listIdeaRows,
+  type IdeaRow,
+} from "./ideas-bridge.js";

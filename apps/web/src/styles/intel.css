@@ -1,0 +1,382 @@
+/* ============================================================
+   Additive lane — Intelligence surfaces (Niche Mining, Keyword Gap,
+   Localization Gap). All classes are .intel- prefixed; colors come
+   from the global CSS variables in index.css so both themes work.
+   ============================================================ */
+
+.intel-wrap {
+  max-width: 1040px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* ---------------------------------------------------------- controls */
+.intel-controls {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.intel-controls-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.intel-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-tertiary);
+  min-width: 86px;
+}
+.intel-spacer { flex: 1; }
+.intel-grow { flex: 1; min-width: 240px; }
+.intel-hint {
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+  align-self: center;
+}
+
+/* ------------------------------------------------------ app picker */
+.intel-picker { position: relative; }
+.intel-picker .search input { width: 100%; }
+.intel-pick-results {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px -12px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.intel-pick-note {
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+.intel-pick-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  text-align: left;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.08s;
+}
+.intel-pick-row:hover:not(:disabled) { background: var(--surface-hover); }
+.intel-pick-row:disabled { opacity: 0.45; cursor: default; }
+.intel-pick-row > svg { margin-left: auto; color: var(--text-tertiary); flex-shrink: 0; }
+.intel-pick-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--surface-2);
+  border: 1px solid var(--border-soft);
+}
+.intel-pick-icon-ph {
+  display: grid;
+  place-items: center;
+  color: var(--text-tertiary);
+  font-weight: 600;
+  font-size: 12px;
+}
+.intel-pick-meta { min-width: 0; display: flex; flex-direction: column; }
+.intel-pick-meta .t {
+  font-size: 12.5px;
+  font-weight: 560;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.intel-pick-meta .s {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* selected chips */
+.intel-chiplist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.intel-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 550;
+  padding: 4px 6px 4px 6px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  white-space: nowrap;
+}
+.intel-chip img {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  object-fit: cover;
+  background: var(--surface-2);
+}
+.intel-chip button {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 5px;
+  background: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: all 0.1s;
+}
+.intel-chip button:hover { background: var(--surface-hover); color: var(--text); }
+
+/* -------------------------------------------------- summary + errors */
+.intel-summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-variant-numeric: tabular-nums;
+}
+.intel-summary strong { color: var(--text); font-weight: 650; }
+.intel-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--negative, #e5484d);
+  background: color-mix(in srgb, currentColor 8%, transparent);
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  border-radius: 10px;
+  padding: 9px 12px;
+}
+.intel-dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 99px;
+  background: var(--text-faint);
+  display: inline-block;
+  margin: 0 6px;
+  flex-shrink: 0;
+}
+
+/* ---------------------------------------------------------- sections */
+.intel-section { display: flex; flex-direction: column; gap: 12px; }
+.intel-section-head { display: flex; align-items: flex-start; gap: 10px; }
+.intel-section-icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.intel-section-title {
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.intel-section-sub { font-size: 12px; color: var(--text-tertiary); margin-top: 1px; }
+.intel-tabpane { margin-top: 4px; }
+
+/* ------------------------------------------------------ cluster cards */
+.intel-cluster-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 10px;
+}
+.intel-cluster {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.intel-cluster-top { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.intel-cluster-rank {
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.intel-cluster-label {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.intel-cluster-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.intel-cluster-meta strong { color: var(--text-secondary); font-weight: 620; }
+
+/* score / opportunity bar */
+.intel-bar {
+  display: inline-block;
+  width: 100%;
+  height: 5px;
+  border-radius: 99px;
+  background: var(--surface-2);
+  overflow: hidden;
+  vertical-align: middle;
+}
+.intel-bar-fill {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 55%, #4a8f2a), var(--accent));
+}
+.intel-opp {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.intel-opp .intel-bar { width: 64px; flex-shrink: 0; }
+.intel-opp-val {
+  min-width: 24px;
+  text-align: right;
+  font-weight: 560;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------ tables */
+.intel-table-scroll { overflow-x: auto; }
+.intel-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-variant-numeric: tabular-nums;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.intel-table thead th {
+  text-align: left;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-tertiary);
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  white-space: nowrap;
+}
+.intel-table tbody td {
+  padding: 8px 14px;
+  font-size: 12.5px;
+  color: var(--text);
+  border-bottom: 1px solid var(--border-soft);
+  white-space: nowrap;
+}
+.intel-table tbody tr:last-child td { border-bottom: none; }
+.intel-table tbody tr:hover td { background: var(--surface-hover); }
+.intel-table th.num,
+.intel-table td.num { text-align: right; }
+.intel-table-compact tbody td { padding: 6px 14px; font-size: 12px; }
+.intel-kw { font-weight: 560; }
+.intel-market-cell { color: var(--text-secondary); font-size: 11.5px; }
+
+/* presence matrix heat cells */
+.intel-matrix td.intel-heat { transition: background 0.1s; color: var(--text-secondary); }
+
+/* ------------------------------------------------------ market cards */
+.intel-market-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(440px, 1fr));
+  gap: 12px;
+}
+@media (max-width: 980px) {
+  .intel-market-grid { grid-template-columns: 1fr; }
+}
+.intel-market {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.intel-market .intel-table { border: none; border-radius: 0; background: none; }
+.intel-market .intel-table thead th { background: none; }
+.intel-market-head { display: flex; align-items: center; gap: 10px; }
+.intel-market-code {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 3px 9px;
+  border-radius: 7px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.intel-market-stats {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  display: inline-flex;
+  align-items: center;
+  font-variant-numeric: tabular-nums;
+}
+.intel-market-stats strong { color: var(--text); font-weight: 650; margin-right: 4px; }
+.intel-more {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: 2px 0;
+  font-size: 12px;
+  font-weight: 560;
+  color: var(--accent);
+  cursor: pointer;
+}
+.intel-more:hover { text-decoration: underline; }

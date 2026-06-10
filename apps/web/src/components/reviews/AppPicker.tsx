@@ -22,7 +22,8 @@ function toMonitored(a: AppListItem): MonitoredApp {
     title: a.title,
     developer: a.developer,
     iconUrl: a.iconUrl,
-    store: a.store,
+    // Reviews are a mobile-store surface; steam/itch rows never reach this picker.
+    store: a.store === "google" ? "google" : "apple",
     reviewCount: a.reviewCount,
     rating: a.rating,
   };

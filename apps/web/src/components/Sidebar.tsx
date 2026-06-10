@@ -16,6 +16,13 @@ import {
   IconBook,
   IconCoin,
   IconSettings,
+  /* additive lane (feat/additive) — append-only block */
+  IconHeart,
+  IconInfo,
+  IconChart,
+  IconFilter,
+  IconRank,
+  /* end additive lane */
 } from "../icons";
 
 type Item = { to: string; label: string; icon: typeof IconDatabase; badge?: "total" };
@@ -53,6 +60,26 @@ const GROUPS: Group[] = [
     label: "App Ideas",
     items: [{ to: "/dashboard/hot-ideas", label: "Hot ideas", icon: IconBulb }],
   },
+  /* additive lane (feat/additive) — append-only block */
+  {
+    label: "Monitor",
+    items: [
+      { to: "/dashboard/monitor/tracked", label: "Tracked Apps", icon: IconHeart },
+      { to: "/dashboard/monitor/alerts", label: "Alerts", icon: IconInfo },
+      { to: "/dashboard/monitor/compare", label: "Compare", icon: IconChart },
+    ],
+  },
+  {
+    label: "Intelligence",
+    items: [
+      { to: "/dashboard/intel/mining", label: "Niche Mining", icon: IconFilter },
+      { to: "/dashboard/intel/keyword-gap", label: "Keyword Gap", icon: IconRank },
+      { to: "/dashboard/intel/localization", label: "Localization", icon: IconGlobe },
+      { to: "/dashboard/intel/chat", label: "Research Chat", icon: IconMessage },
+      { to: "/dashboard/intel/idea-prd", label: "Idea → PRD", icon: IconBulb },
+    ],
+  },
+  /* end additive lane */
   {
     label: "API",
     items: [

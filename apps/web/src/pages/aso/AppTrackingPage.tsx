@@ -109,7 +109,8 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
   function addApp(a: AppListItem) {
     if (tracked.some((t) => t.id === a.id)) { setSelectedId(a.id); setAdding(false); setQuery(""); return; }
     const entry: TrackedApp = {
-      id: a.id, store: a.store, title: a.title, developer: a.developer,
+      // ASO tracking is a mobile-store surface; steam/itch rows never reach it.
+      id: a.id, store: a.store === "google" ? "google" : "apple", title: a.title, developer: a.developer,
       iconUrl: a.iconUrl, category: a.category,
       addedAt: new Date().toISOString(), keywords: [],
     };

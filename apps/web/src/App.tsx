@@ -19,6 +19,16 @@ import { DocsPage } from "./pages/DocsPage";
 import { ScreenshotGeneratorPage } from "./pages/ScreenshotGeneratorPage";
 import { HotIdeasPage } from "./pages/HotIdeasPage";
 import { PricingCalculatorPage } from "./pages/PricingCalculatorPage";
+/* additive lane (feat/additive) — append-only block */
+import { TrackedAppsPage } from "./pages/monitor/TrackedAppsPage";
+import { AlertsPage } from "./pages/monitor/AlertsPage";
+import { ComparePage } from "./pages/monitor/ComparePage";
+import { NicheMiningPage } from "./pages/intel/NicheMiningPage";
+import { KeywordGapPage } from "./pages/intel/KeywordGapPage";
+import { LocalizationGapPage } from "./pages/intel/LocalizationGapPage";
+import { ResearchChatPage } from "./pages/intel/ResearchChatPage";
+import { IdeaPrdPage } from "./pages/intel/IdeaPrdPage";
+/* end additive lane */
 import { useTheme } from "./lib/theme";
 
 export function App() {
@@ -61,6 +71,17 @@ export function App() {
         <Route path="/settings" element={<SettingsPage theme={theme} onToggleTheme={toggleTheme} />} />
         <Route path="/settings/api-keys" element={<ApiKeysPage theme={theme} onToggleTheme={toggleTheme} />} />
         <Route path="/docs" element={<DocsPage theme={theme} onToggleTheme={toggleTheme} />} />
+
+        {/* additive lane (feat/additive) — append-only block */}
+        <Route path="/dashboard/monitor/tracked" element={<TrackedAppsPage theme={theme} onToggleTheme={toggleTheme} />} />
+        <Route path="/dashboard/monitor/alerts" element={<AlertsPage theme={theme} onToggleTheme={toggleTheme} />} />
+        <Route path="/dashboard/monitor/compare" element={<ComparePage theme={theme} onToggleTheme={toggleTheme} />} />
+        <Route path="/dashboard/intel/mining" element={<NicheMiningPage theme={theme} onToggleTheme={toggleTheme} />} />
+        <Route path="/dashboard/intel/keyword-gap" element={<KeywordGapPage theme={theme} onToggleTheme={toggleTheme} />} />
+        <Route path="/dashboard/intel/localization" element={<LocalizationGapPage theme={theme} onToggleTheme={toggleTheme} />} />
+        <Route path="/dashboard/intel/chat" element={<ResearchChatPage theme={theme} onToggleTheme={toggleTheme} />} />
+        <Route path="/dashboard/intel/idea-prd" element={<IdeaPrdPage theme={theme} onToggleTheme={toggleTheme} />} />
+        {/* end additive lane */}
 
         <Route path="*" element={<Navigate to="/dashboard/explore" replace />} />
       </Routes>

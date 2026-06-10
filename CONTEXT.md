@@ -12,6 +12,10 @@ _Avoid_: Product (when meaning one store listing)
 Either `apple` or `google`. Every App belongs to exactly one Store.
 _Avoid_: Platform, source (in user-facing copy)
 
+**Distribution store**:
+The wider set of channels an App row can come from: a Store (`apple`/`google`) plus `steam` and `itch` (multi-store consolidation). Steam/itch rows live in the same apps table but mobile-only surfaces (Reviews, ASO, charts) filter to Stores and never see them. Steam has no 5-star rating and itch's public feed is metadata-thin — missing fields stay null, never fabricated.
+_Avoid_: Store (when steam/itch are in scope — that word stays mobile-only)
+
 **Chart country**:
 Which storefront's charts and Observed metrics we track (ISO market, e.g. `US`). v1 is US-only; other markets use the same free Store sources with a different country parameter — not a paid tier.
 _Avoid_: Region (ambiguous), locale
@@ -141,12 +145,24 @@ A single written, user-submitted review of an App on its Store — rating + opti
 _Avoid_: Rating (that is one field of a Review, not the whole thing); Comment
 
 **Monitored app**:
-An App a person has bookmarked in the Reviews surface to view its reviews and sentiment. A personal bookmark only — it does **not** determine what the server keeps fresh. An App can be kept fresh while monitored by nobody, and monitoring an App never, on its own, adds it to the fresh set.
-_Avoid_: Tracked app, Subscribed app
+An App a person has bookmarked in the Reviews surface to view its reviews and sentiment. A personal bookmark only — it does **not** determine what the server keeps fresh. An App can be kept fresh while monitored by nobody, and monitoring an App never, on its own, adds it to the fresh set. Distinct from a **Tracked app**: monitoring is a reviews-only bookmark with no server-side record and no change history; tracking is a durable server-side anchor that App changes attach to.
+_Avoid_: Subscribed app; Tracked app (a different, server-side concept — see below)
 
 **Fresh set**:
 The set of Apps the ingestion job keeps continuously up to date — defined as *every App that already has at least one indexed Review*. Membership follows ingestion history, not monitoring. This is how review data stays live without any user/auth backend.
 _Avoid_: Monitored set, Watched apps
+
+**Tracked app**:
+An App a person has explicitly added to a durable, server-side shortlist to watch for changes over time. The sibling of a Tracked keyword: it persists in its own table (`tracked_apps`), is never cache-evicted, and is the anchor an App's change history attaches to. Distinct from a Favorite (a client-only localStorage display bookmark, invisible to the server) and from a Monitored app (a reviews-only bookmark that drives nothing server-side). Tracking an App is what scopes change-capture and alerts to it — the server only diffs Apps that are tracked.
+_Avoid_: Watchlist (in schema names — the table is `tracked_apps`), Favorite (client-only, different substrate), Monitored app (reviews bookmark, no history)
+
+**App change**:
+A single recorded difference in one of a Tracked app's fields between two captures — e.g. price, title, description, screenshot set, rating, chart rank, or an Estimated metric. Captured append-only (old value → new value, with the date) so a Tracked app accumulates a change history the server can read without re-deriving it. The substrate beneath both the change-diff timeline and Alerts.
+_Avoid_: Diff (too generic), Snapshot (that is the full per-day record; an App change is one field's delta between records)
+
+**Alert**:
+A notable App change (or threshold crossing) surfaced to the person who tracks the App — a rank shift, price/metadata change, rating drop, or revenue swing past a minimum magnitude. Derived from App changes, never fired on a single capture or on impossible deltas (e.g. a cumulative review count appearing to fall). An Alert is a read over recorded App changes, not a separate ingestion.
+_Avoid_: Notification (that is one delivery channel for an Alert, not the Alert itself); Event
 
 **Hot idea**:
 An AI-generated app concept derived from one real fast-growing App (its source App). Pre-generated in batch and stored — never generated per-view. Each Hot idea has a Blueprint.

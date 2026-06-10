@@ -5,6 +5,11 @@ import { adsRouter } from "./routes/ads.js";
 import { appsRouter } from "./routes/apps.js";
 import { keywordsRouter } from "./routes/keywords.js";
 import { reviewsRouter } from "./routes/reviews.js";
+/* additive lane (feat/additive) — append-only block */
+import { assistRouter } from "./routes/assist.js";
+import { intelRouter } from "./routes/intel.js";
+import { monitorRouter } from "./routes/monitor.js";
+/* end additive lane */
 
 export function createApp() {
   const app = new Hono();
@@ -22,6 +27,11 @@ export function createApp() {
   v1.route("/apps", appsRouter);
   v1.route("/keywords", keywordsRouter);
   v1.route("/reviews", reviewsRouter);
+  /* additive lane (feat/additive) — append-only block */
+  v1.route("/monitor", monitorRouter);
+  v1.route("/intel", intelRouter);
+  v1.route("/assist", assistRouter);
+  /* end additive lane */
   app.route("/api/v1", v1);
 
   return app;

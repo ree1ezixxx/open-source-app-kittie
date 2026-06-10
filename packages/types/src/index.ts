@@ -1,6 +1,11 @@
 /** Store identifier — one App per store listing. */
 export type Store = "apple" | "google";
 
+/** Multi-store consolidation (additive lane): every distribution channel an
+    App row can come from. Mobile surfaces keep using Store; Steam/itch flow
+    through the same apps table with these wider ids. */
+export type DistributionStore = Store | "steam" | "itch";
+
 export type GrowthPeriod = "7d" | "14d" | "30d" | "60d" | "90d";
 
 export type AppSortField =
@@ -58,7 +63,8 @@ export interface AppSearchParams {
 
 export interface AppListItem {
   id: string;
-  store: Store;
+  /** Widened for multi-store consolidation — mobile rows stay apple/google. */
+  store: DistributionStore;
   storeAppId: string;
   title: string;
   iconUrl: string | null;

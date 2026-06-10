@@ -29,6 +29,13 @@
       "when": 1780929314141,
       "tag": "0002_deep_black_tarantula",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1781100711800,
+      "tag": "0004_naive_stepford_cuckoos",
+      "breakpoints": true
     }
   ]
 }

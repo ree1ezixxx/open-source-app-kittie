@@ -5,7 +5,9 @@ export const apps = sqliteTable(
   "apps",
   {
     id: text("id").primaryKey(),
-    store: text("store", { enum: ["apple", "google"] }).notNull(),
+    // "steam" | "itch" are the additive lane's multi-store consolidation;
+    // mobile-only surfaces filter to apple/google and are unaffected.
+    store: text("store", { enum: ["apple", "google", "steam", "itch"] }).notNull(),
     storeAppId: text("store_app_id").notNull(),
     bundleId: text("bundle_id"),
     title: text("title").notNull(),
@@ -201,6 +203,107 @@ export const trackedKeywords = sqliteTable(
   (t) => [uniqueIndex("tracked_keywords_keyword_idx").on(t.keywordId)],
 );
 
+/* ============================================================
+   Additive lane (feat/additive) — Monitor layer. New tables only;
+   see docs/PRD-additive-edge.md (D2–D4). The sibling of trackedKeywords:
+   a durable server-side anchor that App change history attaches to.
+   ============================================================ */
+
+/** The user's durable app watch-list. One row per tracked App. */
+export const trackedApps = sqliteTable(
+  "tracked_apps",
+  {
+    id: text("id").primaryKey(),
+    appId: text("app_id")
+      .notNull()
+      .references(() => apps.id),
+    note: text("note"),
+    trackedAt: integer("tracked_at", { mode: "timestamp" }).notNull(),
+    /** JSON map of the watched fields at the last capture — the diff baseline.
+        Owned by the capture sweep; null until the first capture runs. */
+    lastCapture: text("last_capture"),
+    lastCapturedAt: integer("last_captured_at", { mode: "timestamp" }),
+  },
+  (t) => [uniqueIndex("tracked_apps_app_idx").on(t.appId)],
+);
+
+/** One recorded field delta on a Tracked app — append-only, never updated. */
+export const appChanges = sqliteTable(
+  "app_changes",
+  {
+    id: text("id").primaryKey(),
+    appId: text("app_id")
+      .notNull()
+      .references(() => apps.id),
+    field: text("field").notNull(),
+    oldValue: text("old_value"),
+    newValue: text("new_value"),
+    /** When the prior (old) value was captured — the pair's left edge. */
+    priorAt: integer("prior_at", { mode: "timestamp" }).notNull(),
+    capturedAt: integer("captured_at", { mode: "timestamp" }).notNull(),
+  },
+  (t) => [
+    index("app_changes_app_time_idx").on(t.appId, t.capturedAt),
+    index("app_changes_field_idx").on(t.field),
+  ],
+);
+
+/** User-editable alert thresholds. One row per rule type. */
+export const alertRules = sqliteTable("alert_rules", {
+  id: text("id").primaryKey(),
+  rule: text("rule", {
+    enum: [
+      "rank_shift",
+      "price_change",
+      "metadata_change",
+      "rating_drop",
+      "revenue_swing",
+      "new_ad_creative", // designed; cannot fire until meta_ads ingestion unblocks
+    ],
+  }).notNull(),
+  /** Minimum magnitude to fire (units per rule: ranks, stars, percent). */
+  threshold: real("threshold"),
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+  /** JSON array of channels: ["feed"] always; "banner" opt-in. */
+  channels: text("channels").notNull().default('["feed"]'),
+});
+
+/** A surfaced alert — derived from a recorded App change by the evaluator.
+    Materializes the feed + read state; no other writer exists. */
+export const alerts = sqliteTable(
+  "alerts",
+  {
+    id: text("id").primaryKey(),
+    appId: text("app_id")
+      .notNull()
+      .references(() => apps.id),
+    appChangeId: text("app_change_id")
+      .notNull()
+      .references(() => appChanges.id),
+    ruleId: text("rule_id")
+      .notNull()
+      .references(() => alertRules.id),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+    readAt: integer("read_at", { mode: "timestamp" }),
+  },
+  (t) => [
+    index("alerts_created_idx").on(t.createdAt),
+    index("alerts_unread_idx").on(t.readAt),
+  ],
+);
+
+/** Generic resumable-job cursor (e.g. the keyword corpus sweep). Named to
+    avoid the parity lane's `sweep_state` (different shape, different owner). */
+export const jobCursors = sqliteTable("job_cursors", {
+  id: text("id").primaryKey(),
+  state: text("state").notNull(), // JSON
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
+
 export type App = typeof apps.$inferSelect;
 export type AppSnapshot = typeof appSnapshots.$inferSelect;
 export type TrackedKeyword = typeof trackedKeywords.$inferSelect;
+export type TrackedApp = typeof trackedApps.$inferSelect;
+export type AppChange = typeof appChanges.$inferSelect;
+export type AlertRule = typeof alertRules.$inferSelect;
+export type AlertRow = typeof alerts.$inferSelect;

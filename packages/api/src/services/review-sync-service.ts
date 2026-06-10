@@ -6,8 +6,9 @@ import { getAppByIdFromDb } from "./db-app-service.js";
 export interface ReviewSyncResult {
   /** Number of NEW reviews pulled and stored this run. */
   synced: number;
-  store: "apple" | "google";
-  /** false when the store's live fetch isn't wired (both are now live). */
+  /** Widened for multi-store rows — the unsupported path reports them as-is. */
+  store: string;
+  /** false when the store's live fetch isn't wired (both mobile stores are live). */
   supported: boolean;
 }
 

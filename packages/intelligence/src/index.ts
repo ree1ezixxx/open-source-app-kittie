@@ -12,6 +12,33 @@ export { computeKeywordDifficulty, computeOpportunityScore } from "./keyword.js"
 export { signalsFromContext } from "./signals.js";
 export { classifyReview } from "./reviewClassifier.js";
 export type { ClassifiableReview } from "./reviewClassifier.js";
+/* Additive lane — Monitor + intelligence modules. */
+export { captureChanges } from "./monitor/capture.js";
+export type { Capture, ChangeField, FieldChange, WatchedFields } from "./monitor/capture.js";
+export { DEFAULT_RULES, evaluateAlerts } from "./monitor/alertEvaluator.js";
+export type {
+  AlertCandidate,
+  AlertRuleType,
+  EvaluateOptions,
+  RecentAlert,
+  RuleConfig,
+} from "./monitor/alertEvaluator.js";
+export { mineNiche } from "./mining/reviewMiner.js";
+export type {
+  ClusterKind,
+  MinableReview,
+  MinedCluster,
+  MineOptions,
+  NicheReport,
+} from "./mining/reviewMiner.js";
+export { keywordGap, localizationGap, marketPresence } from "./gap/keywordGap.js";
+export type {
+  GapEntry,
+  GapResult,
+  IndexRow,
+  MarketGapReport,
+  MarketOpening,
+} from "./gap/keywordGap.js";
 export type {
   AppSignals,
   GrowthInput,

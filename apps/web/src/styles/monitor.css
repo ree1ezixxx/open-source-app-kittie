@@ -1,0 +1,432 @@
+/* ============================================================
+   Additive lane — Monitor surfaces (Tracked Apps + Alerts).
+   New .mon-* classes only; themed via index.css CSS vars.
+   ============================================================ */
+
+.mon-wrap {
+  padding: 20px 24px 48px;
+  max-width: 960px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.mon-empty {
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  padding: 40px 32px;
+  text-align: center;
+  color: var(--text-dim);
+  margin-top: 24px;
+}
+.mon-empty-title {
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+.mon-empty p {
+  max-width: 480px;
+  margin: 0 auto;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.mon-sweep-note {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 12.5px;
+  margin-bottom: 14px;
+}
+
+/* ----------------------------------------------------- picker */
+.mon-picker {
+  position: relative;
+}
+.mon-picker-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated, var(--bg));
+  border-radius: 8px;
+  padding: 6px 10px;
+  min-width: 260px;
+}
+.mon-picker-input input {
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  outline: none;
+  flex: 1;
+  font-size: 13px;
+}
+.mon-picker-results {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 320px;
+  background: var(--bg-elevated, var(--bg));
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+  z-index: 30;
+  overflow: hidden;
+}
+.mon-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: 0;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+.mon-picker-row:hover {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.mon-picker-row img {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+}
+.mon-picker-fallback {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: var(--border);
+  display: inline-block;
+}
+.mon-picker-title {
+  font-size: 13px;
+  font-weight: 500;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mon-picker-dev {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  max-width: 110px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ------------------------------------------------------- cards */
+.mon-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.mon-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-elevated, transparent);
+  overflow: hidden;
+}
+.mon-card.open {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+.mon-card-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  background: transparent;
+  border: 0;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+.mon-card-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+}
+.mon-card-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.mon-card-title {
+  font-weight: 600;
+  font-size: 13.5px;
+}
+.mon-card-dev {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.mon-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-dim);
+}
+.mon-card-cap {
+  font-size: 11.5px;
+}
+.mon-card-body {
+  border-top: 1px solid var(--border);
+  padding: 12px 14px 16px;
+}
+.mon-note-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.mon-note-input {
+  flex: 1;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 12.5px;
+  outline: none;
+}
+.mon-note-input:focus {
+  border-color: var(--accent);
+}
+.mon-untrack {
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------- timeline */
+.mon-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mon-timeline-empty {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  padding: 6px 0;
+}
+.mon-change {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12.5px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--border) 35%, transparent);
+}
+.mon-change-field {
+  font-weight: 600;
+  min-width: 110px;
+}
+.mon-change-old {
+  color: var(--text-dim);
+  text-decoration: line-through;
+}
+.mon-change-arrow {
+  color: var(--text-dim);
+}
+.mon-change-new {
+  font-weight: 500;
+}
+.mon-change-when {
+  margin-left: auto;
+  color: var(--text-dim);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+/* -------------------------------------------------------- tabs */
+.mon-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.mon-tab {
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--text-dim);
+  padding: 8px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.mon-tab.active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+/* ------------------------------------------------------ alerts */
+.mon-alert-list,
+.mon-digest {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mon-alert {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.mon-alert.unread {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+.mon-alert-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 7px;
+}
+.mon-alert-main {
+  flex: 1;
+  min-width: 0;
+}
+.mon-alert-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+.mon-alert-app {
+  font-weight: 600;
+  font-size: 13px;
+}
+.mon-rule-chip {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  padding: 1px 8px;
+  color: var(--text-dim);
+}
+.mon-alert-change {
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.mon-alert-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+.mon-alert-when {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.mon-read-btn {
+  font-size: 11.5px;
+  padding: 3px 10px;
+}
+
+.mon-digest-day {
+  margin-bottom: 6px;
+}
+.mon-digest-head {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-dim);
+  margin: 10px 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mon-digest-count {
+  background: var(--border);
+  border-radius: 99px;
+  padding: 0 8px;
+  font-size: 11px;
+}
+
+/* ------------------------------------------------------- rules */
+.mon-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.mon-rules-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  margin: 0 0 6px;
+}
+.mon-rules-note code {
+  background: var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 11.5px;
+}
+.mon-rule {
+  display: grid;
+  grid-template-columns: 180px 1fr auto auto;
+  align-items: center;
+  gap: 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+.mon-rule.dormant {
+  opacity: 0.55;
+}
+.mon-rule-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.mon-rule-name {
+  font-weight: 600;
+  font-size: 13px;
+}
+.mon-rule-hint {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.mon-rule-threshold {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.mon-rule-threshold input {
+  width: 64px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12.5px;
+}
+.mon-rule-channels {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.mon-rule-ch {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+@media (max-width: 760px) {
+  .mon-rule {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+}
