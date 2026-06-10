@@ -13,7 +13,14 @@ import {
   type SnapshotContext,
 } from "@kittie/db";
 import { lookupAppleApp } from "@kittie/ingest";
-import { scoreApp, signalsFromContext } from "@kittie/intelligence";
+import {
+  computeGrowthPct,
+  computeGrowthScore,
+  isFirstMover,
+  priorEstimates,
+  scoreApp,
+  signalsFromContext,
+} from "@kittie/intelligence";
 import type {
   AppDetail,
   AppHistoricalPoint,
@@ -53,13 +60,19 @@ function listItemFromContext(ctx: SnapshotContext, period: GrowthPeriod): AppLis
   };
 
   if (ctx.latest.revenueEstimate != null && ctx.latest.growthScore != null) {
+    // Growth is always computed live from the in-memory context: stored scores
+    // predate snapshot history and would freeze every app at the same value.
+    const signals = signalsFromContext(ctx);
+    const growthScore = computeGrowthScore(signals, period);
     return {
       ...base,
       reviewGrowth7d,
       downloadsEstimate30d: ctx.latest.downloadsEstimate,
       revenueEstimate30d: ctx.latest.revenueEstimate,
-      growthScore: ctx.latest.growthScore,
-      isFirstMover: ctx.latest.isFirstMover ?? false,
+      growthScore,
+      growthPct: computeGrowthPct(signals, period),
+      ...priorEstimates(signals),
+      isFirstMover: isFirstMover(signals, growthScore),
     };
   }
 

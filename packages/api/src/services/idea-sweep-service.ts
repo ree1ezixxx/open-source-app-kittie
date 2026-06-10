@@ -18,13 +18,17 @@ import { selectIdeaSources } from "./idea-gate.js";
 
 /* ============================================================
    Hot-ideas generation sweep (ADR 0005): batch-generate → store →
-   refresh on cadence. Each run generates one paced slice; the full
-   set (~1,200, matching live) accrues over ~a week of runs. The
-   Gemini client's global rate gate paces the calls.
+   refresh on cadence. ONE Gemini call yields ideas for several
+   source apps, so throughput is ideas-per-request, not 1:1 — the
+   only real limiter is the model's daily request quota, and the
+   sweep runs until that (or the slice cap) stops it.
    ============================================================ */
 
 export const IDEAS_TARGET = 1_200;
-const IDEAS_PER_RUN = 75;
+/** Source apps folded into one Gemini request — 8× quota efficiency. */
+const SOURCES_PER_CALL = 8;
+/** Per-run ceiling; on a quota-rich key one run can close most of the gap. */
+const IDEAS_PER_RUN = 320;
 
 export interface IdeaSweepResult {
   existing: number;
@@ -34,6 +38,7 @@ export interface IdeaSweepResult {
 }
 
 interface GeneratedIdea {
+  sourceIndex: number;
   title: string;
   summary: string;
   ideaCategory: string;
@@ -67,9 +72,13 @@ const IDEA_CATEGORIES = [
   "Game",
 ] as const;
 
-const RESPONSE_SCHEMA = {
+const IDEA_SCHEMA = {
   type: "object",
   properties: {
+    sourceIndex: {
+      type: "integer",
+      description: "Index of the source app this idea derives from (matches the numbered list)",
+    },
     title: { type: "string", description: "Concise product name for the new app idea" },
     summary: {
       type: "string",
@@ -109,7 +118,24 @@ const RESPONSE_SCHEMA = {
       ],
     },
   },
-  required: ["title", "summary", "ideaCategory", "needsBackend", "needsDatabase", "needsAi", "blueprint"],
+  required: [
+    "sourceIndex",
+    "title",
+    "summary",
+    "ideaCategory",
+    "needsBackend",
+    "needsDatabase",
+    "needsAi",
+    "blueprint",
+  ],
+};
+
+const BATCH_RESPONSE_SCHEMA = {
+  type: "object",
+  properties: {
+    ideas: { type: "array", items: IDEA_SCHEMA },
+  },
+  required: ["ideas"],
 };
 
 export function slugify(title: string): string {
@@ -120,35 +146,44 @@ export function slugify(title: string): string {
     .slice(0, 60);
 }
 
-function buildPrompt(c: IdeaCandidate, complaints: string[]): string {
+function buildBatchPrompt(sources: Array<{ c: IdeaCandidate; complaints: string[] }>): string {
   const lines = [
-    "You are an app-opportunity analyst. Derive ONE new app concept from this real, fast-growing app.",
-    "The concept must serve the same proven demand but be a DIFFERENT product — not a clone of the source app.",
-    "",
-    `Source app: ${c.title}`,
-    `Category: ${c.category ?? "Unknown"}`,
-    `Store rating: ${c.rating ?? "n/a"} from ${c.reviewCount} reviews`,
-    `Estimated monthly revenue (modeled): $${c.revenueEstimate ?? 0}`,
-    `Price: ${c.price ? `$${c.price}` : "free"}`,
+    "You are an app-opportunity analyst. For EACH numbered source app below, derive ONE new app concept.",
+    "Each concept must serve the same proven demand as its source but be a DIFFERENT product — not a clone.",
+    "Every concept must be distinct from the others in this batch.",
   ];
-  if (c.description) lines.push(`Listing description: ${c.description.slice(0, 400)}`);
-  if (complaints.length) {
-    lines.push("", "What its users complain about (low-rating reviews):");
-    for (const s of complaints) lines.push(`- ${s}`);
-    lines.push("Weight the concept toward fixing these gaps.");
-  }
+  sources.forEach(({ c, complaints }, i) => {
+    lines.push(
+      "",
+      `=== Source app ${i} ===`,
+      `Name: ${c.title}`,
+      `Category: ${c.category ?? "Unknown"}`,
+      `Store rating: ${c.rating ?? "n/a"} from ${c.reviewCount} reviews`,
+      `Estimated monthly revenue (modeled): $${c.revenueEstimate ?? 0}`,
+      `Price: ${c.price ? `$${c.price}` : "free"}`,
+    );
+    if (c.description) lines.push(`Listing description: ${c.description.slice(0, 280)}`);
+    if (complaints.length) {
+      lines.push("User complaints (low-rating reviews) — weight the concept toward fixing these:");
+      for (const s of complaints) lines.push(`- ${s}`);
+    }
+  });
   lines.push(
     "",
-    "Return JSON matching the schema: a concise title, a 2-3 sentence summary,",
-    "an ideaCategory from the allowed list, the three blueprint need flags, and a full",
-    "blueprint (difficulty + reasoning, timelineWeeks, requirements, MVP/key/V2 features,",
+    `Return JSON: { "ideas": [...] } with EXACTLY ${sources.length} entries, one per source app,`,
+    "each with its sourceIndex (0-based, matching the numbering above), a concise title, a 2-3",
+    "sentence summary, an ideaCategory from the allowed list, the three blueprint need flags, and a",
+    "full blueprint (difficulty + reasoning, timelineWeeks, requirements, MVP/key/V2 features,",
     "architecture, techStack, mvpScope, thirdPartyServices). Keep features concrete and buildable by a solo dev.",
   );
   return lines.join("\n");
 }
 
 /** One paced slice of idea generation. Safe to re-run; one failure never aborts the slice. */
-export async function sweepHotIdeas(): Promise<IdeaSweepResult> {
+export async function sweepHotIdeas(
+  maxIdeas = IDEAS_PER_RUN,
+  model = GEMINI_BATCH_MODEL,
+): Promise<IdeaSweepResult> {
   const db = getDb();
   const existing = await countIdeas(db);
   if (!isGeminiConfigured() || existing >= IDEAS_TARGET) {
@@ -159,51 +194,64 @@ export async function sweepHotIdeas(): Promise<IdeaSweepResult> {
     listIdeaCandidates(db),
     countSnapshotDays(db),
   ]);
-  const slice = Math.min(IDEAS_PER_RUN, IDEAS_TARGET - existing);
+  const slice = Math.min(maxIdeas, IDEAS_TARGET - existing);
   const sources = selectIdeaSources(candidates, snapshotDays, slice, Date.now());
 
   let generated = 0;
   let failed = 0;
-  for (const source of sources) {
+  for (let at = 0; at < sources.length; at += SOURCES_PER_CALL) {
+    const chunk = sources.slice(at, at + SOURCES_PER_CALL);
     try {
-      const complaints = await listComplaintSnippets(db, source.appId);
-      const idea = await generateJson<GeneratedIdea>(buildPrompt(source, complaints), {
-        responseSchema: RESPONSE_SCHEMA,
-        priority: "batch", // never make a person wait behind this sweep
-        model: GEMINI_BATCH_MODEL, // separate (larger) daily quota bucket
-      });
-      await insertIdea(db, {
-        sourceAppId: source.appId,
-        slug: slugify(idea.title) || `idea-${source.storeAppId}`,
-        title: idea.title,
-        summary: idea.summary,
-        sourceCategory: source.category ?? "Other",
-        ideaCategory: idea.ideaCategory,
-        needsBackend: idea.needsBackend,
-        needsDatabase: idea.needsDatabase,
-        needsAi: idea.needsAi,
-        blueprint: JSON.stringify(idea.blueprint),
-        reviewCount: source.reviewCount,
-        rating: source.rating,
-        downloadsEstimate: source.downloadsEstimate,
-        revenueEstimate: source.revenueEstimate,
-        price: source.price,
-        releasedAt: source.releasedAt,
-      });
-      generated++;
+      const withComplaints = await Promise.all(
+        chunk.map(async (c) => ({ c, complaints: await listComplaintSnippets(db, c.appId) })),
+      );
+      const result = await generateJson<{ ideas: GeneratedIdea[] }>(
+        buildBatchPrompt(withComplaints),
+        {
+          responseSchema: BATCH_RESPONSE_SCHEMA,
+          priority: "batch", // never make a person wait behind this sweep
+          model, // default: separate daily quota bucket
+        },
+      );
+      for (const idea of result.ideas ?? []) {
+        const source = chunk[idea.sourceIndex];
+        if (!source || !idea.title) {
+          failed++;
+          continue;
+        }
+        await insertIdea(db, {
+          sourceAppId: source.appId,
+          slug: slugify(idea.title) || `idea-${source.storeAppId}`,
+          title: idea.title,
+          summary: idea.summary,
+          sourceCategory: source.category ?? "Other",
+          ideaCategory: idea.ideaCategory,
+          needsBackend: idea.needsBackend,
+          needsDatabase: idea.needsDatabase,
+          needsAi: idea.needsAi,
+          blueprint: JSON.stringify(idea.blueprint),
+          reviewCount: source.reviewCount,
+          rating: source.rating,
+          downloadsEstimate: source.downloadsEstimate,
+          revenueEstimate: source.revenueEstimate,
+          price: source.price,
+          releasedAt: source.releasedAt,
+        });
+        generated++;
+      }
     } catch (e) {
       if (e instanceof GeminiDailyQuotaError) {
         // Today's budget is spent — stop immediately, the next due run resumes.
-        console.warn(`[hot-ideas] ${e.message}; pausing slice`);
+        console.warn(`[hot-ideas] ${e.message}; pausing slice at ${generated} generated`);
         break;
       }
-      failed++;
+      failed += chunk.length;
       console.warn(
-        `[hot-ideas] ${source.title} (${source.appId}) failed:`,
+        `[hot-ideas] batch of ${chunk.length} (from ${chunk[0]?.title}) failed:`,
         e instanceof Error ? e.message : e,
       );
       // Persistent model trouble: stop the slice, next run retries.
-      if (failed >= 5 && generated === 0) break;
+      if (failed >= SOURCES_PER_CALL * 3 && generated === 0) break;
     }
   }
 

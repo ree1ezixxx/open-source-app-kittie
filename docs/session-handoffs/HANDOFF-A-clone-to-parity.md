@@ -64,7 +64,16 @@ Single registry of paced sweeps, boot catch-up + interval while API up:
 4. **Google Play scale** — ✅ BUILT. `google-expand` sweep: top-free+grossing × all Play categories, 400 new apps/run, target 5,000 (485 after first run), idempotent.
 5. **Sequencing** — executed: Gemini seam → scheduler → Hot Ideas → App Detail (breadcrumb, SEO title, Size/Compatibility/Provider lazy-backfilled from Apple lookup, lazy AI About cached forever) → Keyword Explorer (26 markets, Store+Markets modal, SSE live market fill, re-score sweep) → AI Studio real → Google expand.
 
-Verification: `pnpm -r typecheck` 9/9 clean, 15 unit tests green (scheduler due-selection + idea gate), zero console errors on every touched route, all 5 sweeps observed running live against the real DB. Work is uncommitted on `integrate/full-clone` — commit when ready.
+Verification: `pnpm -r typecheck` 9/9 clean, 15 unit tests green (scheduler due-selection + idea gate), zero console errors on every touched route, all 5 sweeps observed running live against the real DB. Committed as `608fef5` on `integrate/full-clone`.
+
+## Post-review parity fixes (2026-06-10, after blind A/B test)
+A blind two-analyst A/B review (swapped labels, isolated browsers) scored us level on UX/polish but behind on data correctness + volume. Everything actionable was fixed:
+1. **Rising uniform "+7.5%" — FIXED.** Root cause: prior-snapshot lookup demanded ≥7-day-old history (we have 3 days) → no prior → all deltas zero → every app scored `0.15×updateRecency = 57.5`, UI showed `score−50`. Now: `pickPrior` falls back to the oldest available snapshot, deltas scale to the period via `priorDays`, and a REAL `growthPct` (period-scaled review velocity, null-honest, ±999 cap) flows through AppListItem → Rising/RankList. Verified live: +30.6 / +17.6 / +560 / +731.8.
+2. **Grey icon boxes — FIXED.** DB icons are 100% present & URLs 200; the grey was the `.app-icon` background during cold loads + no error fallback. New shared `AppIcon` component (lettermark fallback on missing/failed, `decoding=async`) used by AppTable/Rising/Trending/RankList + CDN `preconnect` hints in index.html.
+3. **Trending 24h "—" — FIXED.** Estimators are pure → API recomputes PRIOR-day estimates from prior-snapshot signals (`priorEstimates` in intelligence, `downloadsEstimatePrior`/`revenueEstimatePrior` on AppListItem); TrendingPage derives real ▲/▼ position deltas within the visible set.
+4. **Hot Ideas 24 vs 1,206 — THROUGHPUT 8×.** Sweep now batches 8 source apps per Gemini call (`BATCH_RESPONSE_SCHEMA` with `sourceIndex` mapping); per-run cap 320 so the daily quota (not a constant) is the limiter. ~160 ideas/day on the AQ. key; ~1 day to target on an `AIza…` key. Both daily buckets were exhausted today by verification runs — sweep auto-resumes at quota reset (midnight PT); fail-fast verified on both models.
+5. **Chart-rank coverage 280 → 4,078.** Added `fetchAppleGenreCharts` (legacy iTunes RSS, 24 genres × free+grossing, paced) into `fetchChartRankLookup` — 51 chart categories; persists with tomorrow's snapshot sweep, making rank deltas real at scale.
+6. **Ads Library — externally blocked, not effort-blocked.** Inspected appkittie's network (logged-in): tRPC `ads.getAdsByAppSlug` served from THEIR pre-ingested Meta Ad Library DB. Real creatives require Meta ID verification (pending, Rhodri's side). Scraping Meta's site = ToS violation — not built. Empty state stays honest.
 
 ## Verification protocol
 - `pnpm typecheck` clean; both servers boot; zero console errors per route.

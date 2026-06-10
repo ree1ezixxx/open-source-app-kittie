@@ -1,4 +1,5 @@
 import type { AppListItem, AppSortField, SortOrder } from "@kittie/types";
+import { AppIcon } from "./AppIcon";
 import {
   IconStar,
   IconApple,
@@ -191,11 +192,7 @@ export function AppTable({
                   <td className="num rank-cell">{startRank + i + 1}</td>
                   <td className="col-app">
                     <div className="app-cell">
-                      {a.iconUrl ? (
-                        <img className="app-icon" src={a.iconUrl} alt="" loading="lazy" referrerPolicy="no-referrer" />
-                      ) : (
-                        <div className="app-icon placeholder">{a.title.charAt(0)}</div>
-                      )}
+                      <AppIcon url={a.iconUrl} title={a.title} />
                       <div className="app-meta">
                         <div className="app-title" title={a.title}>
                           {a.title}

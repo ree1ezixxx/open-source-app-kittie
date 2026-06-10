@@ -11,6 +11,8 @@ export interface AppSignals {
   metaAdCount: number;
   metaAdCountPrior: number | null;
   chartRankPrior: number | null;
+  /** Actual day gap to the prior sample — may be shorter than the growth period. */
+  priorDays?: number | null;
   updatedAt: Date | null;
   releasedAt: Date | null;
   categoryAppCount: number;

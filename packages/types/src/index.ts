@@ -70,6 +70,11 @@ export interface AppListItem {
   downloadsEstimate30d: number | null;
   revenueEstimate30d: number | null;
   growthScore: number | null;
+  /** Real period-scaled growth % (review-velocity proxy); null until a prior snapshot exists. */
+  growthPct: number | null;
+  /** Estimates recomputed from the prior snapshot's signals — power rank-change deltas. */
+  downloadsEstimatePrior: number | null;
+  revenueEstimatePrior: number | null;
   isFirstMover: boolean;
   releasedAt: string | null;
   updatedAt: string | null;

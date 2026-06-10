@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import type { CSSProperties } from "react";
 import type { AppListItem } from "@kittie/types";
+import { AppIcon } from "./AppIcon";
 import { formatCompact, formatMoney } from "../lib/format";
 import { EmptyState } from "./EmptyState";
 import { IconChart } from "../icons";
@@ -18,9 +19,9 @@ const headStyle: CSSProperties = {
   cursor: "default",
 };
 
-/** Signed daily growth delta derived from the 0–100 growth score (50 = flat). */
+/** Real period-scaled growth % from snapshot history (null until a prior exists). */
 function deltaOf(a: AppListItem): number | null {
-  return a.growthScore == null ? null : a.growthScore - 50;
+  return a.growthPct;
 }
 
 /**
@@ -92,11 +93,7 @@ export function RankList({
                 )}
               </span>
             )}
-            {a.iconUrl ? (
-              <img className="app-icon" src={a.iconUrl} alt="" loading="lazy" referrerPolicy="no-referrer" />
-            ) : (
-              <div className="app-icon placeholder">{a.title.charAt(0)}</div>
-            )}
+            <AppIcon url={a.iconUrl} title={a.title} />
             <div className="rr-meta">
               <div className="rr-name" title={a.title}>{a.title}</div>
               <div className="rr-sub">{a.developer || a.category}</div>

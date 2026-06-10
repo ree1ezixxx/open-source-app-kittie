@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import type { Store, AppSearchParams } from "@kittie/types";
+import type { Store, AppSearchParams, AppListItem } from "@kittie/types";
+import { AppIcon } from "../components/AppIcon";
 import { PageShell } from "../components/PageShell";
 import { Segmented } from "../components/Segmented";
 import { EmptyState } from "../components/EmptyState";
@@ -37,6 +38,19 @@ export function TrendingPage({ theme, onToggleTheme }: { theme: Theme; onToggleT
   const [category, setCategory] = useState("All categories");
   const { apps, loading } = useApps(paramsFor(chart, store, category));
 
+  // 24h movement: where each app ranked within this same set one snapshot ago,
+  // using estimates recomputed from prior-snapshot signals.
+  const prevRank = useMemo(() => {
+    const priorMetric = (a: AppListItem) =>
+      chart === "free" ? a.downloadsEstimatePrior : a.revenueEstimatePrior;
+    const ranked = new Map<string, number>();
+    apps
+      .filter((a) => priorMetric(a) != null)
+      .sort((x, y) => (priorMetric(y) ?? 0) - (priorMetric(x) ?? 0))
+      .forEach((a, idx) => ranked.set(a.id, idx + 1));
+    return ranked;
+  }, [apps, chart]);
+
   const toolbar = (
     <div className="toolbar">
       <Segmented<ChartType>
@@ -62,7 +76,6 @@ export function TrendingPage({ theme, onToggleTheme }: { theme: Theme; onToggleT
         </select>
       </div>
       <span className="pill" style={pillStyle("#9a9aa3")}>🇺🇸 United States</span>
-      <span className="toolbar-meta">24h change builds once daily snapshots accrue</span>
     </div>
   );
 
@@ -93,17 +106,26 @@ export function TrendingPage({ theme, onToggleTheme }: { theme: Theme; onToggleT
               </tr>
             </thead>
             <tbody>
-              {apps.map((a, i) => (
+              {apps.map((a, i) => {
+                const prev = prevRank.get(a.id);
+                const move = prev != null ? prev - (i + 1) : null;
+                return (
                 <tr key={a.id} onClick={() => nav(`/apps/${a.id}`)}>
                   <td className="num num-strong">{i + 1}</td>
-                  <td className="num num-muted">—</td>
+                  <td className="num">
+                    {move == null ? (
+                      <span className="num-muted">—</span>
+                    ) : move === 0 ? (
+                      <span className="num-muted">0</span>
+                    ) : (
+                      <span className={`delta ${move > 0 ? "up" : "down"}`}>
+                        {move > 0 ? "▲" : "▼"}{Math.abs(move)}
+                      </span>
+                    )}
+                  </td>
                   <td className="col-app">
                     <div className="app-cell">
-                      {a.iconUrl ? (
-                        <img className="app-icon" src={a.iconUrl} alt="" loading="lazy" referrerPolicy="no-referrer" />
-                      ) : (
-                        <div className="app-icon placeholder">{a.title.charAt(0)}</div>
-                      )}
+                      <AppIcon url={a.iconUrl} title={a.title} />
                       <div className="app-meta">
                         <div className="app-title" title={a.title}>{a.title}</div>
                         {a.category && (
@@ -119,7 +141,8 @@ export function TrendingPage({ theme, onToggleTheme }: { theme: Theme; onToggleT
                   <td className="num num-strong">{formatCompact(a.downloadsEstimate30d)}</td>
                   <td className="num num-strong">{formatMoney(a.revenueEstimate30d)}</td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         )}

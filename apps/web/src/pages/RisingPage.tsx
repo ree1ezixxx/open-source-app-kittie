@@ -6,6 +6,7 @@ import { Segmented } from "../components/Segmented";
 import { EmptyState } from "../components/EmptyState";
 import { useApps } from "../hooks/useApps";
 import { EMPTY_FILTERS, writeFilters } from "../lib/exploreFilters";
+import { AppIcon } from "../components/AppIcon";
 import { formatCompact, formatMoney } from "../lib/format";
 import { IconRising, IconChart, IconCheck, IconClose, IconFilter } from "../icons";
 import type { Theme } from "../lib/theme";
@@ -324,17 +325,13 @@ export function RisingPage({ theme, onToggleTheme }: { theme: Theme; onToggleThe
             </thead>
             <tbody>
               {apps.slice(0, 100).map((a, i) => {
-                const d = a.growthScore != null ? a.growthScore - 50 : null;
+                const d = a.growthPct;
                 return (
                   <tr key={a.id} onClick={() => nav(`/apps/${a.id}`)}>
                     <td className="num num-strong">{i + 1}</td>
                     <td className="col-app">
                       <div className="app-cell">
-                        {a.iconUrl ? (
-                          <img className="app-icon" src={a.iconUrl} alt="" loading="lazy" referrerPolicy="no-referrer" />
-                        ) : (
-                          <div className="app-icon placeholder">{a.title.charAt(0)}</div>
-                        )}
+                        <AppIcon url={a.iconUrl} title={a.title} />
                         <div className="app-meta">
                           <div className="app-title" title={a.title}>{a.title}</div>
                           <div className="app-dev">{a.developer}</div>
