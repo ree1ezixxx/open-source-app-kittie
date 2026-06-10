@@ -7,7 +7,7 @@ export const reviewsRouter = new Hono();
 const reviewRequestSchema = z.object({
   appId: z.string(),
   country: z.string().default("US"),
-  limit: z.number().min(1).max(100).default(20),
+  limit: z.number().min(1).max(100).default(50),
 });
 
 reviewsRouter.post("/", async (c) => {
