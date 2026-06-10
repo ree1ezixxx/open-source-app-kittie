@@ -75,6 +75,12 @@ A blind two-analyst A/B review (swapped labels, isolated browsers) scored us lev
 5. **Chart-rank coverage 280 → 4,078.** Added `fetchAppleGenreCharts` (legacy iTunes RSS, 24 genres × free+grossing, paced) into `fetchChartRankLookup` — 51 chart categories; persists with tomorrow's snapshot sweep, making rank deltas real at scale.
 6. **Ads Library — externally blocked, not effort-blocked.** Inspected appkittie's network (logged-in): tRPC `ads.getAdsByAppSlug` served from THEIR pre-ingested Meta Ad Library DB. Real creatives require Meta ID verification (pending, Rhodri's side). Scraping Meta's site = ToS violation — not built. Empty state stays honest.
 
+### Re-test (blind A/B round 2, same protocol, post-fixes)
+- **Round-1 bugs verified gone:** no uniform +7.5% (Rising showed 75.3→999 varied), no grey icons, Trending 24h differentiated (▲1/▼9/▲8; top mega-apps legitimately 0 — same order both days, checked against API). Zero console errors on ours, both analysts.
+- **Open-access analyst → ours, HIGH confidence** (appkittie 100% paywalled to logged-out visitors; ours fully usable).
+- **Full-view analyst → appkittie, MEDIUM confidence (was High)**; ours now ahead on Keyword Explorer (pre-rendered insights), App Detail chart consistency (theirs showed 20K-monthly vs 93-chart mismatch), idea list thumbnails. Remaining deficits ONLY: Ads Library (Meta verification) + idea count 24 vs 1,206 (quota; batched sweep fills ~160/day, ~1 day on an AIza key).
+- Commits: `608fef5` (parity build), `e303af7` (post-review fixes).
+
 ## Verification protocol
 - `pnpm typecheck` clean; both servers boot; zero console errors per route.
 - Diff each surface against the live signed-in appkittie.com tab (Claude-in-Chrome extension; `:9222` not used).
