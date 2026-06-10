@@ -1,19 +1,36 @@
 import type { Store } from "@kittie/types";
 import { Hono } from "hono";
 import { z } from "zod";
-import { batchKeywordDifficulty, getKeywordDifficulty } from "../services/keyword-service.js";
+import {
+  batchKeywordDifficulty,
+  getKeywordDifficulty,
+  getKeywordSuggestions,
+} from "../services/keyword-service.js";
 
 export const keywordsRouter = new Hono();
 
-keywordsRouter.get("/difficulty", (c) => {
+keywordsRouter.get("/suggestions", async (c) => {
+  const storeParam = c.req.query("store");
+  const store =
+    storeParam === "apple" || storeParam === "google" ? storeParam : undefined;
+  const limit = Math.min(Number(c.req.query("limit") ?? 20) || 20, 50);
+
+  const { suggestions, appCount } = await getKeywordSuggestions(store, limit);
+  return c.json({
+    data: suggestions,
+    meta: { country: "US", appCount, source: "tracked-apps" },
+  });
+});
+
+keywordsRouter.get("/difficulty", async (c) => {
   const keyword = c.req.query("keyword");
   const country = c.req.query("country") ?? "US";
   const store = (c.req.query("store") ?? "apple") as Store;
 
   if (!keyword) return c.json({ error: "keyword is required" }, 400);
 
-  const result = getKeywordDifficulty(keyword, country, store);
-  return c.json({ data: result });
+  const result = await getKeywordDifficulty(keyword, country, store);
+  return c.json({ data: result, meta: { source: "store-search" } });
 });
 
 const batchSchema = z.object({
@@ -34,6 +51,6 @@ keywordsRouter.post("/difficulty", async (c) => {
   const parsed = batchSchema.safeParse(body);
   if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
 
-  const data = batchKeywordDifficulty(parsed.data.keywords);
-  return c.json({ data });
+  const data = await batchKeywordDifficulty(parsed.data.keywords);
+  return c.json({ data, meta: { source: "store-search" } });
 });

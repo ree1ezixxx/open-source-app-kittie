@@ -64,6 +64,12 @@ Each Cursor instance works on its own branch off `main`:
 
 Merge to `main` when a slice is verified. Do not cross-edit another branch's owned paths.
 
+## Models (Cursor)
+
+- **Default: Composer 2.5 only.** Run reviews, grills, and implementation in the parent agent.
+- **Do not spawn subagents on Sonnet, Opus, or other models** unless the user explicitly names a model.
+- **3+ file reads:** read sequentially or grep — not parallel subagents on alternate models.
+
 ## Context Management (Token Efficiency)
 
 - **One objective per thread.** If scope creeps, stop and narrow before continuing.
@@ -85,12 +91,12 @@ pnpm install          # root — if db:migrate fails, rebuild: cd node_modules/.
 mkdir -p data
 pnpm db:generate      # drizzle generate
 pnpm db:migrate       # apply migrations → data/kittie.db at repo root
-pnpm typecheck        # all packages
+pnpm typecheck        # build all packages, then tsc --noEmit
 ```
 
 ## Validation
 
-- `pnpm typecheck` must pass before handoff.
+- `pnpm typecheck` must pass before handoff (runs `build` first — workspace packages resolve from `dist/`).
 - Ingestion jobs: log row counts, not full payloads.
 - API: curl smoke tests documented in package READMEs.
 

@@ -148,6 +148,7 @@ export interface KeywordDifficulty {
   popularity: number;
   difficulty: number;
   trafficScore: number;
+  opportunityScore: number;
   competingAppCount: number;
   topApps: Array<{
     title: string;

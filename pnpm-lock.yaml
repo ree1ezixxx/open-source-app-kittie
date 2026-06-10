@@ -85,6 +85,9 @@ importers:
       '@kittie/db':
         specifier: workspace:*
         version: link:../db
+      '@kittie/ingest':
+        specifier: workspace:*
+        version: link:../ingest
       '@kittie/intelligence':
         specifier: workspace:*
         version: link:../intelligence
@@ -160,6 +163,9 @@ importers:
       '@kittie/db':
         specifier: workspace:*
         version: link:../db
+      '@kittie/intelligence':
+        specifier: workspace:*
+        version: link:../intelligence
       '@kittie/types':
         specifier: workspace:*
         version: link:../types

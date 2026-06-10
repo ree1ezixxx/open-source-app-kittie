@@ -5,6 +5,7 @@ import { createDb } from "@kittie/db";
 import { lookupAppleApp } from "../apple/lookup.js";
 import { listTrackedApps, upsertSnapshot } from "../db/apps.js";
 import { fetchGoogleAppMetadata } from "../google/metadata.js";
+import { chartRankForApp, fetchChartRankLookup } from "../util/chart-lookup.js";
 import { todaySnapshotDate } from "../util/dates.js";
 import { sleep } from "../util/rate-limit.js";
 
@@ -14,6 +15,10 @@ export async function runSnapshot(): Promise<void> {
   const snapshotDate = todaySnapshotDate();
   const tracked = await listTrackedApps(db);
 
+  console.log("Fetching fresh chart ranks (US)…");
+  const chartLookup = await fetchChartRankLookup("us");
+  console.log(`  ${chartLookup.size} charted apps across Apple + Google`);
+
   console.log(`Refreshing snapshots for ${tracked.length} apps (${snapshotDate})…`);
 
   let success = 0;
@@ -21,6 +26,8 @@ export async function runSnapshot(): Promise<void> {
 
   for (const app of tracked) {
     try {
+      const chart = chartRankForApp(chartLookup, app.store, app.storeAppId);
+
       if (app.store === "apple") {
         const meta = await lookupAppleApp(app.storeAppId);
         if (!meta) {
@@ -34,6 +41,9 @@ export async function runSnapshot(): Promise<void> {
           snapshotDate,
           reviewCount: meta.reviewCount,
           rating: meta.rating,
+          chartRank: chart?.chartRank ?? null,
+          chartCategory: chart?.chartCategory ?? null,
+          chartCountry: chart?.chartCountry ?? "US",
         });
       } else {
         const meta = await fetchGoogleAppMetadata(app.storeAppId);
@@ -42,6 +52,9 @@ export async function runSnapshot(): Promise<void> {
           snapshotDate,
           reviewCount: meta.reviewCount,
           rating: meta.rating,
+          chartRank: chart?.chartRank ?? null,
+          chartCategory: chart?.chartCategory ?? null,
+          chartCountry: chart?.chartCountry ?? "US",
         });
         await sleep(150);
       }
