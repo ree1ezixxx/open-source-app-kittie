@@ -27,6 +27,11 @@ import {
   IconGlobe,
   IconMessage,
 } from "../icons";
+<<<<<<< HEAD
+=======
+import { Lightbox } from "../components/Lightbox";
+import { DetailParitySections } from "../components/detail/ParitySections";
+>>>>>>> feat/reviews-meta
 
 const MIN_COLLECTION = 3;
 
@@ -331,6 +336,7 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
                 ) : (
                   <div className="facts-grid">{app.metaAds.map((ad) => <Fact key={ad.id} label={ad.status ?? "Ad"}>{ad.adCopy ?? "—"}</Fact>)}</div>
                 )}
+<<<<<<< HEAD
               </DetailCard>
               <DetailCard title="Apple Search Ads" count={app.appleSearchAds.length || undefined}>
                 {app.appleSearchAds.length === 0 ? (
@@ -344,9 +350,33 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
                   <EmptyCard icon={<IconUsers />} title="No creators" sub="Creator-partnership ingestion pending." />
                 ) : (
                   <div className="facts-grid">{app.creators.map((c, i) => <Fact key={i} label={c.platform}>{c.handle}</Fact>)}</div>
+=======
+              </div>
+              <div>
+                <div className="section-label">Details</div>
+                <dl className="kv">
+                  <dt>Developer</dt><dd>{app.developer}</dd>
+                  <dt>Category</dt><dd>{app.category ?? "—"}</dd>
+                  <dt>Content rating</dt><dd>{app.contentRating ?? "—"}</dd>
+                  <dt>Price</dt><dd>{app.price ? `$${app.price}` : "Free"}</dd>
+                  <dt>Released</dt><dd>{formatDate(app.releasedAt)}</dd>
+                  <dt>Updated</dt><dd>{formatDate(app.updatedAt)}</dd>
+                </dl>
+                {app.languages.length > 0 && (
+                  <>
+                    <div className="section-label">Languages ({app.languages.length})</div>
+                    <div className="lang-chips">
+                      {app.languages.slice(0, 30).map((l) => <span key={l} className="lang-chip">{l}</span>)}
+                      {app.languages.length > 30 && <span className="lang-chip">+{app.languages.length - 30}</span>}
+                    </div>
+                  </>
+>>>>>>> feat/reviews-meta
                 )}
               </DetailCard>
             </div>
+
+            {/* Lane D — acquisition & monetization parity (honest empty-states today) */}
+            <DetailParitySections app={app} />
 
             {app.historicals.length < 2 && (
               <div className="notice">

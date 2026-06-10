@@ -10,6 +10,8 @@ export {
 } from "./revenue.js";
 export { computeKeywordDifficulty, computeOpportunityScore } from "./keyword.js";
 export { signalsFromContext } from "./signals.js";
+export { classifyReview } from "./reviewClassifier.js";
+export type { ClassifiableReview } from "./reviewClassifier.js";
 export type {
   AppSignals,
   GrowthInput,

@@ -73,6 +73,11 @@ export const reviews = sqliteTable(
     author: text("author"),
     reviewedAt: integer("reviewed_at", { mode: "timestamp" }).notNull(),
     ingestedAt: integer("ingested_at", { mode: "timestamp" }).notNull(),
+    // Persisted classification — written once at ingest by the classifier seam.
+    // Null on legacy rows ingested before tagging; a sweep backfills them.
+    sentiment: text("sentiment", { enum: ["positive", "neutral", "negative", "mixed"] }),
+    topics: text("topics"), // JSON array
+    improvementAreas: text("improvement_areas"), // JSON array
   },
   (t) => [index("reviews_app_idx").on(t.appId)],
 );

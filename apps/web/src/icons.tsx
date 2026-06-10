@@ -45,6 +45,9 @@ export const IconRefresh = (p: P) => (
 export const IconClose = (p: P) => (
   <svg {...base(p)}><path d="M18 6L6 18M6 6l12 12" /></svg>
 );
+export const IconCheck = (p: P) => (
+  <svg {...base(p)}><path d="M20 6L9 17l-5-5" /></svg>
+);
 export const IconChevron = (p: P) => (
   <svg {...base(p)}><path d="M6 9l6 6 6-6" /></svg>
 );

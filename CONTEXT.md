@@ -116,6 +116,7 @@ _Avoid_: Influencer (acceptable in UI copy, not in schema names)
 A scheduled task that fetches external data and writes Snapshots or related records to the database.
 _Avoid_: Crawler, scraper (in domain docs)
 
+<<<<<<< HEAD
 **Snapshot refresh**:
 Each run fetches fresh Observed metrics from Store sources for that calendar day. Prior Snapshot values are used only when a fetch fails or a metric is unavailable (e.g. rank when the App is not on a chart) — not as a default shortcut.
 _Avoid_: Stale copy-forward
@@ -135,6 +136,31 @@ _Avoid_: Every other day, batch weekly (for Observed metrics)
 **Keyword storefront scope** — Apple and Google Play, **multi-market**. v1 was US-only; now 14 markets wired (target: AppKittie's 26). Each Keyword is scored per-country, with a cross-market view that flags untapped markets (high popularity + low difficulty).
 
 **Keyword popularity source** — derived from Apple search **autocomplete rank** (a free signal that reflects real search demand), NOT Apple's official popularity index (which is paid/scraped and has no free equivalent). Directionally accurate for ranking terms; not a calibrated volume figure. Architected pluggable so a real source can drop in later. See ADR.
+=======
+**Review**:
+A single written, user-submitted review of an App on its Store — rating + optional title + body + author + date. Rating-only reviews (no written body) are not indexed.
+_Avoid_: Rating (that is one field of a Review, not the whole thing); Comment
+
+**Monitored app**:
+An App a person has bookmarked in the Reviews surface to view its reviews and sentiment. A personal bookmark only — it does **not** determine what the server keeps fresh. An App can be kept fresh while monitored by nobody, and monitoring an App never, on its own, adds it to the fresh set.
+_Avoid_: Tracked app, Subscribed app
+
+**Fresh set**:
+The set of Apps the ingestion job keeps continuously up to date — defined as *every App that already has at least one indexed Review*. Membership follows ingestion history, not monitoring. This is how review data stays live without any user/auth backend.
+_Avoid_: Monitored set, Watched apps
+
+## Flagged ambiguities
+
+_None open._
+
+## Resolved decisions
+
+**Continuous-refresh runtime** — runs in-process inside the API: a catch-up sweep on boot (top up anything stale) plus an interval while the API is up. No hosted server, no OS cron. Free to run; the only ceiling is store rate-limiting, so the sweep is *paced* (polite delays, low concurrency) and uses **delta fetches** (only Reviews newer than the latest stored), never full re-pulls.
+
+**On-add flow** — adding an App opens a 5-stage progress modal driven by a **real SSE stream** from the sync endpoint (fetch → parse → analyse → save → done). No faked timers. The App is populated and in the fresh set when the modal closes.
+
+**Classifier seam** — the per-Review tagging (sentiment, topics, improvement areas) moves **server-side** during sync, and tags are **persisted** to the DB (not recomputed in each browser). Engine is the existing **keyword taxonomy** for now ($0). The seam is a single function; swapping in a real LLM later is a one-function change, deliberately deferred to avoid per-review API cost. Future: a positive/negative review filter layered on the stored sentiment.
+>>>>>>> feat/reviews-meta
 
 ## Example dialogue
 
