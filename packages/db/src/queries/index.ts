@@ -67,11 +67,14 @@ export {
   type TrackedAppEntry,
 } from "./monitor.js";
 export {
+  appTitlesByIds,
   listAppIdsByCategory,
   listAppsByIds,
   listKeywordIndexRows,
   listMinableReviews,
   listSnapshotSeries,
+  reviewFreshnessByApp,
+  staleKeywordsForScope,
   type KeywordIndexRowRaw,
   type MinableReviewRow,
 } from "./intel.js";

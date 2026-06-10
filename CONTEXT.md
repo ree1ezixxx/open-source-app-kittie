@@ -178,6 +178,8 @@ _Avoid_: Cron job, scheduler (implies external infra)
 
 ## Resolved decisions
 
+**Freshness contract** — every user-triggered question (Niche mining, Keyword gap, Compare, Research chat, …) must answer from *today's market, not yesterday's*: (1) resolve the question's scope (which Apps / Keywords); (2) **freshen that scope live, on demand** — delta-fetch from the Stores, paced, with visible progress — whenever it is staler than the surface's cadence; (3) only then compute, from the store; (4) stamp every answer "data as of X" with a Refresh affordance. The DB is a cache in front of the Stores plus the accumulated history nobody can backfill — never silently the source of truth for "now". Chosen trade-off: **block with honest progress** (the wait is the cost of truth) over instant-but-stale answers. Reference implementation: Niche mining's sync-then-mine stream; the on-add review SSE flow and the Tracked-app capture sweep already follow it.
+
 **Continuous-refresh runtime** — runs in-process inside the API: a catch-up sweep on boot (top up anything stale) plus an interval while the API is up. No hosted server, no OS cron. Free to run; the only ceiling is store rate-limiting, so the sweep is *paced* (polite delays, low concurrency) and uses **delta fetches** (only Reviews newer than the latest stored), never full re-pulls.
 
 **On-add flow** — adding an App opens a 5-stage progress modal driven by a **real SSE stream** from the sync endpoint (fetch → parse → analyse → save → done). No faked timers. The App is populated and in the fresh set when the modal closes.

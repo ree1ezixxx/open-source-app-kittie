@@ -21,7 +21,12 @@ import {
   IconSpark,
 } from "../../icons";
 import { listApps } from "../../lib/api";
-import { mineNiche, type MinedCluster, type NicheReport } from "../../lib/api/intel";
+import {
+  mineNicheFresh,
+  type FreshNicheReport,
+  type MinedCluster,
+  type MineSyncProgress,
+} from "../../lib/api/intel";
 import type { Theme } from "../../lib/theme";
 import "../../styles/intel.css";
 
@@ -86,7 +91,8 @@ export function NicheMiningPage({ theme, onToggleTheme }: { theme: Theme; onTogg
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [report, setReport] = useState<NicheReport | null>(null);
+  const [report, setReport] = useState<FreshNicheReport | null>(null);
+  const [progress, setProgress] = useState<MineSyncProgress | null>(null);
 
   // Merge live categories from the tracked corpus into the datalist seed.
   useEffect(() => {
@@ -125,18 +131,25 @@ export function NicheMiningPage({ theme, onToggleTheme }: { theme: Theme; onTogg
 
   const canRun = mode === "category" ? category.trim().length > 0 : picked.length > 0;
 
+  // Freshness contract (CONTEXT.md): the server live-syncs every stale App in
+  // the niche before mining — we block with honest progress, never answer
+  // from yesterday's market silently.
   function run() {
     if (!canRun || loading) return;
     setLoading(true);
     setError(null);
+    setProgress(null);
     const params =
       mode === "category"
         ? { category: category.trim() }
         : { appIds: picked.map((a) => a.id) };
-    mineNiche(params)
+    mineNicheFresh(params, setProgress)
       .then(setReport)
       .catch((e) => setError(e instanceof Error ? e.message : "Mining failed"))
-      .finally(() => setLoading(false));
+      .finally(() => {
+        setLoading(false);
+        setProgress(null);
+      });
   }
 
   const byKind = useMemo(() => {
@@ -244,6 +257,35 @@ export function NicheMiningPage({ theme, onToggleTheme }: { theme: Theme; onTogg
           <div className="intel-error"><IconInfo style={{ width: 14, height: 14 }} /> {error}</div>
         )}
 
+        {/* ---- freshness progress (sync-then-mine — the wait is the cost of truth) ---- */}
+        {loading && (
+          <div className="intel-progress">
+            {!progress && <span>Resolving the niche…</span>}
+            {progress?.phase === "scope" && (
+              <span>
+                {progress.apps} apps in scope — {progress.toSync === 0
+                  ? "all fresh, mining now…"
+                  : `live-syncing ${progress.toSync} stale ${progress.toSync === 1 ? "app" : "apps"} first…`}
+                {progress.capped ? ` (${progress.capped} more deferred to stay polite to the stores)` : ""}
+              </span>
+            )}
+            {progress?.phase === "sync" && (
+              <>
+                <span>
+                  Syncing live reviews {progress.i}/{progress.total} — {progress.title}
+                </span>
+                <span className="intel-progress-bar">
+                  <span
+                    className="intel-progress-fill"
+                    style={{ width: `${Math.round(((progress.i ?? 0) / (progress.total || 1)) * 100)}%` }}
+                  />
+                </span>
+              </>
+            )}
+            {progress?.phase === "mining" && <span>Synced. Mining today's reviews…</span>}
+          </div>
+        )}
+
         {/* ---- results ---- */}
         {!report && !loading && !error && (
           <EmptyState
@@ -268,6 +310,13 @@ export function NicheMiningPage({ theme, onToggleTheme }: { theme: Theme; onTogg
               <strong>{report.appCount.toLocaleString()}</strong>&nbsp;{report.appCount === 1 ? "app" : "apps"}
               <span className="intel-dot" />
               {report.clusters.length} themes mined
+              <span className="intel-dot" />
+              <span title={report.syncedAt}>
+                data as of {new Date(report.syncedAt).toLocaleTimeString()}
+              </span>
+              <button className="btn intel-refresh" onClick={run} disabled={loading}>
+                Refresh
+              </button>
             </div>
 
             {SECTIONS.map((s) => {

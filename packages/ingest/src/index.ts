@@ -14,3 +14,4 @@ export { suggestRelatedKeywords } from "./keyword-suggest.js";
 export { searchPopularity } from "./keyword-popularity.js";
 export { syncKeyword, getCachedKeyword, fetchKeywordRankings } from "./db/keywords.js";
 export { runKeywordSync } from "./jobs/keyword-sync.js";
+export { freshenKeyword, writeInverseIndex } from "./db/rankings.js";

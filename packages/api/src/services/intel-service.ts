@@ -2,7 +2,9 @@ import {
   listAppIdsByCategory,
   listKeywordIndexRows,
   listMinableReviews,
+  staleKeywordsForScope,
 } from "@kittie/db";
+import { freshenKeyword } from "@kittie/ingest";
 import {
   keywordGap,
   localizationGap,
@@ -78,19 +80,45 @@ async function loadIndexRows(filter: {
   }));
 }
 
+/** Freshness contract: live-rescore the scope's stalest Keywords (cadence 7d,
+    politely capped) before answering, so gap views read today's rankings.
+    Returns how many were freshened — surfaced in the response stamp. */
+async function freshenScope(
+  filter: { appIds?: string[]; store?: "apple" | "google" },
+  cap = 20,
+): Promise<number> {
+  const db = getDb();
+  const stale = await staleKeywordsForScope(db, filter, 7, cap);
+  let freshened = 0;
+  for (const k of stale) {
+    try {
+      await freshenKeyword(db, k.keyword, k.country, k.store);
+      freshened++;
+    } catch {
+      /* one keyword failing must not block the answer */
+    }
+  }
+  return freshened;
+}
+
 /** Keywords competitors rank top-N for that the subject doesn't. */
 export async function analyzeKeywordGap(params: {
   subjectAppId: string;
   competitorAppIds: string[];
   country?: string;
   store?: "apple" | "google";
-}): Promise<GapResult> {
-  const rows = await loadIndexRows({
+}): Promise<GapResult & { dataAsOf: string; freshened: number }> {
+  const scope = {
     appIds: [params.subjectAppId, ...params.competitorAppIds],
     store: params.store,
-    country: params.country,
-  });
-  return keywordGap(params.subjectAppId, params.competitorAppIds, rows);
+  };
+  const freshened = await freshenScope(scope);
+  const rows = await loadIndexRows({ ...scope, country: params.country });
+  return {
+    ...keywordGap(params.subjectAppId, params.competitorAppIds, rows),
+    dataAsOf: new Date().toISOString(),
+    freshened,
+  };
 }
 
 /** Cross-market openings + per-app market presence. */
@@ -100,10 +128,15 @@ export async function analyzeLocalization(params: {
 }): Promise<{
   markets: MarketGapReport[];
   presence: Array<{ appId: string; byCountry: Record<string, number> }>;
+  dataAsOf: string;
+  freshened: number;
 }> {
+  const freshened = await freshenScope({ appIds: params.appIds, store: params.store });
   const rows = await loadIndexRows({ appIds: params.appIds, store: params.store });
   return {
     markets: localizationGap(rows),
     presence: params.appIds && params.appIds.length > 0 ? marketPresence(params.appIds, rows) : [],
+    dataAsOf: new Date().toISOString(),
+    freshened,
   };
 }

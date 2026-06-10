@@ -169,3 +169,69 @@ export async function fetchLocalizationGap(
   const json = (await res.json()) as { data: LocalizationGapResult };
   return json.data;
 }
+
+/* ----------------------------------------------------------------
+   Freshness-contract mining (CONTEXT.md "Freshness contract"):
+   sync-then-mine over SSE. The server live-syncs every stale App in
+   the niche first (real progress events), THEN mines — the answer is
+   today's market, and the wait is shown honestly.
+   ---------------------------------------------------------------- */
+
+export interface MineSyncProgress {
+  phase: "scope" | "sync" | "mining";
+  /** scope */
+  apps?: number;
+  toSync?: number;
+  capped?: number;
+  /** sync */
+  i?: number;
+  total?: number;
+  title?: string;
+}
+
+export interface FreshNicheReport extends NicheReport {
+  appIds: string[];
+  /** When the sync-then-mine pass finished — the "data as of" stamp. */
+  syncedAt: string;
+}
+
+export function mineNicheFresh(
+  params: NicheMiningParams,
+  onProgress: (p: MineSyncProgress) => void,
+): Promise<FreshNicheReport> {
+  const q = new URLSearchParams();
+  if (params.appIds && params.appIds.length > 0) q.set("appIds", params.appIds.join(","));
+  else if (params.category) q.set("category", params.category);
+
+  return new Promise((resolve, reject) => {
+    const es = new EventSource(`${BASE}/intel/niche-mining/stream?${q.toString()}`);
+    const fail = (message: string) => {
+      es.close();
+      reject(new Error(message));
+    };
+    es.addEventListener("scope", (e) =>
+      onProgress({ phase: "scope", ...(JSON.parse((e as MessageEvent).data) as object) }),
+    );
+    es.addEventListener("sync", (e) =>
+      onProgress({ phase: "sync", ...(JSON.parse((e as MessageEvent).data) as object) }),
+    );
+    es.addEventListener("mining", () => onProgress({ phase: "mining" }));
+    es.addEventListener("report", (e) => {
+      const report = JSON.parse((e as MessageEvent).data) as FreshNicheReport;
+      es.close();
+      resolve(report);
+    });
+    es.addEventListener("error", (e) => {
+      const data = (e as MessageEvent).data;
+      if (typeof data === "string") {
+        try {
+          fail((JSON.parse(data) as { message?: string }).message ?? "Mining failed");
+          return;
+        } catch {
+          /* fall through */
+        }
+      }
+      fail("Mining stream failed — is the API up?");
+    });
+  });
+}

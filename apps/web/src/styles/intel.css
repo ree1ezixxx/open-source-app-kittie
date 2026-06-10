@@ -380,3 +380,35 @@
   cursor: pointer;
 }
 .intel-more:hover { text-decoration: underline; }
+
+/* ---- freshness-contract progress (sync-then-mine) ---- */
+.intel-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 18px;
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-bottom: 16px;
+}
+.intel-progress-bar {
+  display: block;
+  height: 6px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--border) 60%, transparent);
+  overflow: hidden;
+}
+.intel-progress-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 99px;
+  transition: width 0.3s ease;
+}
+.intel-refresh {
+  margin-left: auto;
+  font-size: 11.5px;
+  padding: 3px 12px;
+}

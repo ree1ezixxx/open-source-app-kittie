@@ -5,6 +5,7 @@ import type { Store } from "@kittie/types";
 import { eq, inArray, isNotNull } from "drizzle-orm";
 
 import { searchAppleKeyword } from "../apple/search.js";
+import { writeInverseIndex } from "../db/rankings.js";
 import { syncKeyword } from "../db/keywords.js";
 import { searchGoogleKeyword } from "../google/search.js";
 import { suggestRelatedKeywords } from "../keyword-suggest.js";
@@ -112,43 +113,6 @@ async function saveCursor(db: Db, cursorId: string, cursor: CorpusCursor): Promi
 /** Store rate-limit / block responses deserve a harder backoff than flakes. */
 function isThrottleError(error: unknown): boolean {
   return /\b(429|403)\b/.test(String(error));
-}
-
-/**
- * Explode a scored Keyword's top-10 into the keyword_rankings inverse index.
- * Only Apps already in the catalog get rows — one batched existence query, and
- * never a fabricated App row. Replace-then-insert keeps one observation set
- * per Keyword.
- */
-async function writeInverseIndex(db: Db, item: CorpusItem, store: Store): Promise<number> {
-  const results =
-    store === "apple"
-      ? await searchAppleKeyword(item.keyword, item.country, TOP_RANKS)
-      : await searchGoogleKeyword(item.keyword, item.country, TOP_RANKS);
-
-  const keywordId = makeKeywordId(store, item.country, item.keyword);
-  const candidateIds = results.map((r) => makeAppId(store, r.storeAppId));
-
-  const existing = candidateIds.length
-    ? await db.select({ id: apps.id }).from(apps).where(inArray(apps.id, candidateIds))
-    : [];
-  const known = new Set(existing.map((r) => r.id));
-
-  const observedAt = new Date();
-  const rows = results
-    .map((r) => ({ appId: makeAppId(store, r.storeAppId), rank: r.rank }))
-    .filter((r) => known.has(r.appId))
-    .map((r) => ({
-      id: `${keywordId}:${r.appId}`,
-      keywordId,
-      appId: r.appId,
-      rank: r.rank,
-      observedAt,
-    }));
-
-  await db.delete(keywordRankings).where(eq(keywordRankings.keywordId, keywordId));
-  if (rows.length > 0) await db.insert(keywordRankings).values(rows);
-  return rows.length;
 }
 
 function printPlan(cursor: CorpusCursor, args: CorpusArgs, resumed: boolean): void {
