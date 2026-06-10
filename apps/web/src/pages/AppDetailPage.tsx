@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import type { AppDetail, Review } from "@kittie/types";
 import { getApp, getReviews } from "../lib/api";
+import { appSlug, parseAppSlug } from "../lib/slug";
 import type { Theme } from "../lib/theme";
 import { categoryColor, pillStyle } from "../lib/palette";
 import { formatCompact, formatMoney, formatRating, formatDate } from "../lib/format";
@@ -34,7 +35,8 @@ const MIN_COLLECTION = 3;
 const plusVal = (s: string) => (s && s !== "—" && s !== "0" ? `+${s}` : s);
 
 export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => void }) {
-  const { id } = useParams();
+  const { id: idParam, slug } = useParams();
+  const id = slug ? parseAppSlug(slug) ?? undefined : idParam;
   const navigate = useNavigate();
   const [app, setApp] = useState<AppDetail | null>(null);
   const [reviews, setReviews] = useState<Review[] | null>(null);
@@ -65,6 +67,13 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
       .catch(() => !ac.signal.aborted && setReviews([]));
     return () => ac.abort();
   }, [id]);
+
+  // Canonicalize the URL to the live-format slug (/app/app-<title>-id<storeAppId>).
+  useEffect(() => {
+    if (!app) return;
+    const canonical = `/app/${encodeURIComponent(appSlug(app))}`;
+    if (window.location.pathname !== canonical) navigate(canonical, { replace: true });
+  }, [app, navigate]);
 
   // Probe screenshots in-browser; only show a real working collection.
   useEffect(() => {
