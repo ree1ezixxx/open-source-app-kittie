@@ -13,24 +13,21 @@ import { KeywordExplorerPage } from "./pages/aso/KeywordExplorerPage";
 import { ReviewsPage } from "./pages/reviews/ReviewsPage";
 import { McpLandingPage } from "./pages/McpLandingPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { ScreenshotGeneratorPage } from "./pages/ScreenshotGeneratorPage";
+import { HotIdeasPage } from "./pages/HotIdeasPage";
+import { PricingCalculatorPage } from "./pages/PricingCalculatorPage";
 import {
-  IconImage,
   IconGlobe,
-  IconBulb,
   IconKey,
   IconBook,
-  IconCoin,
 } from "./icons";
 import { useTheme } from "./lib/theme";
 
 type Stub = { path: string; title: string; sub: string; lane: string; icon: ReactNode };
 
-// Routes owned by other lanes (B/C/D) + Lane-A pages not yet built. Each lane swaps its stub.
+// Remaining unbuilt routes — swapped for real pages as they land.
 const STUBS: Stub[] = [
-  { path: "/dashboard/aso/screenshots", title: "AI Screenshot Generator", sub: "Generate optimized App Store visuals", lane: "Lane C (AI Studio)", icon: <IconImage /> },
   { path: "/dashboard/aso/screenshot-translation", title: "Screenshot Translation", sub: "Localize screenshots for any market", lane: "Lane C (AI Studio)", icon: <IconGlobe /> },
-  { path: "/dashboard/hot-ideas", title: "Hot app ideas", sub: "AI concepts from fast-growing apps", lane: "Lane C (AI Studio)", icon: <IconBulb /> },
-  { path: "/tools/pricing-calculator", title: "App Pricing Calculator", sub: "Localized pricing for 190+ markets", lane: "Lane C (AI Studio)", icon: <IconCoin /> },
   { path: "/settings/api-keys", title: "API Keys", sub: "Manage keys & credits", lane: "Lane D (Reviews & Meta)", icon: <IconKey /> },
   { path: "/docs", title: "API Docs", sub: "Reference & guides", lane: "Lane D (Reviews & Meta)", icon: <IconBook /> },
 ];
@@ -58,6 +55,11 @@ export function App() {
 
         <Route path="/dashboard/aso/apps" element={<AppTrackingPage theme={theme} onToggleTheme={toggleTheme} />} />
         <Route path="/dashboard/aso/keywords" element={<KeywordExplorerPage theme={theme} onToggleTheme={toggleTheme} />} />
+
+        {/* Lane C — AI Studio */}
+        <Route path="/dashboard/aso/screenshots" element={<ScreenshotGeneratorPage />} />
+        <Route path="/dashboard/hot-ideas" element={<HotIdeasPage />} />
+        <Route path="/tools/pricing-calculator" element={<PricingCalculatorPage />} />
 
         {/* Lane D — Reviews & Meta */}
         <Route path="/reviews" element={<Navigate to="/reviews/overview" replace />} />

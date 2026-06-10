@@ -1,0 +1,266 @@
+/**
+ * Generates apps/web/src/datasets/ppp-index.json — a static PPP-localisation dataset
+ * for the offline Pricing Calculator. No network, no backend.
+ *
+ * Each row carries:
+ *   - pli: price-level index relative to the US (US = 1.00). Lower = cheaper
+ *          country → charge a smaller share of the USD price for fairness.
+ *          Sourced from World Bank ICP price-level ratios (PPP / market FX),
+ *          approximate and rounded — swap in fresh ICP data when you have it.
+ *   - fx:  market exchange rate, local currency units per 1 USD (rough, mid-2024).
+ *
+ * Calculator maths (done at runtime, not here):
+ *   usdEquivalent = baseUSD * pli
+ *   localPrice    = usdEquivalent * fx   (then charm-rounded in the UI)
+ *
+ * Run:  node apps/web/scripts/gen-ppp.mjs
+ */
+import { writeFileSync, mkdirSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// [ country, ISO2, currency, symbol, pli, fx ]
+const ROWS = [
+  ["United States", "US", "USD", "$", 1.0, 1],
+  ["Canada", "CA", "CAD", "CA$", 0.96, 1.37],
+  ["Mexico", "MX", "MXN", "MX$", 0.47, 17.1],
+  ["Brazil", "BR", "BRL", "R$", 0.45, 5.1],
+  ["Argentina", "AR", "ARS", "AR$", 0.4, 920],
+  ["Chile", "CL", "CLP", "CLP$", 0.55, 940],
+  ["Colombia", "CO", "COP", "COL$", 0.4, 3950],
+  ["Peru", "PE", "PEN", "S/", 0.45, 3.75],
+  ["Uruguay", "UY", "UYU", "$U", 0.62, 39],
+  ["Ecuador", "EC", "USD", "$", 0.52, 1],
+  ["Bolivia", "BO", "BOB", "Bs", 0.4, 6.9],
+  ["Paraguay", "PY", "PYG", "₲", 0.42, 7300],
+  ["Venezuela", "VE", "VES", "Bs.", 0.35, 36],
+  ["Costa Rica", "CR", "CRC", "₡", 0.6, 515],
+  ["Panama", "PA", "USD", "$", 0.55, 1],
+  ["Guatemala", "GT", "GTQ", "Q", 0.43, 7.8],
+  ["Dominican Republic", "DO", "DOP", "RD$", 0.5, 59],
+  ["Honduras", "HN", "HNL", "L", 0.45, 24.7],
+  ["El Salvador", "SV", "USD", "$", 0.46, 1],
+  ["Nicaragua", "NI", "NIO", "C$", 0.42, 36.8],
+  ["Jamaica", "JM", "JMD", "J$", 0.55, 156],
+  ["Trinidad & Tobago", "TT", "TTD", "TT$", 0.6, 6.8],
+
+  ["United Kingdom", "GB", "GBP", "£", 1.02, 0.79],
+  ["Ireland", "IE", "EUR", "€", 1.05, 0.92],
+  ["Germany", "DE", "EUR", "€", 0.96, 0.92],
+  ["France", "FR", "EUR", "€", 0.95, 0.92],
+  ["Spain", "ES", "EUR", "€", 0.85, 0.92],
+  ["Portugal", "PT", "EUR", "€", 0.78, 0.92],
+  ["Italy", "IT", "EUR", "€", 0.86, 0.92],
+  ["Netherlands", "NL", "EUR", "€", 0.98, 0.92],
+  ["Belgium", "BE", "EUR", "€", 0.97, 0.92],
+  ["Luxembourg", "LU", "EUR", "€", 1.1, 0.92],
+  ["Austria", "AT", "EUR", "€", 0.97, 0.92],
+  ["Switzerland", "CH", "CHF", "CHF", 1.3, 0.88],
+  ["Norway", "NO", "NOK", "kr", 1.18, 10.7],
+  ["Sweden", "SE", "SEK", "kr", 1.0, 10.5],
+  ["Denmark", "DK", "DKK", "kr", 1.08, 6.9],
+  ["Finland", "FI", "EUR", "€", 1.0, 0.92],
+  ["Iceland", "IS", "ISK", "kr", 1.15, 138],
+  ["Poland", "PL", "PLN", "zł", 0.58, 3.95],
+  ["Czechia", "CZ", "CZK", "Kč", 0.65, 23],
+  ["Slovakia", "SK", "EUR", "€", 0.68, 0.92],
+  ["Hungary", "HU", "HUF", "Ft", 0.58, 360],
+  ["Romania", "RO", "RON", "lei", 0.52, 4.57],
+  ["Bulgaria", "BG", "BGN", "лв", 0.5, 1.8],
+  ["Greece", "GR", "EUR", "€", 0.72, 0.92],
+  ["Croatia", "HR", "EUR", "€", 0.65, 0.92],
+  ["Slovenia", "SI", "EUR", "€", 0.74, 0.92],
+  ["Serbia", "RS", "RSD", "дин", 0.5, 108],
+  ["Ukraine", "UA", "UAH", "₴", 0.4, 40],
+  ["Belarus", "BY", "BYN", "Br", 0.45, 3.25],
+  ["Russia", "RU", "RUB", "₽", 0.45, 90],
+  ["Lithuania", "LT", "EUR", "€", 0.68, 0.92],
+  ["Latvia", "LV", "EUR", "€", 0.7, 0.92],
+  ["Estonia", "EE", "EUR", "€", 0.74, 0.92],
+  ["Cyprus", "CY", "EUR", "€", 0.82, 0.92],
+  ["Malta", "MT", "EUR", "€", 0.8, 0.92],
+  ["Bosnia & Herzegovina", "BA", "BAM", "KM", 0.5, 1.8],
+  ["North Macedonia", "MK", "MKD", "ден", 0.45, 56.5],
+  ["Albania", "AL", "ALL", "L", 0.48, 92],
+  ["Moldova", "MD", "MDL", "L", 0.42, 17.8],
+  ["Montenegro", "ME", "EUR", "€", 0.55, 0.92],
+  ["Kosovo", "XK", "EUR", "€", 0.5, 0.92],
+  ["Georgia", "GE", "GEL", "₾", 0.45, 2.7],
+  ["Armenia", "AM", "AMD", "֏", 0.45, 388],
+  ["Azerbaijan", "AZ", "AZN", "₼", 0.45, 1.7],
+
+  ["Turkey", "TR", "TRY", "₺", 0.4, 32],
+  ["Israel", "IL", "ILS", "₪", 1.0, 3.7],
+  ["Saudi Arabia", "SA", "SAR", "﷼", 0.62, 3.75],
+  ["United Arab Emirates", "AE", "AED", "د.إ", 0.7, 3.67],
+  ["Qatar", "QA", "QAR", "﷼", 0.7, 3.64],
+  ["Kuwait", "KW", "KWD", "د.ك", 0.68, 0.31],
+  ["Bahrain", "BH", "BHD", ".د.ب", 0.66, 0.38],
+  ["Oman", "OM", "OMR", "﷼", 0.62, 0.385],
+  ["Jordan", "JO", "JOD", "د.ا", 0.6, 0.71],
+  ["Lebanon", "LB", "LBP", "ل.ل", 0.45, 89500],
+  ["Iraq", "IQ", "IQD", "ع.د", 0.45, 1310],
+  ["Iran", "IR", "IRR", "﷼", 0.35, 42000],
+  ["Egypt", "EG", "EGP", "E£", 0.32, 48],
+  ["Morocco", "MA", "MAD", "د.م.", 0.45, 10],
+  ["Tunisia", "TN", "TND", "د.ت", 0.42, 3.1],
+  ["Algeria", "DZ", "DZD", "د.ج", 0.4, 134],
+  ["Libya", "LY", "LYD", "ل.د", 0.42, 4.85],
+
+  ["South Africa", "ZA", "ZAR", "R", 0.45, 18.5],
+  ["Nigeria", "NG", "NGN", "₦", 0.32, 1450],
+  ["Kenya", "KE", "KES", "KSh", 0.4, 130],
+  ["Ghana", "GH", "GHS", "₵", 0.38, 14.8],
+  ["Ethiopia", "ET", "ETB", "Br", 0.35, 57],
+  ["Tanzania", "TZ", "TZS", "TSh", 0.36, 2580],
+  ["Uganda", "UG", "UGX", "USh", 0.36, 3750],
+  ["Côte d’Ivoire", "CI", "XOF", "CFA", 0.45, 605],
+  ["Senegal", "SN", "XOF", "CFA", 0.45, 605],
+  ["Cameroon", "CM", "XAF", "FCFA", 0.42, 605],
+  ["Angola", "AO", "AOA", "Kz", 0.4, 840],
+  ["Mozambique", "MZ", "MZN", "MT", 0.38, 63.5],
+  ["Zambia", "ZM", "ZMW", "ZK", 0.4, 26.5],
+  ["Zimbabwe", "ZW", "USD", "$", 0.4, 1],
+  ["Botswana", "BW", "BWP", "P", 0.45, 13.6],
+  ["Namibia", "NA", "NAD", "N$", 0.45, 18.5],
+  ["Mauritius", "MU", "MUR", "₨", 0.5, 46],
+  ["Rwanda", "RW", "RWF", "FRw", 0.38, 1290],
+  ["Madagascar", "MG", "MGA", "Ar", 0.35, 4500],
+  ["Democratic Republic of the Congo", "CD", "CDF", "FC", 0.36, 2750],
+  ["Sudan", "SD", "SDG", "ج.س.", 0.34, 600],
+
+  ["China", "CN", "CNY", "¥", 0.6, 7.2],
+  ["Hong Kong", "HK", "HKD", "HK$", 0.92, 7.81],
+  ["Taiwan", "TW", "TWD", "NT$", 0.72, 32],
+  ["Japan", "JP", "JPY", "¥", 0.88, 152],
+  ["South Korea", "KR", "KRW", "₩", 0.85, 1340],
+  ["India", "IN", "INR", "₹", 0.27, 83.3],
+  ["Pakistan", "PK", "PKR", "₨", 0.28, 278],
+  ["Bangladesh", "BD", "BDT", "৳", 0.32, 117],
+  ["Sri Lanka", "LK", "LKR", "Rs", 0.35, 300],
+  ["Nepal", "NP", "NPR", "₨", 0.3, 133],
+  ["Indonesia", "ID", "IDR", "Rp", 0.4, 15800],
+  ["Malaysia", "MY", "MYR", "RM", 0.45, 4.7],
+  ["Thailand", "TH", "THB", "฿", 0.5, 36.5],
+  ["Vietnam", "VN", "VND", "₫", 0.4, 25400],
+  ["Philippines", "PH", "PHP", "₱", 0.42, 58],
+  ["Singapore", "SG", "SGD", "S$", 0.85, 1.35],
+  ["Cambodia", "KH", "KHR", "៛", 0.38, 4080],
+  ["Laos", "LA", "LAK", "₭", 0.36, 21500],
+  ["Myanmar", "MM", "MMK", "K", 0.35, 2100],
+  ["Mongolia", "MN", "MNT", "₮", 0.42, 3450],
+  ["Kazakhstan", "KZ", "KZT", "₸", 0.45, 470],
+  ["Uzbekistan", "UZ", "UZS", "soʻm", 0.38, 12650],
+  ["Kyrgyzstan", "KG", "KGS", "сом", 0.38, 88],
+  ["Tajikistan", "TJ", "TJS", "ЅМ", 0.38, 10.9],
+  ["Turkmenistan", "TM", "TMT", "m", 0.4, 3.5],
+  ["Brunei", "BN", "BND", "B$", 0.72, 1.35],
+  ["Macau", "MO", "MOP", "MOP$", 0.85, 8.05],
+
+  ["Australia", "AU", "AUD", "A$", 1.0, 1.52],
+  ["New Zealand", "NZ", "NZD", "NZ$", 0.98, 1.65],
+  ["Fiji", "FJ", "FJD", "FJ$", 0.6, 2.25],
+  ["Papua New Guinea", "PG", "PGK", "K", 0.5, 3.85],
+
+  ["Afghanistan", "AF", "AFN", "؋", 0.3, 71],
+  ["Maldives", "MV", "MVR", "Rf", 0.55, 15.4],
+  ["Bhutan", "BT", "BTN", "Nu.", 0.32, 83.3],
+  ["Brunei", "BN2", "BND", "B$", 0.72, 1.35],
+  ["Bahamas", "BS", "BSD", "B$", 0.85, 1],
+  ["Barbados", "BB", "BBD", "Bds$", 0.78, 2],
+  ["Belize", "BZ", "BZD", "BZ$", 0.6, 2],
+  ["Cuba", "CU", "CUP", "₱", 0.45, 120],
+  ["Guyana", "GY", "GYD", "G$", 0.5, 209],
+  ["Suriname", "SR", "SRD", "$", 0.45, 35],
+  ["Haiti", "HT", "HTG", "G", 0.42, 132],
+  ["Gabon", "GA", "XAF", "FCFA", 0.5, 605],
+  ["Mali", "ML", "XOF", "CFA", 0.4, 605],
+  ["Burkina Faso", "BF", "XOF", "CFA", 0.4, 605],
+  ["Benin", "BJ", "XOF", "CFA", 0.42, 605],
+  ["Togo", "TG", "XOF", "CFA", 0.4, 605],
+  ["Niger", "NE", "XOF", "CFA", 0.38, 605],
+  ["Guinea", "GN", "GNF", "FG", 0.36, 8600],
+  ["Malawi", "MW", "MWK", "MK", 0.35, 1735],
+  ["Sierra Leone", "SL", "SLE", "Le", 0.35, 22.6],
+  ["Liberia", "LR", "LRD", "L$", 0.4, 193],
+  ["Gambia", "GM", "GMD", "D", 0.38, 68],
+  ["Mauritania", "MR", "MRU", "UM", 0.4, 39.7],
+  ["Eswatini", "SZ", "SZL", "E", 0.45, 18.5],
+  ["Lesotho", "LS", "LSL", "L", 0.42, 18.5],
+  ["Burundi", "BI", "BIF", "FBu", 0.34, 2870],
+  ["South Sudan", "SS", "SSP", "£", 0.34, 1300],
+  ["Somalia", "SO", "SOS", "Sh", 0.34, 571],
+  ["Chad", "TD", "XAF", "FCFA", 0.38, 605],
+  ["Central African Republic", "CF", "XAF", "FCFA", 0.38, 605],
+  ["Republic of the Congo", "CG", "XAF", "FCFA", 0.42, 605],
+  ["Equatorial Guinea", "GQ", "XAF", "FCFA", 0.45, 605],
+  ["Djibouti", "DJ", "DJF", "Fdj", 0.45, 178],
+  ["Comoros", "KM", "KMF", "CF", 0.4, 452],
+  ["Cape Verde", "CV", "CVE", "$", 0.5, 101],
+  ["Seychelles", "SC", "SCR", "₨", 0.6, 13.5],
+  ["São Tomé & Príncipe", "ST", "STN", "Db", 0.42, 22.5],
+  ["Eritrea", "ER", "ERN", "Nfk", 0.36, 15],
+  ["Yemen", "YE", "YER", "﷼", 0.35, 250],
+  ["Syria", "SY", "SYP", "£S", 0.34, 13000],
+  ["Palestine", "PS", "ILS", "₪", 0.5, 3.7],
+  ["Andorra", "AD", "EUR", "€", 0.95, 0.92],
+  ["Monaco", "MC", "EUR", "€", 1.15, 0.92],
+  ["San Marino", "SM", "EUR", "€", 0.9, 0.92],
+  ["Liechtenstein", "LI", "CHF", "CHF", 1.25, 0.88],
+  ["Greenland", "GL", "DKK", "kr", 1.0, 6.9],
+  ["Gibraltar", "GI", "GIP", "£", 0.95, 0.79],
+  ["Bermuda", "BM", "BMD", "$", 1.1, 1],
+  ["Cayman Islands", "KY", "KYD", "$", 1.05, 0.83],
+  ["Aruba", "AW", "AWG", "ƒ", 0.78, 1.8],
+  ["Barbados", "BB2", "BBD", "Bds$", 0.78, 2],
+  ["Antigua & Barbuda", "AG", "XCD", "EC$", 0.7, 2.7],
+  ["Saint Lucia", "LC", "XCD", "EC$", 0.68, 2.7],
+  ["Grenada", "GD", "XCD", "EC$", 0.65, 2.7],
+  ["Saint Kitts & Nevis", "KN", "XCD", "EC$", 0.7, 2.7],
+  ["Saint Vincent & the Grenadines", "VC", "XCD", "EC$", 0.62, 2.7],
+  ["Dominica", "DM", "XCD", "EC$", 0.6, 2.7],
+  ["Samoa", "WS", "WST", "T", 0.55, 2.75],
+  ["Tonga", "TO", "TOP", "T$", 0.55, 2.35],
+  ["Vanuatu", "VU", "VUV", "VT", 0.55, 119],
+  ["Solomon Islands", "SB", "SBD", "SI$", 0.5, 8.45],
+  ["Kiribati", "KI", "AUD", "A$", 0.55, 1.52],
+  ["Nauru", "NR", "AUD", "A$", 0.6, 1.52],
+  ["Tuvalu", "TV", "AUD", "A$", 0.6, 1.52],
+  ["Palau", "PW", "USD", "$", 0.7, 1],
+  ["Marshall Islands", "MH", "USD", "$", 0.6, 1],
+  ["Micronesia", "FM", "USD", "$", 0.55, 1],
+  ["Timor-Leste", "TL", "USD", "$", 0.45, 1],
+];
+
+// dedupe synthetic ISO suffixes (BN2/BB2) used only to keep tuple keys unique
+const seen = new Set();
+const data = [];
+for (const [country, code, currency, symbol, pli, fx] of ROWS) {
+  const iso = code.replace(/\d+$/, "");
+  if (seen.has(country)) continue;
+  seen.add(country);
+  data.push({ country, code: iso, currency, symbol, pli, fx });
+}
+
+data.sort((a, b) => a.country.localeCompare(b.country));
+
+const out = resolve(__dirname, "../src/data/ppp-index.json");
+mkdirSync(dirname(out), { recursive: true });
+writeFileSync(
+  out,
+  JSON.stringify(
+    {
+      meta: {
+        note: "Approximate World Bank ICP price-level ratios + rough mid-2024 FX. Static, for the offline Pricing Calculator. Replace with fresh ICP data when available.",
+        usBase: "United States pli=1.00 is the reference. usdEquivalent = baseUSD*pli; localPrice = usdEquivalent*fx.",
+        count: data.length,
+      },
+      countries: data,
+    },
+    null,
+    2,
+  ) + "\n",
+);
+console.log(`Wrote ${data.length} countries → ${out}`);
