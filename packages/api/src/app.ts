@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { SUPPORTED_COUNTRIES } from "./mock/fixtures.js";
 import { appsRouter } from "./routes/apps.js";
+import { chartsRouter } from "./routes/charts.js";
 import { keywordsRouter } from "./routes/keywords.js";
 import { reviewsRouter } from "./routes/reviews.js";
 
@@ -18,6 +19,7 @@ export function createApp() {
 
   const v1 = new Hono();
   v1.route("/apps", appsRouter);
+  v1.route("/charts", chartsRouter);
   v1.route("/keywords", keywordsRouter);
   v1.route("/reviews", reviewsRouter);
   app.route("/api/v1", v1);
