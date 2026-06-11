@@ -2,8 +2,11 @@ import type {
   AppDetail,
   AppListItem,
   AppSearchParams,
+  ChartType,
   PaginatedResponse,
   Review,
+  Store,
+  TopChartsResult,
 } from "@kittie/types";
 
 const BASE = "/api/v1";
@@ -38,6 +41,23 @@ export async function getApp(id: string, signal?: AbortSignal): Promise<AppDetai
   const res = await fetch(`${BASE}/apps/${encodeURIComponent(id)}`, { signal });
   if (!res.ok) throw new Error(`Failed to load app (${res.status})`);
   const body = (await res.json()) as { data: AppDetail };
+  return body.data;
+}
+
+/** Trending "Store Rankings" — real top charts with day-over-day rank deltas. */
+export async function listCharts(
+  params: { store: Store; type: ChartType; country?: string; category?: string; limit?: number },
+  signal?: AbortSignal,
+): Promise<TopChartsResult> {
+  const q = new URLSearchParams();
+  q.set("store", params.store);
+  q.set("type", params.type);
+  if (params.country) q.set("country", params.country);
+  if (params.category) q.set("category", params.category);
+  if (params.limit) q.set("limit", String(params.limit));
+  const res = await fetch(`${BASE}/charts?${q.toString()}`, { signal });
+  if (!res.ok) throw new Error(`Failed to load charts (${res.status})`);
+  const body = (await res.json()) as { data: TopChartsResult };
   return body.data;
 }
 

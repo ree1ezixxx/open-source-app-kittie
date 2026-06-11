@@ -3,6 +3,47 @@ export type Store = "apple" | "google";
 
 export type GrowthPeriod = "7d" | "14d" | "30d" | "60d" | "90d";
 
+/**
+ * Canonical store-chart type. The raw `chart_category` column has drifted
+ * across ingest versions (`top-free` vs `topfreeapplications`, etc.); callers
+ * always work in these normalized values — see `normalizeChartType`.
+ */
+export type ChartType = "free" | "paid" | "grossing";
+
+/** One ranked app in a store chart, with its day-over-day movement. */
+export interface ChartEntry {
+  /** 1-based position on the resolved chart date (ascending = better). */
+  rank: number;
+  /** priorRank − rank (positive = climbed); null when there is no prior day. */
+  rankDelta: number | null;
+  app: {
+    id: string;
+    store: Store;
+    storeAppId: string;
+    title: string;
+    developer: string;
+    iconUrl: string | null;
+    category: string | null;
+  };
+  rating: number | null;
+  reviewCount: number;
+  /** Snapshot estimates on the chart date (for the Downloads / MRR columns). */
+  downloadsEstimate: number | null;
+  revenueEstimate: number | null;
+}
+
+/** A resolved store-ranking chart — what `GET /api/v1/charts` returns. */
+export interface TopChartsResult {
+  store: Store;
+  country: string;
+  type: ChartType;
+  /** Genre filter applied, or null for the overall chart. */
+  category: string | null;
+  /** Chart date the entries are from (`YYYY-MM-DD`), or null when no data. */
+  date: string | null;
+  entries: ChartEntry[];
+}
+
 export type AppSortField =
   | "growth"
   | "rating"

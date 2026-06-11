@@ -1,17 +1,15 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import type { Store, AppSearchParams, AppListItem } from "@kittie/types";
+import type { ChartType, Store, TopChartsResult } from "@kittie/types";
 import { AppIcon } from "../components/AppIcon";
 import { PageShell } from "../components/PageShell";
 import { Segmented } from "../components/Segmented";
 import { EmptyState } from "../components/EmptyState";
-import { useApps } from "../hooks/useApps";
+import { listCharts } from "../lib/api";
 import { categoryColor, pillStyle } from "../lib/palette";
-import { formatCompact, formatMoney } from "../lib/format";
+import { formatCompact } from "../lib/format";
 import { IconTrending, IconChart } from "../icons";
 import type { Theme } from "../lib/theme";
-
-type ChartType = "free" | "paid" | "grossing";
 
 const CATEGORIES = [
   "All categories", "Business", "Education", "Entertainment", "Finance", "Food & Drink",
@@ -20,36 +18,38 @@ const CATEGORIES = [
   "Utilities", "Weather",
 ];
 
-function paramsFor(chart: ChartType, store: Store, category: string): AppSearchParams {
-  const base: AppSearchParams = {
-    source: store,
-    sortOrder: "desc",
-    categories: category === "All categories" ? undefined : category,
-  };
-  if (chart === "free") return { ...base, priceType: "free", sortBy: "downloads" };
-  if (chart === "paid") return { ...base, priceType: "paid", sortBy: "revenue" };
-  return { ...base, priceType: "all", sortBy: "revenue" };
-}
-
 export function TrendingPage({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => void }) {
   const nav = useNavigate();
   const [chart, setChart] = useState<ChartType>("free");
   const [store, setStore] = useState<Store>("apple");
   const [category, setCategory] = useState("All categories");
-  const { apps, loading } = useApps(paramsFor(chart, store, category));
+  const [result, setResult] = useState<TopChartsResult | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  // 24h movement: where each app ranked within this same set one snapshot ago,
-  // using estimates recomputed from prior-snapshot signals.
-  const prevRank = useMemo(() => {
-    const priorMetric = (a: AppListItem) =>
-      chart === "free" ? a.downloadsEstimatePrior : a.revenueEstimatePrior;
-    const ranked = new Map<string, number>();
-    apps
-      .filter((a) => priorMetric(a) != null)
-      .sort((x, y) => (priorMetric(y) ?? 0) - (priorMetric(x) ?? 0))
-      .forEach((a, idx) => ranked.set(a.id, idx + 1));
-    return ranked;
-  }, [apps, chart]);
+  useEffect(() => {
+    const ac = new AbortController();
+    setLoading(true);
+    listCharts(
+      {
+        store,
+        type: chart,
+        category: category === "All categories" ? undefined : category,
+        limit: 100,
+      },
+      ac.signal,
+    )
+      .then((r) => setResult(r))
+      .catch((e) => {
+        if (e?.name !== "AbortError") setResult(null);
+      })
+      .finally(() => setLoading(false));
+    return () => ac.abort();
+  }, [chart, store, category]);
+
+  const entries = result?.entries ?? [];
+  const updated = result?.date
+    ? new Date(result.date).toLocaleDateString(undefined, { month: "short", day: "numeric" })
+    : null;
 
   const toolbar = (
     <div className="toolbar">
@@ -76,6 +76,7 @@ export function TrendingPage({ theme, onToggleTheme }: { theme: Theme; onToggleT
         </select>
       </div>
       <span className="pill" style={pillStyle("#9a9aa3")}>🇺🇸 United States</span>
+      {updated && <span className="pill" style={pillStyle("#9a9aa3")}>Updated {updated}</span>}
     </div>
   );
 
@@ -92,8 +93,16 @@ export function TrendingPage({ theme, onToggleTheme }: { theme: Theme; onToggleT
       <div className="table-scroll">
         {loading ? (
           <EmptyState icon={<IconChart />} title="Loading rankings…" />
-        ) : !apps.length ? (
-          <EmptyState icon={<IconChart />} title="No apps in this chart" sub="Try another category or store." />
+        ) : !entries.length ? (
+          <EmptyState
+            icon={<IconChart />}
+            title="No ranking data"
+            sub={
+              store === "google"
+                ? "Google Play chart data isn't ingested yet."
+                : "No clean chart for this store / category yet."
+            }
+          />
         ) : (
           <table className="apps">
             <thead>
@@ -101,48 +110,44 @@ export function TrendingPage({ theme, onToggleTheme }: { theme: Theme; onToggleT
                 <th className="num" style={{ width: 56 }}>Rank</th>
                 <th className="num" style={{ width: 64 }}>24h</th>
                 <th className="col-app">App</th>
-                <th className="num">Downloads</th>
-                <th className="num">MRR</th>
+                <th className="num">Rating</th>
+                <th className="num">Reviews</th>
               </tr>
             </thead>
             <tbody>
-              {apps.map((a, i) => {
-                const prev = prevRank.get(a.id);
-                const move = prev != null ? prev - (i + 1) : null;
-                return (
-                <tr key={a.id} onClick={() => nav(`/apps/${a.id}`)}>
-                  <td className="num num-strong">{i + 1}</td>
+              {entries.map((e) => (
+                <tr key={e.app.id} onClick={() => nav(`/apps/${e.app.id}`)}>
+                  <td className="num num-strong">{e.rank}</td>
                   <td className="num">
-                    {move == null ? (
+                    {e.rankDelta == null ? (
                       <span className="num-muted">—</span>
-                    ) : move === 0 ? (
+                    ) : e.rankDelta === 0 ? (
                       <span className="num-muted">0</span>
                     ) : (
-                      <span className={`delta ${move > 0 ? "up" : "down"}`}>
-                        {move > 0 ? "▲" : "▼"}{Math.abs(move)}
+                      <span className={`delta ${e.rankDelta > 0 ? "up" : "down"}`}>
+                        {e.rankDelta > 0 ? "▲" : "▼"}{Math.abs(e.rankDelta)}
                       </span>
                     )}
                   </td>
                   <td className="col-app">
                     <div className="app-cell">
-                      <AppIcon url={a.iconUrl} title={a.title} />
+                      <AppIcon url={e.app.iconUrl} title={e.app.title} />
                       <div className="app-meta">
-                        <div className="app-title" title={a.title}>{a.title}</div>
-                        {a.category && (
+                        <div className="app-title" title={e.app.title}>{e.app.title}</div>
+                        {e.app.category && (
                           <div className="app-dev">
-                            <span className="pill" style={{ ...pillStyle(categoryColor(a.category)), padding: "1px 7px", fontSize: 10.5 }}>
-                              {a.category}
+                            <span className="pill" style={{ ...pillStyle(categoryColor(e.app.category)), padding: "1px 7px", fontSize: 10.5 }}>
+                              {e.app.category}
                             </span>
                           </div>
                         )}
                       </div>
                     </div>
                   </td>
-                  <td className="num num-strong">{formatCompact(a.downloadsEstimate30d)}</td>
-                  <td className="num num-strong">{formatMoney(a.revenueEstimate30d)}</td>
+                  <td className="num num-strong">{e.rating != null ? e.rating.toFixed(2) : "—"}</td>
+                  <td className="num num-strong">{formatCompact(e.reviewCount)}</td>
                 </tr>
-                );
-              })}
+              ))}
             </tbody>
           </table>
         )}
