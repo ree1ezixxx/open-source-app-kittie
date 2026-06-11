@@ -4,7 +4,9 @@ import { z } from "zod";
 
 const envSchema = z.object({
   DATABASE_URL: z.string().default("file:./data/kittie.db"),
-  PORT: z.coerce.number().default(3000),
+  // Default matches the web dev proxy (apps/web/vite.config.ts -> :3009) so a
+  // fresh `pnpm dev:api` + `pnpm dev:web` works with no env fiddling.
+  PORT: z.coerce.number().default(3009),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   META_ACCESS_TOKEN: z.string().optional(),
   GEMINI_API_KEY: z.string().optional(),

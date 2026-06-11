@@ -10,6 +10,7 @@ import { MetricBar } from "../components/MetricBar";
 import { DetailCard, EmptyCard, Fact } from "../components/DetailCard";
 import { TrendPanel, type ChartMetric } from "../components/TrendPanel";
 import { SimilarApps } from "../components/SimilarApps";
+import { CloneToIosCard } from "../components/detail/CloneToIosCard";
 import { FavoriteToggle } from "../components/FavoriteToggle";
 import { Lightbox } from "../components/Lightbox";
 import {
@@ -359,6 +360,9 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
                 </div>
               )}
             </DetailCard>
+
+            {/* clone-to-iOS engine */}
+            <CloneToIosCard appId={app.id} />
 
             {/* similar apps */}
             <DetailCard title="Similar apps">

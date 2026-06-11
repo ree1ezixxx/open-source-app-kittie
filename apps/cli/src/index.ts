@@ -1,6 +1,8 @@
 #!/usr/bin/env node
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import type { AppListItem } from "@kittie/types";
-import { getAppDetail, searchApps } from "./client.js";
+import { cloneIos, getAppDetail, searchApps } from "./client.js";
 
 function formatMoney(n: number | null): string {
   if (n == null) return "—";
@@ -50,6 +52,31 @@ async function cmdDetail(id: string) {
   if (app.creators.length) console.log(`Creators: ${app.creators.map((c) => c.handle).join(", ")}`);
 }
 
+async function cmdCloneIos(args: string[]) {
+  const appId = args[0];
+  if (!appId) {
+    console.error("App id required:  pluto clone-ios <appId> [--out <dir>]");
+    process.exit(1);
+  }
+  const outFlag = args.indexOf("--out");
+  const result = await cloneIos(appId);
+  const outDir = resolve(outFlag >= 0 && args[outFlag + 1] ? args[outFlag + 1]! : `./${result.projectName}`);
+  for (const f of result.files) {
+    const p = join(outDir, f.path);
+    mkdirSync(dirname(p), { recursive: true });
+    writeFileSync(p, f.contents);
+  }
+  console.log(`\n🐱  Cloned "${result.sourceTitle}"  →  ${result.blueprint.appName}`);
+  console.log(`    ${result.blueprint.tagline}`);
+  console.log(`    accent ${result.blueprint.accentHex} · ${result.blueprint.primaryEntity} · ${result.aiGenerated ? "AI-designed" : "template"}${result.cached ? " (cached)" : ""}`);
+  console.log(`    screens: ${result.blueprint.tabs.map((t) => `${t.title}(${t.kind})`).join(", ")}`);
+  console.log(`\n    Wrote ${result.files.length} files to ${outDir}\n`);
+  console.log("    Build it:");
+  console.log(`      cd ${outDir}`);
+  for (const cmd of result.buildCommands) console.log(`      ${cmd}`);
+  console.log();
+}
+
 function printHeader() {
   console.log(
     ["Title".padEnd(22), "Store".padEnd(6), "Reviews".padStart(6), "Growth".padStart(6), "Revenue".padStart(8)].join(
@@ -61,9 +88,10 @@ function printHeader() {
 
 function usage() {
   console.log(`Usage:
-  pluto search [query]   Search apps
-  pluto trends           Top growth movers
-  pluto detail <id>      App detail`);
+  pluto search [query]          Search apps
+  pluto trends                  Top growth movers
+  pluto detail <id>             App detail
+  pluto clone-ios <id> [--out d]  Generate a buildable SwiftUI clone of a trending app`);
 }
 
 async function main() {
@@ -83,6 +111,9 @@ async function main() {
           process.exit(1);
         }
         await cmdDetail(args[0]);
+        break;
+      case "clone-ios":
+        await cmdCloneIos(args);
         break;
       default:
         usage();
