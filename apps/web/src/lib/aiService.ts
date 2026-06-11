@@ -81,7 +81,9 @@ export interface AiService {
 
 /* ============================================================ Integration flags */
 
-export const AI_SERVICE_MODE: "mock" | "live" = "mock";
+// LIVE: screenshot copy calls /api/v1/ai/art-direction (Gemini) with a
+// deterministic fallback; Hot Ideas read the batch-generated /api/v1/ideas.
+export const AI_SERVICE_MODE: "mock" | "live" = "live";
 
 export const AI_INTEGRATION_POINTS = [
   {
