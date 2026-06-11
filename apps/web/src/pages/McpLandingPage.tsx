@@ -20,6 +20,7 @@ const TOOLS = [
   { name: "batch_keyword_difficulty", desc: "Score many keywords in one call for opportunity ranking." },
   { name: "get_app_reviews", desc: "Latest review text for an app by country — ratings, titles, dates." },
   { name: "get_supported_countries", desc: "Countries the store data, charts and rankings cover." },
+  { name: "clone_ios_app", desc: "Generate a complete, buildable SwiftUI iOS app that clones a trending app's core UX — blueprint + every source file." },
 ];
 
 const SKILLS: { icon: typeof IconGrid; title: string; desc: string }[] = [
@@ -98,7 +99,7 @@ export function McpLandingPage({ theme, onToggleTheme }: { theme: Theme; onToggl
           {/* tools */}
           <section className="mcp-section">
             <div className="mcp-section-head">
-              <h2 className="mcp-h2">6 tools</h2>
+              <h2 className="mcp-h2">7 tools</h2>
               <p className="mcp-section-sub">Everything the agent can call, exposed over HTTP.</p>
             </div>
             <div className="mcp-tool-grid">
