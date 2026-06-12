@@ -20,6 +20,7 @@ import { z } from "zod";
 
 import { getDb } from "../lib/db.js";
 import { generateJson, isGeminiConfigured } from "../lib/gemini.js";
+import { generateJsonOllama, isOllamaAvailable, OLLAMA_MODEL } from "../lib/ollama.js";
 
 /* ============================================================
    App Builder (Rork-style) endpoints.
@@ -37,12 +38,22 @@ import { generateJson, isGeminiConfigured } from "../lib/gemini.js";
 
 export const builderRouter = new Hono();
 
-const gen = isGeminiConfigured()
-  ? (prompt: string, schema: Record<string, unknown>) =>
-      generateJson<unknown>(prompt, { responseSchema: schema, priority: "user" })
-  : undefined;
+/* Engine resolution per request: local Ollama first, then Gemini, then the
+   deterministic heuristic. Resolved lazily so Ollama coming up/down mid-
+   session is picked up (the probe is cached ~30s). */
+type EngineKind = "ollama" | "gemini" | "heuristic";
+type Gen = (prompt: string, schema: Record<string, unknown>) => Promise<unknown>;
 
-const engine = (): "gemini" | "heuristic" => (isGeminiConfigured() ? "gemini" : "heuristic");
+async function resolveEngine(): Promise<{ kind: EngineKind; gen?: Gen }> {
+  if (await isOllamaAvailable()) return { kind: "ollama", gen: generateJsonOllama };
+  if (isGeminiConfigured()) {
+    return {
+      kind: "gemini",
+      gen: (prompt, schema) => generateJson<unknown>(prompt, { responseSchema: schema, priority: "user" }),
+    };
+  }
+  return { kind: "heuristic" };
+}
 
 function projectPayload(project: { id: string; name: string; prompt: string; blueprintJson: string; engine: string; createdAt: Date; updatedAt: Date }) {
   const blueprint = JSON.parse(project.blueprintJson) as AppBlueprint;
@@ -68,13 +79,14 @@ builderRouter.post("/projects", async (c) => {
   if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
   const { prompt } = parsed.data;
 
+  const { kind, gen } = await resolveEngine();
   const blueprint = await buildBlueprintFromPrompt(prompt, gen);
   const db = getDb();
   const project = await createBuilderProject(db, {
     name: blueprint.appName,
     prompt,
     blueprintJson: JSON.stringify(blueprint),
-    engine: engine(),
+    engine: kind,
   });
   await addBuilderMessage(db, { projectId: project.id, role: "user", content: prompt });
   await addBuilderMessage(db, {
@@ -114,7 +126,8 @@ builderRouter.get("/projects/:id", async (c) => {
         content: m.content,
         createdAt: m.createdAt,
       })),
-      aiConfigured: isGeminiConfigured(),
+      aiConfigured: (await isOllamaAvailable()) || isGeminiConfigured(),
+      aiEngine: (await isOllamaAvailable()) ? `ollama:${OLLAMA_MODEL}` : isGeminiConfigured() ? "gemini" : "heuristic",
     },
   });
 });
@@ -139,6 +152,7 @@ builderRouter.post("/projects/:id/messages", async (c) => {
   const { content } = parsed.data;
 
   const current = JSON.parse(project.blueprintJson) as AppBlueprint;
+  const { kind, gen } = await resolveEngine();
   const revised = gen
     ? await reviseBlueprint(current, content, gen)
     : heuristicRevise(current, content);
@@ -151,14 +165,14 @@ builderRouter.post("/projects/:id/messages", async (c) => {
     await updateBuilderProjectBlueprint(db, project.id, {
       name: revised.appName,
       blueprintJson: JSON.stringify(revised),
-      engine: engine(),
+      engine: kind,
     });
     reply = assistantSummary(revised, current);
   } else {
     // Honest no-op: never pretend a change landed.
     reply = gen
       ? "I couldn't map that instruction to a change in the app. Try being more specific — e.g. \"add a stats tab\", \"make the accent #FF375F\", or \"rename it to Pulse\"."
-      : "Offline mode handles: add/remove a tab, rename the app, and accent color changes (named or #RRGGBB). For free-form changes, configure GEMINI_API_KEY.";
+      : "Offline mode handles: add/remove a tab, rename the app, and accent color changes (named or #RRGGBB). For free-form changes, start Ollama (or configure GEMINI_API_KEY).";
   }
   const assistant = await addBuilderMessage(db, {
     projectId: project.id,

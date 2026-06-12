@@ -350,8 +350,8 @@ export const builderProjects = sqliteTable(
     prompt: text("prompt").notNull(),
     /** Current AppBlueprint as JSON — files are regenerated, never stored. */
     blueprintJson: text("blueprint_json").notNull(),
-    /** 'gemini' when the model produced the blueprint, 'heuristic' offline. */
-    engine: text("engine", { enum: ["gemini", "heuristic"] }).notNull(),
+    /** Which engine produced the current blueprint. */
+    engine: text("engine", { enum: ["ollama", "gemini", "heuristic"] }).notNull(),
     createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
   },

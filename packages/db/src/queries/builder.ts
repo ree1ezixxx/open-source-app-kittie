@@ -14,7 +14,7 @@ import {
 
 export async function createBuilderProject(
   db: Db,
-  input: { name: string; prompt: string; blueprintJson: string; engine: "gemini" | "heuristic" },
+  input: { name: string; prompt: string; blueprintJson: string; engine: "ollama" | "gemini" | "heuristic" },
 ): Promise<BuilderProject> {
   const now = new Date();
   const row = {
@@ -42,7 +42,7 @@ export async function getBuilderProject(db: Db, id: string): Promise<BuilderProj
 export async function updateBuilderProjectBlueprint(
   db: Db,
   id: string,
-  input: { name: string; blueprintJson: string; engine: "gemini" | "heuristic" },
+  input: { name: string; blueprintJson: string; engine: "ollama" | "gemini" | "heuristic" },
 ): Promise<void> {
   await db
     .update(builderProjects)
