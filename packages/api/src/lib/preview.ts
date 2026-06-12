@@ -66,6 +66,9 @@ export interface PreviewView {
 }
 
 const sessions = new Map<string, PreviewSession>();
+// Per-project lock: prevents concurrent startPreview calls from creating
+// duplicate sessions and leaking ports. Second caller awaits the first.
+const startingLocks = new Map<string, Promise<PreviewSession>>();
 
 /* ---- helpers ----------------------------------------------------------- */
 
@@ -234,7 +237,15 @@ export function stopPreview(projectId: string): PreviewSession | null {
  * immediately in 'installing'/'starting' state; the install + boot + ready
  * healthcheck run async and mutate the session in place. Poll getPreview().
  */
-export async function startPreview(projectId: string): Promise<PreviewSession> {
+export function startPreview(projectId: string): Promise<PreviewSession> {
+  const inflight = startingLocks.get(projectId);
+  if (inflight) return inflight;
+  const p = _startPreviewImpl(projectId).finally(() => startingLocks.delete(projectId));
+  startingLocks.set(projectId, p);
+  return p;
+}
+
+async function _startPreviewImpl(projectId: string): Promise<PreviewSession> {
   const prior = sessions.get(projectId);
   if (prior) {
     // Idempotent revalidating start: if a session claims to be ready, trust it

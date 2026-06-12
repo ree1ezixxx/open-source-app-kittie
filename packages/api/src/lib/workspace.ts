@@ -186,6 +186,37 @@ export async function syncWorkspace(
   return { written, deleted, skipped };
 }
 
+/**
+ * Best-effort copy of a source project's current/ tree (INCLUDING node_modules)
+ * into a destination project's current/, so a cloned project's first Run is
+ * instant rather than triggering a fresh npm install. Uses `cp -R` for speed.
+ * Never throws — a failed copy just means the clone installs deps on first Run.
+ */
+export async function cloneWorkspaceFull(sourceId: string, destId: string): Promise<boolean> {
+  try {
+    const root = await workspaceRoot();
+    const srcCurrent = path.join(root, sourceId, "current");
+    // Verify both paths stay under workspaceRoot (same guard used in syncWorkspace).
+    const srcResolved = path.resolve(srcCurrent);
+    const destResolved = path.resolve(path.join(root, destId, "current"));
+    const rootPrefix = root.endsWith(path.sep) ? root : root + path.sep;
+    if (!srcResolved.startsWith(rootPrefix) || !destResolved.startsWith(rootPrefix)) return false;
+    if (!(await exists(srcCurrent))) return false;
+    const destCurrent = destResolved;
+    await fs.mkdir(path.dirname(destCurrent), { recursive: true });
+    const { spawn } = await import("node:child_process");
+    await new Promise<void>((resolve, reject) => {
+      // cp -R <src>/. <dest> copies the directory CONTENTS (incl. node_modules).
+      const child = spawn("cp", ["-R", `${srcCurrent}/.`, destCurrent], { stdio: "ignore" });
+      child.on("error", reject);
+      child.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`cp exited ${code}`))));
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Relative paths in <project>/current/ (excluding build artifacts). */
 export async function readWorkspaceTree(projectId: string): Promise<string[]> {
   const current = path.join(await projectDir(projectId), "current");

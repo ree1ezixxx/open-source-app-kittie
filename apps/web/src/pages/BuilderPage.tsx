@@ -325,10 +325,12 @@ function useLivePreview(projectId: string) {
   const refreshAfterRevise = useCallback(() => {
     setUpdating(true);
     let tries = 0;
+    let cancelled = false;
     const tick = () => {
       fetch(`/api/v1/builder/projects/${projectId}/preview/status`)
         .then((r) => r.json())
         .then((r) => {
+          if (cancelled) return;
           const v: PreviewView | null = r.data ?? null;
           if (v) setSession(v);
           if ((v?.status === "ready" && v.url) || tries >= 6) {
@@ -340,11 +342,13 @@ function useLivePreview(projectId: string) {
           }
         })
         .catch(() => {
+          if (cancelled) return;
           setReloadKey((k) => k + 1);
           setUpdating(false);
         });
     };
     tick();
+    return () => { cancelled = true; };
   }, [projectId]);
 
   return { session, busy, updating, reloadKey, start, stop, reload, refreshAfterRevise };
@@ -388,6 +392,7 @@ function BuilderWorkspace({
   const [liveRunId, setLiveRunId] = useState<string | null>(null);
   const [codeTab, setCodeTab] = useState<"files" | "logs">("files");
   const [previewEpoch, setPreviewEpoch] = useState(0);
+  const [cloning, setCloning] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const base = useBuilderBase();
@@ -507,6 +512,24 @@ function BuilderWorkspace({
               </button>
             ))}
           </div>
+          <button
+            className="builder-clone-btn"
+            title="Duplicate this project (copies the app + full chat history)"
+            disabled={cloning}
+            onClick={() => {
+              if (cloning) return;
+              setCloning(true);
+              fetch(`/api/v1/builder/projects/${projectId}/clone`, { method: "POST" })
+                .then((r) => r.json())
+                .then((j) => {
+                  if (j.data?.id) navigate(`${base}/${j.data.id}`);
+                  else setCloning(false);
+                })
+                .catch(() => setCloning(false));
+            }}
+          >
+            {cloning ? "Cloning…" : "⎘ Clone"}
+          </button>
           {project.aiConfigured === false && <span className="builder-offline-pill">offline engine</span>}
         </div>
       }
@@ -804,7 +827,11 @@ function useRunEvents(
       onEnded?.();
       es.close();
     });
-    es.onerror = () => es.close();
+    es.onerror = () => {
+      setFailed("connection lost — reload to retry");
+      setEnded(true);
+      es.close();
+    };
     return () => es.close();
     // onEnded intentionally excluded: stable via useCallback, re-subscribing on
     // identity churn would drop the stream.
