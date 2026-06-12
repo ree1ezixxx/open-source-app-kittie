@@ -3,6 +3,7 @@ export {
   countAppsInCategory,
   getLatestSnapshot,
   getSnapshotContext,
+  getTopRankedApps,
   listHistoricals,
   listSnapshotContexts,
   parseJsonArray,

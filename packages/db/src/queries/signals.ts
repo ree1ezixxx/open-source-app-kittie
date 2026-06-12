@@ -156,3 +156,31 @@ export async function listHistoricals(db: Db, appId: string): Promise<AppSnapsho
     .where(eq(appSnapshots.appId, appId))
     .orderBy(appSnapshots.snapshotDate);
 }
+
+/** Top-ranked apps for a given store, ordered by chart rank (for keyword difficulty scoring). */
+export async function getTopRankedApps(
+  db: Db,
+  store: "apple" | "google",
+  limit = 10,
+): Promise<Array<{ title: string; iconUrl: string | null; reviewCount: number; rating: number | null; rank: number }>> {
+  const rows = await db
+    .select({
+      title: apps.title,
+      iconUrl: apps.iconUrl,
+      reviewCount: appSnapshots.reviewCount,
+      rating: appSnapshots.rating,
+      chartRank: appSnapshots.chartRank,
+    })
+    .from(apps)
+    .innerJoin(appSnapshots, eq(apps.id, appSnapshots.appId))
+    .where(eq(apps.store, store))
+    .orderBy(appSnapshots.chartRank);
+
+  return rows.slice(0, limit).map((r, i) => ({
+    title: r.title,
+    iconUrl: r.iconUrl,
+    reviewCount: r.reviewCount ?? 0,
+    rating: r.rating ?? 0,
+    rank: i + 1,
+  }));
+}
