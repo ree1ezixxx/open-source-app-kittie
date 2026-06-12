@@ -22,6 +22,7 @@ import { z } from "zod";
 import { getDb } from "../lib/db.js";
 import { generateJson, isGeminiConfigured } from "../lib/gemini.js";
 import { generateJsonOllama, isOllamaAvailable, OLLAMA_MODEL } from "../lib/ollama.js";
+import { getPreview, startPreview, stopPreview, toView } from "../lib/preview.js";
 import { pruneRuns, readWorkspaceTree, syncWorkspace, workspaceRoot } from "../lib/workspace.js";
 
 /* ============================================================
@@ -307,6 +308,40 @@ function assistantSummary(b: AppBlueprint, prev: AppBlueprint | null): string {
   if (!changes.length) changes.push("updated the app");
   return `Done — ${changes.join(", ")}. The preview and code are updated.`;
 }
+
+/* ---- live web preview --------------------------------------------------
+   The generated Expo app runs as a web dev server (expo start --web) so it
+   can be iframed into the phone simulator. Start is async: it returns the
+   session immediately (status installing/starting) and the UI polls status. */
+
+builderRouter.post("/projects/:id/preview/start", async (c) => {
+  const project = await getBuilderProject(getDb(), c.req.param("id"));
+  if (!project) return c.json({ error: "Project not found" }, 404);
+  try {
+    const session = await startPreview(project.id);
+    return c.json({ data: toView(session) }, 202);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = message === "workspace not synced" ? 409 : 500;
+    return c.json({ error: message }, status);
+  }
+});
+
+builderRouter.post("/projects/:id/preview/stop", async (c) => {
+  const project = await getBuilderProject(getDb(), c.req.param("id"));
+  if (!project) return c.json({ error: "Project not found" }, 404);
+  const session = stopPreview(project.id);
+  if (!session) return c.json({ error: "No preview running" }, 404);
+  return c.json({ data: toView(session) });
+});
+
+builderRouter.get("/projects/:id/preview/status", async (c) => {
+  const project = await getBuilderProject(getDb(), c.req.param("id"));
+  if (!project) return c.json({ error: "Project not found" }, 404);
+  const session = getPreview(project.id);
+  if (!session) return c.json({ data: null });
+  return c.json({ data: toView(session) });
+});
 
 /* Real project export: a zip of the regenerated files.
    ?target=xcode -> native SwiftUI Xcode project; default -> Expo. */

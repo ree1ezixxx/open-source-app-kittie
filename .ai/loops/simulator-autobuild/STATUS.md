@@ -6,16 +6,16 @@ feat/simulator-first-builder
 
 ## Current phase
 
-Milestone 6 — Expo preview path (milestone 5 ✅ complete)
+Milestone 6 — Expo preview path (process manager ✅; UI iframe next)
 
 ## Last completed iteration
 
-1
+2
 
 ## Current objective
 
-Preview process manager: spawn `expo start --web` per project from its
-workspace, port registry, healthcheck, start/stop/status routes.
+Run button + live preview iframe inside the PhonePreview frame, with
+installing/starting/failed overlays and mockup fallback.
 
 ## What works
 
