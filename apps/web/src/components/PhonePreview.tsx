@@ -473,16 +473,106 @@ function DetailScreen({
   );
 }
 
+/* ---- live preview overlay -------------------------------------------------- */
+
+export interface LivePreview {
+  status: "idle" | "installing" | "starting" | "ready" | "failed" | "stopped";
+  url?: string;
+  error?: string;
+  logTail?: string[];
+  /** bump to force the iframe to re-fetch its src */
+  reloadKey?: number;
+  onRetry: () => void;
+}
+
+const LIVE_LABELS: Record<string, string> = {
+  installing: "Installing dependencies…",
+  starting: "Starting simulator…",
+  idle: "Ready to launch",
+};
+
+function LiveOverlay({ live, accent }: { live: LivePreview; accent: string }) {
+  const { status } = live;
+
+  if (status === "ready" && live.url) {
+    return (
+      <iframe
+        key={live.reloadKey ?? 0}
+        className="ip-live-frame"
+        src={live.url}
+        title="Live preview"
+        sandbox="allow-scripts allow-same-origin allow-forms"
+      />
+    );
+  }
+
+  if (status === "failed") {
+    return (
+      <div className="ip-live-state failed">
+        <div className="ip-live-cross">!</div>
+        <div className="ip-live-title">Preview failed to start</div>
+        {live.error && <div className="ip-live-error">{live.error}</div>}
+        <button className="ip-live-retry" style={{ background: accent }} onClick={live.onRetry}>
+          Retry
+        </button>
+        {live.logTail && live.logTail.length > 0 && <LiveLogs lines={live.logTail.slice(-20)} collapsible />}
+      </div>
+    );
+  }
+
+  if (status === "stopped") {
+    return (
+      <div className="ip-live-state">
+        <div className="ip-live-title dim">Preview stopped</div>
+        <button className="ip-live-retry" style={{ background: accent }} onClick={live.onRetry}>
+          Run again
+        </button>
+      </div>
+    );
+  }
+
+  // installing / starting / idle — booting spinner with rolling logs
+  return (
+    <div className="ip-live-state">
+      <span className="ip-live-spinner" style={{ borderTopColor: accent }} />
+      <div className="ip-live-title">{LIVE_LABELS[status] ?? "Starting…"}</div>
+      {live.logTail && live.logTail.length > 0 && <LiveLogs lines={live.logTail.slice(-4)} />}
+    </div>
+  );
+}
+
+function LiveLogs({ lines, collapsible }: { lines: string[]; collapsible?: boolean }) {
+  const [open, setOpen] = useState(!collapsible);
+  return (
+    <div className="ip-live-logs-wrap">
+      {collapsible && (
+        <button className="ip-live-logs-toggle" onClick={() => setOpen((o) => !o)}>
+          {open ? "▾" : "▸"} {open ? "Hide" : "Show"} last {lines.length} log lines
+        </button>
+      )}
+      {open && (
+        <pre className="ip-live-logs">
+          {lines.map((l, i) => (
+            <div key={i}>{l}</div>
+          ))}
+        </pre>
+      )}
+    </div>
+  );
+}
+
 /* ---- root ------------------------------------------------------------------ */
 
 export function PhonePreview({
   blueprint: b,
   activeTab,
   onSelectTab,
+  live,
 }: {
   blueprint: Blueprint;
   activeTab: number;
   onSelectTab: (i: number) => void;
+  live?: LivePreview;
 }) {
   const [detail, setDetail] = useState<BlueprintItem | null>(null);
   const tab = b.tabs[Math.min(activeTab, b.tabs.length - 1)];
@@ -491,6 +581,23 @@ export function PhonePreview({
   const today = new Date()
     .toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })
     .toUpperCase();
+
+  // Live mode: keep the frame + status bar chrome, swap the screen body for the
+  // iframe / boot overlays. Mockup mode falls through to the blueprint render.
+  if (live) {
+    const isReady = live.status === "ready" && live.url;
+    return (
+      <div className="ip-frame">
+        <div className="ip-island" />
+        <div className="ip-screen" style={{ background: isReady ? "#000" : `radial-gradient(120% 50% at 50% -8%, ${alpha(accent, 0.16)}, transparent 60%), #000` }}>
+          {!isReady && <StatusBar />}
+          <div className={`ip-live-body${isReady ? " ready" : ""}`}>
+            <LiveOverlay live={live} accent={accent} />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="ip-frame">

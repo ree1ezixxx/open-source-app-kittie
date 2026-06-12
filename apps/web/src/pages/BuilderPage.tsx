@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { PageShell } from "../components/PageShell";
-import { PhonePreview } from "../components/PhonePreview";
+import { PhonePreview, type LivePreview } from "../components/PhonePreview";
 import { IconSparkles } from "../icons";
 import type { Theme } from "../lib/theme";
 import "../styles/builder.css";
@@ -69,6 +69,19 @@ interface ProjectDetail extends ProjectSummary {
   aiEngine?: string;
   swiftProjectName?: string;
   swiftFiles?: GeneratedFile[];
+}
+
+type PreviewStatus = "installing" | "starting" | "ready" | "failed" | "stopped";
+interface PreviewView {
+  projectId: string;
+  port: number;
+  pid: number;
+  status: PreviewStatus;
+  url: string;
+  startedAt: number;
+  lastHealthAt: number;
+  error?: string;
+  logTail: string[];
 }
 
 /** Route prefix this Builder instance lives under (dashboard vs /studio). */
@@ -201,6 +214,101 @@ function BuilderLanding({ theme, onToggleTheme }: { theme: Theme; onToggleTheme:
   );
 }
 
+/* ---- live preview session hook ------------------------------------------ */
+
+/** Drives the server-side Expo preview process: start/stop/poll/reload.
+ *  Session lives on the server, so on mount we re-fetch status (survives view
+ *  switches) and only poll while a start is in flight (non-terminal status). */
+function useLivePreview(projectId: string) {
+  const [session, setSession] = useState<PreviewView | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
+
+  const isTerminal = (s?: PreviewStatus) => s === "ready" || s === "failed" || s === "stopped";
+
+  const startPolling = useCallback(() => {
+    stopPolling();
+    pollRef.current = setInterval(() => {
+      fetch(`/api/v1/builder/projects/${projectId}/preview/status`)
+        .then((r) => r.json())
+        .then((r) => {
+          const v: PreviewView | null = r.data ?? null;
+          setSession(v);
+          if (isTerminal(v?.status)) stopPolling();
+        })
+        .catch(() => {});
+    }, 1800);
+  }, [projectId, stopPolling]);
+
+  // Re-fetch existing session on mount / project switch.
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/v1/builder/projects/${projectId}/preview/status`)
+      .then((r) => r.json())
+      .then((r) => {
+        if (cancelled) return;
+        const v: PreviewView | null = r.data ?? null;
+        setSession(v);
+        if (v && !isTerminal(v.status)) startPolling();
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+      stopPolling();
+    };
+  }, [projectId, startPolling, stopPolling]);
+
+  const start = useCallback(async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/v1/builder/projects/${projectId}/preview/start`, { method: "POST" });
+      const json = await res.json();
+      setSession(json.data ?? null);
+      startPolling();
+    } catch {
+      /* polling / next status call will surface errors */
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, projectId, startPolling]);
+
+  const stop = useCallback(async () => {
+    stopPolling();
+    try {
+      await fetch(`/api/v1/builder/projects/${projectId}/preview/stop`, { method: "POST" });
+    } catch {
+      /* ignore */
+    }
+    setSession((s) => (s ? { ...s, status: "stopped" } : { status: "stopped" } as PreviewView));
+  }, [projectId, stopPolling]);
+
+  const reload = useCallback(() => setReloadKey((k) => k + 1), []);
+
+  return { session, busy, reloadKey, start, stop, reload };
+}
+
+/** Map the live-preview hook state onto the PhonePreview `live` prop. */
+function toLivePreview(lp: ReturnType<typeof useLivePreview>): LivePreview {
+  const s = lp.session;
+  return {
+    status: lp.busy && !s ? "starting" : (s?.status ?? "idle"),
+    url: s?.url,
+    error: s?.error,
+    logTail: s?.logTail,
+    reloadKey: lp.reloadKey,
+    onRetry: () => void lp.start(),
+  };
+}
+
 /* ---- workspace ---------------------------------------------------------- */
 
 function BuilderWorkspace({
@@ -217,6 +325,7 @@ function BuilderWorkspace({
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [view, setView] = useState<"preview" | "code" | "export">("preview");
+  const [previewMode, setPreviewMode] = useState<"mockup" | "live">("mockup");
   const [activeTab, setActiveTab] = useState(0);
   const [activeFile, setActiveFile] = useState(0);
   const [codeTarget, setCodeTarget] = useState<"swift" | "expo">("swift");
@@ -225,6 +334,7 @@ function BuilderWorkspace({
   const chatEndRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const base = useBuilderBase();
+  const livePreview = useLivePreview(projectId);
 
   useEffect(() => {
     fetch(`/api/v1/builder/projects/${projectId}`)
@@ -381,25 +491,76 @@ function BuilderWorkspace({
           {view === "preview" && (
             <div className="builder-preview-wrap">
               <div className="builder-preview-bar">
-                <span className="builder-live">
-                  <span className="builder-live-dot" /> Live
-                </span>
-                <div className="builder-preview-actions">
+                <div className="builder-code-targets builder-preview-modes">
                   <button
-                    title="Restart preview"
+                    className={previewMode === "mockup" ? "active" : ""}
+                    onClick={() => setPreviewMode("mockup")}
+                  >
+                    Mockup
+                  </button>
+                  <button
+                    className={previewMode === "live" ? "active" : ""}
                     onClick={() => {
-                      setActiveTab(0);
-                      setPreviewEpoch((e) => e + 1);
+                      setPreviewMode("live");
+                      const s = livePreview.session?.status;
+                      if (!s || s === "stopped" || s === "failed") void livePreview.start();
                     }}
                   >
-                    ⟳
-                  </button>
-                  <button className="builder-run-device" onClick={() => setView("export")}>
-                    Run on your device
+                    Live
                   </button>
                 </div>
+                {previewMode === "mockup" ? (
+                  <div className="builder-preview-actions">
+                    <button
+                      title="Restart preview"
+                      onClick={() => {
+                        setActiveTab(0);
+                        setPreviewEpoch((e) => e + 1);
+                      }}
+                    >
+                      ⟳
+                    </button>
+                    <button className="builder-run-device" onClick={() => setView("export")}>
+                      Run on your device
+                    </button>
+                  </div>
+                ) : livePreview.session && livePreview.session.status !== "stopped" && livePreview.session.status !== "failed" ? (
+                  <span className="builder-live">
+                    <span className="builder-live-dot" /> {livePreview.session.status === "ready" ? "Live" : livePreview.session.status}
+                  </span>
+                ) : (
+                  <button
+                    className="builder-go builder-run-btn"
+                    onClick={() => void livePreview.start()}
+                    disabled={livePreview.busy}
+                  >
+                    {livePreview.busy ? "Starting…" : "▶ Run"}
+                  </button>
+                )}
               </div>
-              <PhonePreview key={previewEpoch} blueprint={b} activeTab={activeTab} onSelectTab={setActiveTab} />
+
+              {previewMode === "mockup" ? (
+                <PhonePreview key={previewEpoch} blueprint={b} activeTab={activeTab} onSelectTab={setActiveTab} />
+              ) : (
+                <>
+                  <PhonePreview
+                    blueprint={b}
+                    activeTab={activeTab}
+                    onSelectTab={setActiveTab}
+                    live={toLivePreview(livePreview)}
+                  />
+                  {livePreview.session?.status === "ready" && livePreview.session.url && (
+                    <div className="builder-live-toolbar">
+                      <button onClick={() => livePreview.reload()}>⟳ Reload</button>
+                      <button onClick={() => void livePreview.stop()}>■ Stop</button>
+                      <a href={livePreview.session.url} target="_blank" rel="noreferrer">
+                        ↗ Open
+                      </a>
+                      <span className="builder-live-url">{livePreview.session.url}</span>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           )}
           {view === "code" && (

@@ -465,3 +465,116 @@
   margin: 6px auto 7px;
   flex-shrink: 0;
 }
+
+/* ---- live preview (real Expo web app inside the frame) ---- */
+.ip-live-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 22px 18px;
+  text-align: center;
+  animation: ip-live-fade 0.25s ease;
+}
+.ip-live-body.ready {
+  padding: 0;
+  align-items: stretch;
+}
+@keyframes ip-live-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.ip-live-frame {
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: #000;
+  display: block;
+}
+.ip-live-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+.ip-live-spinner {
+  width: 26px;
+  height: 26px;
+  border: 2.5px solid rgba(255, 255, 255, 0.14);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: builder-spin 0.8s linear infinite;
+}
+@keyframes builder-spin { to { transform: rotate(360deg); } }
+.ip-live-title {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #fff;
+}
+.ip-live-title.dim { color: rgba(235, 235, 245, 0.55); }
+.ip-live-cross {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: rgba(255, 69, 58, 0.16);
+  color: #ff453a;
+  font-size: 22px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ip-live-state.failed .ip-live-title { color: #ff6b6b; }
+.ip-live-error {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: rgba(235, 235, 245, 0.7);
+  font-family: ui-monospace, "SF Mono", monospace;
+  max-width: 240px;
+  word-break: break-word;
+}
+.ip-live-retry {
+  border: none;
+  border-radius: 999px;
+  padding: 8px 22px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #111;
+  font-family: inherit;
+  cursor: pointer;
+}
+.ip-live-logs-wrap {
+  width: 100%;
+  max-width: 256px;
+}
+.ip-live-logs-toggle {
+  background: none;
+  border: none;
+  color: rgba(235, 235, 245, 0.5);
+  font-size: 10.5px;
+  font-family: ui-monospace, monospace;
+  cursor: pointer;
+  padding: 4px 0;
+}
+.ip-live-logs-toggle:hover { color: rgba(235, 235, 245, 0.8); }
+.ip-live-logs {
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 0.5px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  font-size: 9.5px;
+  line-height: 1.5;
+  font-family: ui-monospace, "SF Mono", monospace;
+  color: rgba(235, 235, 245, 0.55);
+  text-align: left;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 160px;
+  overflow-y: auto;
+}
+.ip-live-logs::-webkit-scrollbar { display: none; }

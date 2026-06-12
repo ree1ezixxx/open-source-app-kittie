@@ -6,19 +6,24 @@ feat/simulator-first-builder
 
 ## Current phase
 
-Milestone 6 — Expo preview path (process manager ✅; UI iframe next)
+Milestone 7 — build log capture + live run events (milestone 6 ✅ COMPLETE:
+the real generated Expo app runs inside the phone frame)
 
 ## Last completed iteration
 
-2
+3
 
 ## Current objective
 
-Run button + live preview iframe inside the PhonePreview frame, with
-installing/starting/failed overlays and mockup fallback.
+SSE run events + Logs tab; replace the synthetic PendingRun ticker with real
+phases; preview-start revalidation; tagged log lines.
 
 ## What works
 
+- LIVE PREVIEW: Mockup|Live toggle in the studio — Run boots the generated
+  Expo app (npm install → expo start --web :191xx → healthcheck) and the
+  REAL app renders interactively inside the phone frame, with boot/failure
+  overlays, Reload/Stop/Open toolbar (iterations 002–003)
 - Generated workspaces on disk: `generated-workspaces/<projectId>/current/` +
   per-run `runs/<msgId>/{before,after}` snapshots, synced on create/revise,
   `GET /projects/:id/workspace` (iteration 001)
@@ -35,7 +40,6 @@ installing/starting/failed overlays and mockup fallback.
 
 ## What does not work yet
 
-- REAL Expo preview in the phone frame (frame is a mockup today)
 - Build log capture + live SSE run events
 - Build/error repair loop
 - Visual QA loop
