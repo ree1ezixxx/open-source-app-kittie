@@ -560,3 +560,18 @@
   font-weight: 800;
   font-size: 16px;
 }
+
+.builder-recent-card { position: relative; }
+.builder-recent-delete {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  background: transparent;
+  border: none;
+  color: inherit;
+  opacity: 0.35;
+  font-size: 16px;
+  cursor: pointer;
+  line-height: 1;
+}
+.builder-recent-delete:hover { opacity: 1; color: #ff6b6b; }

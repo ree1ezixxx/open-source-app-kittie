@@ -156,11 +156,24 @@ function BuilderLanding({ theme, onToggleTheme }: { theme: Theme; onToggleTheme:
             <h2>Your apps</h2>
             <div className="builder-recent-grid">
               {recent.map((p) => (
-                <button key={p.id} className="builder-recent-card" onClick={() => navigate(`/dashboard/builder/${p.id}`)}>
+                <div key={p.id} className="builder-recent-card" role="button" tabIndex={0} onClick={() => navigate(`/dashboard/builder/${p.id}`)}>
                   <span className="builder-recent-name">{p.name}</span>
                   <span className="builder-recent-prompt">{p.prompt}</span>
                   <span className={`builder-engine ${p.engine}`}>{p.engine === "gemini" ? "AI" : "offline"}</span>
-                </button>
+                  <button
+                    className="builder-recent-delete"
+                    title="Delete project"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (!window.confirm(`Delete ${p.name}? This can't be undone.`)) return;
+                      void fetch(`/api/v1/builder/projects/${p.id}`, { method: "DELETE" }).then(() =>
+                        setRecent((rs) => rs.filter((r) => r.id !== p.id)),
+                      );
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
               ))}
             </div>
           </div>
