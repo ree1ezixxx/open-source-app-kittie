@@ -150,7 +150,7 @@ export function OverviewTab({ tagged, appsMonitored }: { tagged: TaggedReview[];
         <section className="rv-card">
           <div className="rv-card-head">
             <div className="rv-card-title">Rating distribution</div>
-            <span className="rv-card-meta">{formatCompact(total)} loaded</span>
+            <span className="rv-card-meta">{formatCompact(total)} loaded · real data</span>
           </div>
           <div className="rv-avg">
             <div className="rv-avg-num">{avg != null ? avg.toFixed(2) : "—"}</div>
@@ -179,7 +179,7 @@ export function OverviewTab({ tagged, appsMonitored }: { tagged: TaggedReview[];
         <section className="rv-card">
           <div className="rv-card-head">
             <div className="rv-card-title">Sentiment summary</div>
-            <span className="rv-card-meta">tagged</span>
+            <span className="rv-card-meta">interim tags · real data</span>
           </div>
           <div className="rv-net">
             <div className="rv-net-num" style={{ color: net >= 0 ? "var(--positive)" : "var(--negative)" }}>
@@ -229,6 +229,7 @@ export function ReviewsTab({ tagged }: { tagged: TaggedReview[] }) {
   const sFacet = useMemo(() => sentimentCounts(periodSet), [periodSet]);
   const tFacets = useMemo(() => topicFacets(periodSet), [periodSet]);
   const iFacets = useMemo(() => improvementFacets(periodSet), [periodSet]);
+  const hasAnyFilters = rating !== "all" || sentiment !== "all" || !!topic || !!area || q.trim().length > 0;
 
   const filtered = useMemo(() => {
     let list = periodSet;
@@ -325,11 +326,19 @@ export function ReviewsTab({ tagged }: { tagged: TaggedReview[] }) {
       )}
 
       {filtered.length === 0 ? (
-        <EmptyState
-          icon={<IconSearch />}
-          title="No reviews match these filters"
-          sub="Try clearing a filter or widening the period."
-        />
+        periodSet.length === 0 ? (
+          <EmptyState
+            icon={<IconSearch />}
+            title="No reviews indexed yet"
+            sub="Refresh to pull the latest reviews from the store, or wait for the daily sync."
+          />
+        ) : (
+          <EmptyState
+            icon={<IconSearch />}
+            title="No reviews match these filters"
+            sub={hasAnyFilters ? "Try clearing a filter or widening the period." : "No reviews in this period."}
+          />
+        )
       ) : (
         <ul className="rv-review-list">
           {filtered.map((t) => {
@@ -415,7 +424,11 @@ export function SemanticsTab({ tagged, onRefresh, refreshing }: { tagged: Tagged
       <MockNotice>{INTERIM_NOTE}</MockNotice>
 
       {ts.rows.length === 0 ? (
-        <EmptyState icon={<IconSearch />} title="No topics in this period" sub="Widen the period or load more reviews to surface themes." />
+        tagged.length === 0 ? (
+          <EmptyState icon={<IconSearch />} title="No reviews indexed yet" sub="Refresh to pull the latest reviews from the store, or wait for the daily sync." />
+        ) : (
+          <EmptyState icon={<IconSearch />} title="No topics in this period" sub="Widen the period or load more reviews to surface themes." />
+        )
       ) : (
         <>
           {/* Topic trends chart */}
@@ -503,7 +516,13 @@ export function ImprovementsTab({ tagged, onRefresh, refreshing }: { tagged: Tag
       <MockNotice>{INTERIM_NOTE}</MockNotice>
 
       {shown.length === 0 ? (
-        <EmptyState icon={<IconSpark />} title="No improvement areas here" sub="Try a different filter or a wider period." />
+        tagged.length === 0 ? (
+          <EmptyState icon={<IconSpark />} title="No reviews indexed yet" sub="Refresh to pull the latest reviews from the store, or wait for the daily sync." />
+        ) : improvements.length === 0 ? (
+          <EmptyState icon={<IconSpark />} title="No improvement areas in this period" sub="Widen the period or load more reviews to identify patterns." />
+        ) : (
+          <EmptyState icon={<IconSpark />} title="No improvement areas here" sub="Try a different filter or a wider period." />
+        )
       ) : (
         <>
           {/* Improvement trends chart */}

@@ -282,7 +282,17 @@ export function getMonitored(): MonitoredApp[] {
     const raw = localStorage.getItem(STORE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as MonitoredApp[]) : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((a): a is MonitoredApp =>
+      typeof a === "object" && a !== null &&
+      typeof a.id === "string" && a.id.length > 0 &&
+      typeof a.title === "string" &&
+      typeof a.developer === "string" &&
+      typeof a.store === "string" && (a.store === "apple" || a.store === "google") &&
+      typeof a.reviewCount === "number" &&
+      (typeof a.rating === "number" || a.rating === null) &&
+      (typeof a.iconUrl === "string" || a.iconUrl === null),
+    );
   } catch {
     return [];
   }

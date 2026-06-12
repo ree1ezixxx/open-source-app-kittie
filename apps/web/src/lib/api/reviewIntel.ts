@@ -94,7 +94,7 @@ function matchCategories(text: string, cats: Category[]): string[] {
    ================================================================ */
 export function classifyReview(r: Review): ReviewTags {
   const text = `${r.title ?? ""} ${r.body}`.toLowerCase();
-  const rating = Math.round(r.rating);
+  const rating = Math.round(r.rating); // 1-5; matches ReviewsTab filter rounding
   const hasPos = POSITIVE_WORDS.some((w) => text.includes(w));
   const hasNeg = NEGATIVE_WORDS.some((w) => text.includes(w));
 
