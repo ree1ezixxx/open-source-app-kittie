@@ -7,6 +7,7 @@ import {
   IconRising,
   IconStar,
   IconDownload,
+  IconSparkles,
   IconGrid,
   IconSearch,
   IconImage,
@@ -36,7 +37,10 @@ const GROUPS: Group[] = [
   },
   {
     label: "Developer",
-    items: [{ to: "/dashboard/app-engine", label: "App Engine", icon: IconDownload }],
+    items: [
+      { to: "/dashboard/builder", label: "Builder", icon: IconSparkles },
+      { to: "/dashboard/app-engine", label: "App Engine", icon: IconDownload },
+    ],
   },
   {
     label: "Your Apps",

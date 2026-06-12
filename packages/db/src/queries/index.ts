@@ -56,3 +56,12 @@ export {
   type IdeaListQuery,
   type IdeaSort,
 } from "./ideas.js";
+export {
+  addBuilderMessage,
+  createBuilderProject,
+  deleteBuilderProject,
+  getBuilderProject,
+  listBuilderMessages,
+  listBuilderProjects,
+  updateBuilderProjectBlueprint,
+} from "./builder.js";

@@ -336,3 +336,44 @@ export type AiGeneration = typeof aiGenerations.$inferSelect;
 export type SweepState = typeof sweepState.$inferSelect;
 export type AppIdea = typeof appIdeas.$inferSelect;
 export type CloneableApp = typeof cloneableApps.$inferSelect;
+
+/* ---- App Builder (Rork-style): prompt -> generated Expo app ------------ */
+
+/** A builder project: one prompt-born app, iterated via chat. */
+export const builderProjects = sqliteTable(
+  "builder_projects",
+  {
+    id: text("id").primaryKey(),
+    /** Display name — mirrors blueprint.appName at last revision. */
+    name: text("name").notNull(),
+    /** The original creation prompt. */
+    prompt: text("prompt").notNull(),
+    /** Current AppBlueprint as JSON — files are regenerated, never stored. */
+    blueprintJson: text("blueprint_json").notNull(),
+    /** 'gemini' when the model produced the blueprint, 'heuristic' offline. */
+    engine: text("engine", { enum: ["gemini", "heuristic"] }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+  },
+  (t) => [index("builder_projects_updated_idx").on(t.updatedAt)],
+);
+
+/** Chat thread per project; assistant turns snapshot the blueprint they produced. */
+export const builderMessages = sqliteTable(
+  "builder_messages",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => builderProjects.id, { onDelete: "cascade" }),
+    role: text("role", { enum: ["user", "assistant"] }).notNull(),
+    content: text("content").notNull(),
+    /** Blueprint after this turn (assistant turns only). */
+    blueprintJson: text("blueprint_json"),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  },
+  (t) => [index("builder_messages_project_idx").on(t.projectId)],
+);
+
+export type BuilderProject = typeof builderProjects.$inferSelect;
+export type BuilderMessage = typeof builderMessages.$inferSelect;

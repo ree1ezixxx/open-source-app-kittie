@@ -64,6 +64,13 @@
       "when": 1781245366492,
       "tag": "0008_outgoing_scarecrow",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1781271030011,
+      "tag": "0009_shallow_ultragirl",
+      "breakpoints": true
     }
   ]
 }
