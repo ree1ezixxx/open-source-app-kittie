@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Sidebar } from "./components/Sidebar";
 import { ExplorePage } from "./pages/ExplorePage";
 import { AppDetailPage } from "./pages/AppDetailPage";
@@ -27,11 +27,15 @@ import { useTheme } from "./lib/theme";
 export function App() {
   const [theme, toggleTheme] = useTheme();
   const [total, setTotal] = useState(0);
+  // /studio/* runs the Builder full-bleed, outside the Kittie dashboard chrome.
+  const studio = useLocation().pathname.startsWith("/studio");
 
   return (
-    <div className="app-shell">
-      <Sidebar total={total} />
+    <div className={studio ? "app-shell studio" : "app-shell"}>
+      {!studio && <Sidebar total={total} />}
       <Routes>
+        <Route path="/studio" element={<BuilderPage theme={theme} onToggleTheme={toggleTheme} />} />
+        <Route path="/studio/:id" element={<BuilderPage theme={theme} onToggleTheme={toggleTheme} />} />
         <Route path="/" element={<Navigate to="/dashboard/explore" replace />} />
         <Route
           path="/dashboard/explore"

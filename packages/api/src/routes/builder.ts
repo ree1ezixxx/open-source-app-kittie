@@ -1,6 +1,7 @@
 import {
   buildBlueprintFromPrompt,
   fromBlueprintExpo,
+  fromBlueprintXcode,
   heuristicRevise,
   reviseBlueprint,
   type AppBlueprint,
@@ -58,6 +59,7 @@ async function resolveEngine(): Promise<{ kind: EngineKind; gen?: Gen }> {
 function projectPayload(project: { id: string; name: string; prompt: string; blueprintJson: string; engine: string; createdAt: Date; updatedAt: Date }) {
   const blueprint = JSON.parse(project.blueprintJson) as AppBlueprint;
   const result = fromBlueprintExpo(blueprint);
+  const xcode = fromBlueprintXcode(blueprint);
   return {
     id: project.id,
     name: project.name,
@@ -69,6 +71,81 @@ function projectPayload(project: { id: string; name: string; prompt: string; blu
     projectName: result.projectName,
     files: result.files,
     buildCommands: result.buildCommands,
+    swiftProjectName: xcode.projectName,
+    swiftFiles: xcode.files,
+  };
+}
+
+/* ---- agent run: the structured transcript behind each assistant turn ---- */
+
+interface AgentRun {
+  engine: string;
+  plan: string;
+  todos: { label: string; done: boolean }[];
+  steps: { label: string }[];
+  changedFiles: string[];
+}
+
+/** Human-readable change list between two blueprints. */
+function blueprintChanges(prev: AppBlueprint, next: AppBlueprint): string[] {
+  const changes: string[] = [];
+  if (prev.appName !== next.appName) changes.push(`renamed to **${next.appName}**`);
+  if (prev.accentHex !== next.accentHex) changes.push(`accent → ${next.accentHex}`);
+  if (prev.tagline !== next.tagline) changes.push(`tagline → “${next.tagline}”`);
+  const prevTitles = new Set(prev.tabs.map((t) => t.title));
+  const nextTitles = new Set(next.tabs.map((t) => t.title));
+  for (const t of next.tabs) if (!prevTitles.has(t.title)) changes.push(`added **${t.title}** (${t.kind})`);
+  for (const t of prev.tabs) if (!nextTitles.has(t.title)) changes.push(`removed **${t.title}**`);
+  for (const t of next.tabs) {
+    const p = prev.tabs.find((x) => x.title === t.title);
+    if (!p) continue;
+    if (p.headline !== t.headline) changes.push(`**${t.title}** headline → “${t.headline}”`);
+    else if (p.subhead !== t.subhead) changes.push(`**${t.title}** subhead → “${t.subhead}”`);
+    else if (JSON.stringify(p.items) !== JSON.stringify(t.items)) changes.push(`updated **${t.title}** content`);
+  }
+  return changes;
+}
+
+/** Which generated files differ between two blueprints' codegen output. */
+function changedFilePaths(prev: AppBlueprint | null, next: AppBlueprint): string[] {
+  const nextFiles = fromBlueprintExpo(next).files;
+  if (!prev) return nextFiles.map((f) => f.path);
+  const prevByPath = new Map(fromBlueprintExpo(prev).files.map((f) => [f.path, f.contents]));
+  return nextFiles.filter((f) => prevByPath.get(f.path) !== f.contents).map((f) => f.path);
+}
+
+function buildRun(kind: EngineKind, prev: AppBlueprint | null, next: AppBlueprint, changed: boolean): AgentRun {
+  const engine = kind === "ollama" ? `Ollama · ${OLLAMA_MODEL}` : kind === "gemini" ? "Gemini" : "Offline engine";
+  if (!prev) {
+    const files = changedFilePaths(null, next);
+    return {
+      engine,
+      plan: `Design **${next.appName}** — ${next.tagline}`,
+      todos: next.tabs.map((t) => ({ label: `${t.title} screen (${t.kind})`, done: true })),
+      steps: [
+        { label: "Created plan" },
+        { label: `Designed ${next.tabs.length} screens` },
+        { label: `Generated ${files.length} files` },
+        { label: "Validated blueprint" },
+      ],
+      changedFiles: files,
+    };
+  }
+  const changes = blueprintChanges(prev, next);
+  const files = changed ? changedFilePaths(prev, next) : [];
+  return {
+    engine,
+    plan: changed ? `Apply: ${changes.join(", ")}` : "No change required",
+    todos: changes.map((c) => ({ label: c.replace(/\*\*/g, ""), done: true })),
+    steps: changed
+      ? [
+          { label: "Read current blueprint" },
+          { label: `Applied ${changes.length} change${changes.length === 1 ? "" : "s"}` },
+          { label: `Regenerated ${files.length} file${files.length === 1 ? "" : "s"}` },
+          { label: "Validated blueprint" },
+        ]
+      : [{ label: "Read current blueprint" }, { label: "No applicable change found" }],
+    changedFiles: files,
   };
 }
 
@@ -94,6 +171,7 @@ builderRouter.post("/projects", async (c) => {
     role: "assistant",
     content: assistantSummary(blueprint, null),
     blueprintJson: JSON.stringify(blueprint),
+    runJson: JSON.stringify(buildRun(kind, null, blueprint, true)),
   });
   return c.json({ data: projectPayload(project) }, 201);
 });
@@ -124,6 +202,7 @@ builderRouter.get("/projects/:id", async (c) => {
         id: m.id,
         role: m.role,
         content: m.content,
+        run: m.runJson ? (JSON.parse(m.runJson) as AgentRun) : undefined,
         createdAt: m.createdAt,
       })),
       aiConfigured: (await isOllamaAvailable()) || isGeminiConfigured(),
@@ -174,11 +253,13 @@ builderRouter.post("/projects/:id/messages", async (c) => {
       ? "I couldn't map that instruction to a change in the app. Try being more specific — e.g. \"add a stats tab\", \"make the accent #FF375F\", or \"rename it to Pulse\"."
       : "Offline mode handles: add/remove a tab, rename the app, and accent color changes (named or #RRGGBB). For free-form changes, start Ollama (or configure GEMINI_API_KEY).";
   }
+  const run = buildRun(kind, current, revised, changed);
   const assistant = await addBuilderMessage(db, {
     projectId: project.id,
     role: "assistant",
     content: reply,
     blueprintJson: changed ? JSON.stringify(revised) : undefined,
+    runJson: JSON.stringify(run),
   });
 
   const fresh = await getBuilderProject(db, project.id);
@@ -186,7 +267,7 @@ builderRouter.post("/projects/:id/messages", async (c) => {
     data: {
       ...projectPayload(fresh ?? project),
       changed,
-      reply: { id: assistant.id, role: "assistant", content: reply, createdAt: assistant.createdAt },
+      reply: { id: assistant.id, role: "assistant", content: reply, run, createdAt: assistant.createdAt },
     },
   });
 });
@@ -197,23 +278,19 @@ function assistantSummary(b: AppBlueprint, prev: AppBlueprint | null): string {
     const tabList = b.tabs.map((t) => `${t.title} (${t.kind})`).join(", ");
     return `Generated **${b.appName}** — ${b.tagline}. Screens: ${tabList}. Accent ${b.accentHex}. Preview it on the right, or open the Code tab to see the Expo project.`;
   }
-  const changes: string[] = [];
-  if (prev.appName !== b.appName) changes.push(`renamed to **${b.appName}**`);
-  if (prev.accentHex !== b.accentHex) changes.push(`accent → ${b.accentHex}`);
-  const prevTitles = new Set(prev.tabs.map((t) => t.title));
-  const nextTitles = new Set(b.tabs.map((t) => t.title));
-  for (const t of b.tabs) if (!prevTitles.has(t.title)) changes.push(`added **${t.title}** (${t.kind})`);
-  for (const t of prev.tabs) if (!nextTitles.has(t.title)) changes.push(`removed **${t.title}**`);
+  const changes = blueprintChanges(prev, b);
   if (!changes.length) changes.push("updated the app");
   return `Done — ${changes.join(", ")}. The preview and code are updated.`;
 }
 
-/* Real project export: a zip of the regenerated files. */
+/* Real project export: a zip of the regenerated files.
+   ?target=xcode -> native SwiftUI Xcode project; default -> Expo. */
 builderRouter.get("/projects/:id/zip", async (c) => {
   const project = await getBuilderProject(getDb(), c.req.param("id"));
   if (!project) return c.json({ error: "Project not found" }, 404);
   const blueprint = JSON.parse(project.blueprintJson) as AppBlueprint;
-  const result = fromBlueprintExpo(blueprint);
+  const result =
+    c.req.query("target") === "xcode" ? fromBlueprintXcode(blueprint) : fromBlueprintExpo(blueprint);
   const entries: Record<string, Uint8Array> = {};
   for (const f of result.files) {
     entries[`${result.projectName}/${f.path}`] = new TextEncoder().encode(f.contents);

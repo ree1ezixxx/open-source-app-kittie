@@ -370,6 +370,8 @@ export const builderMessages = sqliteTable(
     content: text("content").notNull(),
     /** Blueprint after this turn (assistant turns only). */
     blueprintJson: text("blueprint_json"),
+    /** Structured agent run (plan/steps/changed files) for assistant turns. */
+    runJson: text("run_json"),
     createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
   },
   (t) => [index("builder_messages_project_idx").on(t.projectId)],

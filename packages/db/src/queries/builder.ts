@@ -56,7 +56,7 @@ export async function deleteBuilderProject(db: Db, id: string): Promise<void> {
 
 export async function addBuilderMessage(
   db: Db,
-  input: { projectId: string; role: "user" | "assistant"; content: string; blueprintJson?: string },
+  input: { projectId: string; role: "user" | "assistant"; content: string; blueprintJson?: string; runJson?: string },
 ): Promise<BuilderMessage> {
   const row = {
     id: randomUUID(),
@@ -64,6 +64,7 @@ export async function addBuilderMessage(
     role: input.role,
     content: input.content,
     blueprintJson: input.blueprintJson ?? null,
+    runJson: input.runJson ?? null,
     createdAt: new Date(),
   };
   await db.insert(builderMessages).values(row);

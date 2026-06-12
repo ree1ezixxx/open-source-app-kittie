@@ -88,6 +88,10 @@ function revisePrompt(current: AppBlueprint, instruction: string): string {
     ``,
     `Rules:`,
     `- Keep everything the user did NOT ask to change exactly as-is.`,
+    `- Apply EVERY part of the instruction. Copy changes are allowed and`,
+    `  expected: appName, tagline, tab titles, headline, subhead, and item`,
+    `  text are all editable. A "greeting" or on-screen message maps to the`,
+    `  headline (or subhead) of the most relevant tab.`,
     `- Same schema constraints as before (2-5 tabs, allowed symbols/kinds,`,
     `  "#RRGGBB" accentHex, realistic sample items).`,
     `Return ONLY JSON matching the provided schema.`,
@@ -190,11 +194,53 @@ function brandFrom(prompt: string): string {
   return words.join("") || "MyApp";
 }
 
+/** Believable sample rows per entity — placeholder "Item 1 / #1" reads as slop. */
+const SAMPLE_ITEMS: Record<string, { title: string; subtitle: string; detail: string }[]> = {
+  habit: [
+    { title: "Morning run", subtitle: "Before 8am, 5km", detail: "12/14 days" },
+    { title: "Read 20 pages", subtitle: "Non-fiction first", detail: "8/14 days" },
+    { title: "No sugar", subtitle: "Weekdays only", detail: "5/7 days" },
+    { title: "Lights out by 11", subtitle: "Screens off at 10:30", detail: "9/14 days" },
+  ],
+  workout: [
+    { title: "Push day", subtitle: "Chest, shoulders, triceps", detail: "45 min" },
+    { title: "Pull day", subtitle: "Back and biceps", detail: "50 min" },
+    { title: "Leg day", subtitle: "Squat focus", detail: "60 min" },
+    { title: "Easy run", subtitle: "Zone 2 recovery", detail: "5.2 km" },
+  ],
+  recipe: [
+    { title: "15-min carbonara", subtitle: "Pantry staples only", detail: "15 min" },
+    { title: "Sheet-pan salmon", subtitle: "One pan, no cleanup", detail: "25 min" },
+    { title: "Chickpea curry", subtitle: "Vegan weeknight bowl", detail: "20 min" },
+    { title: "Smash burgers", subtitle: "Crispy edges, soft buns", detail: "18 min" },
+  ],
+  product: [
+    { title: "Canvas weekender", subtitle: "Waxed cotton, brass zips", detail: "£89" },
+    { title: "Trail runners", subtitle: "Vibram sole, wide fit", detail: "£129" },
+    { title: "Merino hoodie", subtitle: "Temperature regulating", detail: "£75" },
+    { title: "Field notebook", subtitle: "Dot grid, 3-pack", detail: "£12" },
+  ],
+  entry: [
+    { title: "Slept badly, trained anyway", subtitle: "Energy picked up after lunch", detail: "Tue" },
+    { title: "Shipped the demo", subtitle: "Felt sharp all morning", detail: "Mon" },
+    { title: "Walked the long way home", subtitle: "Needed the quiet", detail: "Sun" },
+    { title: "Hard conversation, went well", subtitle: "Prep paid off", detail: "Sat" },
+  ],
+  conversation: [
+    { title: "Maya", subtitle: "See you at the gym at 7?", detail: "2m" },
+    { title: "Dad", subtitle: "Call me when you're free", detail: "1h" },
+    { title: "Studio group", subtitle: "Floor plans are approved 🎉", detail: "3h" },
+    { title: "Sam", subtitle: "Sent the invoice over", detail: "1d" },
+  ],
+};
+
 function heuristicItems(entity: string, tab: Partial<BlueprintTab>): { title: string; subtitle: string; detail: string }[] {
+  const samples = SAMPLE_ITEMS[entity.toLowerCase()];
+  if (samples) return samples.map((s) => ({ ...s }));
   return [1, 2, 3, 4].map((n) => ({
     title: `${entity} ${n}`,
-    subtitle: `Sample ${entity.toLowerCase()} description`,
-    detail: tab.kind === "feed" ? "Featured" : `#${n}`,
+    subtitle: `A ${entity.toLowerCase()} worth keeping`,
+    detail: tab.kind === "feed" ? "Featured" : `${n * 3} new`,
   }));
 }
 
@@ -232,6 +278,8 @@ const NAMED_COLORS: Record<string, string> = {
   mint: "#00C7BE", teal: "#30B0C7", cyan: "#32ADE6", blue: "#007AFF",
   indigo: "#5856D6", purple: "#AF52DE", pink: "#FF2D55", brown: "#A2845E",
   black: "#1C1C1E", white: "#F2F2F7", gold: "#D4AF37", lime: "#C6F24D",
+  emerald: "#50C878", coral: "#FF7F50", lavender: "#B57EDC", navy: "#1B2A4A",
+  turquoise: "#40E0D0", crimson: "#DC143C", magenta: "#FF00FF", olive: "#808000",
 };
 
 /** Deterministic revision — handles the common chat asks without a model. */
@@ -246,6 +294,17 @@ export function heuristicRevise(current: AppBlueprint, instruction: string): App
     for (const [name, value] of Object.entries(NAMED_COLORS)) {
       if (lower.includes(name)) { next.accentHex = value; break; }
     }
+  }
+
+  // copy edit: `change the greeting/headline/title to "X"` / `make it say "X"`
+  const copy = instruction.match(
+    /(?:greeting|headline|heading|message|say)\s*(?:to|says?|:)?\s*["“']([^"”']{2,60})["”']/i,
+  );
+  if (copy) {
+    const text = copy[1]!.trim();
+    // Prefer the tab whose title is mentioned; otherwise the first tab.
+    const named = next.tabs.find((t) => lower.includes(t.title.toLowerCase()));
+    (named ?? next.tabs[0]!).headline = text;
   }
 
   // rename: `rename ... to X` / `call it X`

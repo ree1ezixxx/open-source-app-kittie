@@ -1,11 +1,11 @@
 import { generateBlueprint, type GenerateJson, validateBlueprint } from "./blueprint.js";
-import { generateProject } from "./codegen.js";
+import { generateProject, generateXcodeProject } from "./codegen.js";
 import { generateExpoProject } from "./expo-codegen.js";
 import type { AppBlueprint, CloneResult, CloneSource } from "./types.js";
 
 export type { AppBlueprint, BlueprintTab, BlueprintItem, CloneResult, CloneSource, GeneratedFile, TabKind } from "./types.js";
 export { generateBlueprint, validateBlueprint } from "./blueprint.js";
-export { generateProject, projectNameFor } from "./codegen.js";
+export { generateProject, generateXcodeProject, projectNameFor } from "./codegen.js";
 export type { GenerateJson } from "./blueprint.js";
 export { SAFE_SYMBOLS } from "./blueprint.js";
 export {
@@ -37,6 +37,20 @@ export async function generateIosClone(src: CloneSource, gen?: GenerateJson): Pr
 export function fromBlueprint(blueprint: AppBlueprint): CloneResult {
   const { projectName, files } = generateProject(blueprint);
   return { blueprint, projectName, files, buildCommands: buildCommands(projectName) };
+}
+
+/** Render a blueprint straight to a native SwiftUI Xcode project. */
+export function fromBlueprintXcode(blueprint: AppBlueprint): CloneResult {
+  const { projectName, files } = generateXcodeProject(blueprint);
+  return {
+    blueprint,
+    projectName,
+    files,
+    buildCommands: [
+      `open ${projectName}.xcodeproj`,
+      `xcodebuild -project ${projectName}.xcodeproj -scheme ${projectName} -destination 'generic/platform=iOS Simulator' build CODE_SIGNING_ALLOWED=NO`,
+    ],
+  };
 }
 
 /** Render a blueprint straight to an Expo Router project (the builder path). */

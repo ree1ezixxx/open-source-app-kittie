@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { PageShell } from "../components/PageShell";
+import { PhonePreview } from "../components/PhonePreview";
 import { IconSparkles } from "../icons";
 import type { Theme } from "../lib/theme";
 import "../styles/builder.css";
@@ -38,10 +39,18 @@ interface GeneratedFile {
   path: string;
   contents: string;
 }
+interface AgentRun {
+  engine: string;
+  plan: string;
+  todos: { label: string; done: boolean }[];
+  steps: { label: string }[];
+  changedFiles: string[];
+}
 interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
+  run?: AgentRun;
 }
 interface ProjectSummary {
   id: string;
@@ -57,6 +66,14 @@ interface ProjectDetail extends ProjectSummary {
   buildCommands: string[];
   messages: ChatMessage[];
   aiConfigured?: boolean;
+  aiEngine?: string;
+  swiftProjectName?: string;
+  swiftFiles?: GeneratedFile[];
+}
+
+/** Route prefix this Builder instance lives under (dashboard vs /studio). */
+function useBuilderBase(): string {
+  return useLocation().pathname.startsWith("/studio") ? "/studio" : "/dashboard/builder";
 }
 
 const SUGGESTIONS = [
@@ -83,6 +100,7 @@ function BuilderLanding({ theme, onToggleTheme }: { theme: Theme; onToggleTheme:
   const [error, setError] = useState<string | null>(null);
   const [recent, setRecent] = useState<ProjectSummary[]>([]);
   const navigate = useNavigate();
+  const base = useBuilderBase();
 
   useEffect(() => {
     fetch("/api/v1/builder/projects")
@@ -105,7 +123,7 @@ function BuilderLanding({ theme, onToggleTheme }: { theme: Theme; onToggleTheme:
         });
         const json = await res.json();
         if (!res.ok) throw new Error(json.error?.message ?? "generation failed");
-        navigate(`/dashboard/builder/${json.data.id}`);
+        navigate(`${base}/${json.data.id}`);
       } catch (e) {
         setError(e instanceof Error ? e.message : "generation failed");
         setCreating(false);
@@ -156,7 +174,7 @@ function BuilderLanding({ theme, onToggleTheme }: { theme: Theme; onToggleTheme:
             <h2>Your apps</h2>
             <div className="builder-recent-grid">
               {recent.map((p) => (
-                <div key={p.id} className="builder-recent-card" role="button" tabIndex={0} onClick={() => navigate(`/dashboard/builder/${p.id}`)}>
+                <div key={p.id} className="builder-recent-card" role="button" tabIndex={0} onClick={() => navigate(`${base}/${p.id}`)}>
                   <span className="builder-recent-name">{p.name}</span>
                   <span className="builder-recent-prompt">{p.prompt}</span>
                   <span className={`builder-engine ${p.engine}`}>{p.engine === "gemini" ? "AI" : "offline"}</span>
@@ -201,8 +219,12 @@ function BuilderWorkspace({
   const [view, setView] = useState<"preview" | "code" | "export">("preview");
   const [activeTab, setActiveTab] = useState(0);
   const [activeFile, setActiveFile] = useState(0);
+  const [codeTarget, setCodeTarget] = useState<"swift" | "expo">("swift");
+  const [freshRunId, setFreshRunId] = useState<string | null>(null);
+  const [previewEpoch, setPreviewEpoch] = useState(0);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const base = useBuilderBase();
 
   useEffect(() => {
     fetch(`/api/v1/builder/projects/${projectId}`)
@@ -248,6 +270,7 @@ function BuilderWorkspace({
             }
           : p,
       );
+      setFreshRunId(d.reply.id);
       if (d.changed) setActiveTab(0);
     } catch (e) {
       setProject((p) =>
@@ -273,7 +296,7 @@ function BuilderWorkspace({
   if (loadError) {
     return (
       <PageShell icon={<IconSparkles />} title="Builder" sub={loadError} theme={theme} onToggleTheme={onToggleTheme}>
-        <button className="builder-back" onClick={() => navigate("/dashboard/builder")}>← Back to Builder</button>
+        <button className="builder-back" onClick={() => navigate(base)}>← Back to Builder</button>
       </PageShell>
     );
   }
@@ -286,6 +309,7 @@ function BuilderWorkspace({
   }
 
   const b = project.blueprint;
+  const codeFiles = codeTarget === "swift" && project.swiftFiles?.length ? project.swiftFiles : project.files;
   return (
     <PageShell
       icon={<IconSparkles />}
@@ -296,7 +320,7 @@ function BuilderWorkspace({
       bodyClass="flush"
       toolbar={
         <div className="builder-toolbar">
-          <button className="builder-back" onClick={() => navigate("/dashboard/builder")}>← All apps</button>
+          <button className="builder-back" onClick={() => navigate(base)}>← All apps</button>
           <div className="builder-views">
             {(["preview", "code", "export"] as const).map((v) => (
               <button key={v} className={view === v ? "active" : ""} onClick={() => setView(v)}>
@@ -311,12 +335,16 @@ function BuilderWorkspace({
       <div className="builder-workspace">
         <div className="builder-chat">
           <div className="builder-thread">
-            {project.messages.map((m) => (
-              <div key={m.id} className={`builder-msg ${m.role}`}>
-                {m.content}
-              </div>
-            ))}
-            {sending && <div className="builder-msg assistant pending">Thinking…</div>}
+            {project.messages.map((m) =>
+              m.role === "assistant" && m.run ? (
+                <RunCard key={m.id} message={m} animate={m.id === freshRunId} />
+              ) : (
+                <div key={m.id} className={`builder-msg ${m.role}`}>
+                  {mdBold(m.content)}
+                </div>
+              ),
+            )}
+            {sending && <PendingRun engine={project.aiEngine} />}
             <div ref={chatEndRef} />
           </div>
           <div className="builder-composer">
@@ -329,32 +357,73 @@ function BuilderWorkspace({
                   void send();
                 }
               }}
-              placeholder='Iterate: "add a stats tab", "make the accent purple", "rename it to Pulse"…'
+              placeholder="Describe a change — copy, colors, tabs, the name…"
               rows={2}
               disabled={sending}
             />
-            <button onClick={() => void send()} disabled={sending || draft.trim().length < 2}>
-              Send
-            </button>
+            <div className="builder-composer-row">
+              <span className="builder-model-pill" title="Engine handling your messages">
+                {project.aiEngine ?? "auto"}
+              </span>
+              <button
+                className="builder-send"
+                title="Send"
+                onClick={() => void send()}
+                disabled={sending || draft.trim().length < 2}
+              >
+                ↑
+              </button>
+            </div>
           </div>
         </div>
 
         <div className="builder-stage">
           {view === "preview" && (
-            <PhonePreview blueprint={b} activeTab={activeTab} onSelectTab={setActiveTab} />
+            <div className="builder-preview-wrap">
+              <div className="builder-preview-bar">
+                <span className="builder-live">
+                  <span className="builder-live-dot" /> Live
+                </span>
+                <div className="builder-preview-actions">
+                  <button
+                    title="Restart preview"
+                    onClick={() => {
+                      setActiveTab(0);
+                      setPreviewEpoch((e) => e + 1);
+                    }}
+                  >
+                    ⟳
+                  </button>
+                  <button className="builder-run-device" onClick={() => setView("export")}>
+                    Run on your device
+                  </button>
+                </div>
+              </div>
+              <PhonePreview key={previewEpoch} blueprint={b} activeTab={activeTab} onSelectTab={setActiveTab} />
+            </div>
           )}
           {view === "code" && (
-            <div className="builder-code">
-              <div className="builder-filetree">
-                {project.files.map((f, i) => (
-                  <button key={f.path} className={i === activeFile ? "active" : ""} onClick={() => setActiveFile(i)}>
-                    {f.path}
-                  </button>
-                ))}
+            <div className="builder-code-wrap">
+              <div className="builder-code-targets">
+                <button className={codeTarget === "swift" ? "active" : ""} onClick={() => { setCodeTarget("swift"); setActiveFile(0); }}>
+                   SwiftUI · Xcode
+                </button>
+                <button className={codeTarget === "expo" ? "active" : ""} onClick={() => { setCodeTarget("expo"); setActiveFile(0); }}>
+                  Expo · React Native
+                </button>
               </div>
-              <pre className="builder-filebody">
-                <code>{project.files[activeFile]?.contents ?? ""}</code>
-              </pre>
+              <div className="builder-code">
+                <div className="builder-filetree">
+                  {codeFiles.map((f, i) => (
+                    <button key={f.path} className={i === activeFile ? "active" : ""} onClick={() => setActiveFile(i)}>
+                      {f.path}
+                    </button>
+                  ))}
+                </div>
+                <pre className="builder-filebody">
+                  <code>{codeFiles[activeFile]?.contents ?? ""}</code>
+                </pre>
+              </div>
             </div>
           )}
           {view === "export" && <ExportPanel project={project} />}
@@ -364,138 +433,92 @@ function BuilderWorkspace({
   );
 }
 
-/* ---- phone preview: a faithful web render of the blueprint -------------- */
+/* ---- agent run transcript: the structured story behind each turn -------- */
 
-function PhonePreview({
-  blueprint: b,
-  activeTab,
-  onSelectTab,
-}: {
-  blueprint: Blueprint;
-  activeTab: number;
-  onSelectTab: (i: number) => void;
-}) {
-  const [detail, setDetail] = useState<BlueprintItem | null>(null);
-  const tab = b.tabs[Math.min(activeTab, b.tabs.length - 1)];
-  if (!tab) return null;
-  const accent = b.accentHex;
-  if (detail) {
-    return (
-      <div className="phone-frame">
-        <div className="phone-notch" />
-        <div className="phone-screen">
-          <div className="phone-header phone-header-detail">
-            <button className="phone-back" onClick={() => setDetail(null)}>‹ Back</button>
-            <span>{detail.title}</span>
-          </div>
-          <div className="phone-body">
-            <div className="phone-detail-hero" style={{ background: accent }}>
-              <span>{detail.detail || detail.title}</span>
-            </div>
-            <div className="phone-headline">{detail.title}</div>
-            {detail.subtitle && <div className="phone-dim">{detail.subtitle}</div>}
-            <div className="phone-row" style={{ background: "#17171e", borderRadius: 12, padding: "10px 12px" }}>
-              <div className="phone-row-main">
-                <div className="phone-dim">{b.primaryEntity}</div>
-              </div>
-              <div className="phone-row-detail" style={{ color: accent }}>{detail.detail || "—"}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+/** Minimal markdown: render **bold** spans, leave everything else as text. */
+function mdBold(text: string) {
+  const parts = text.split(/\*\*([^*]+)\*\*/g);
+  return parts.map((p, i) => (i % 2 === 1 ? <strong key={i}>{p}</strong> : p));
+}
+
+const PENDING_STATUSES = [
+  "Reading the blueprint…",
+  "Creating a plan…",
+  "Applying changes…",
+  "Regenerating files…",
+  "Validating…",
+];
+
+function PendingRun({ engine }: { engine?: string }) {
+  const [step, setStep] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setStep((s) => Math.min(s + 1, PENDING_STATUSES.length - 1)), 2200);
+    return () => clearInterval(t);
+  }, []);
   return (
-    <div className="phone-frame">
-      <div className="phone-notch" />
-      <div className="phone-screen">
-        <div className="phone-header">{tab.title}</div>
-        <div className="phone-body">
-          {tab.kind !== "profile" && (
-            <div className="phone-headline-block">
-              <div className="phone-headline">{tab.headline}</div>
-              {tab.subhead && <div className="phone-subhead">{tab.subhead}</div>}
-            </div>
-          )}
-          {tab.kind === "feed" &&
-            tab.items.map((it, i) => (
-              <div key={i} className="phone-card phone-tappable" onClick={() => setDetail(it)}>
-                <div className="phone-card-hero" style={{ background: accent }}>
-                  <span>{it.detail}</span>
-                </div>
-                <div className="phone-card-title">{it.title}</div>
-                {it.subtitle && <div className="phone-dim">{it.subtitle}</div>}
-              </div>
-            ))}
-          {tab.kind === "grid" && (
-            <div className="phone-grid">
-              {tab.items.map((it, i) => (
-                <div key={i} className="phone-tile phone-tappable" onClick={() => setDetail(it)}>
-                  <div className="phone-tile-hero" style={{ background: `${accent}55` }}>
-                    <span style={{ color: accent }}>{it.detail}</span>
-                  </div>
-                  <div className="phone-tile-title">{it.title}</div>
-                </div>
-              ))}
-            </div>
-          )}
-          {(tab.kind === "list" || tab.kind === "profile") && (
-            <div className={tab.kind === "profile" ? "phone-profile-card" : undefined}>
-              {tab.kind === "profile" && (
-                <div className="phone-profile-top">
-                  <div className="phone-avatar" style={{ background: `${accent}66` }} />
-                  <div className="phone-headline">{tab.headline}</div>
-                  {tab.subhead && <div className="phone-dim">{tab.subhead}</div>}
-                </div>
-              )}
-              {tab.items.map((it, i) => (
-                <div key={i} className="phone-row phone-tappable" onClick={() => setDetail(it)}>
-                  <div className="phone-row-icon" style={{ background: `${accent}44` }} />
-                  <div className="phone-row-main">
-                    <div className="phone-row-title">{it.title}</div>
-                    {it.subtitle && <div className="phone-dim">{it.subtitle}</div>}
-                  </div>
-                  {it.detail && (
-                    <div className="phone-row-detail" style={{ color: accent }}>
-                      {it.detail}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-          {tab.kind === "form" && (
-            <div className="phone-form">
-              <div className="phone-input">Title</div>
-              <div className="phone-input tall">Notes</div>
-              <div className="phone-button" style={{ background: accent }}>
-                Add
-              </div>
-              {tab.items.map((it, i) => (
-                <div key={i} className="phone-row">
-                  <div className="phone-row-icon" style={{ background: `${accent}44` }} />
-                  <div className="phone-row-main">
-                    <div className="phone-row-title">{it.title}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="phone-tabbar">
-          {b.tabs.map((t, i) => (
-            <button
-              key={i}
-              className="phone-tab"
-              style={{ color: i === activeTab ? accent : undefined }}
-              onClick={() => onSelectTab(i)}
-            >
-              <span className="phone-tab-dot" style={{ background: i === activeTab ? accent : "currentColor" }} />
-              {t.title}
-            </button>
-          ))}
-        </div>
+    <div className="builder-run">
+      <div className="builder-run-head">
+        <span className="builder-run-brand">Kittie</span>
+        <span className="builder-run-engine">{engine ?? "auto"}</span>
       </div>
+      <div className="builder-run-step live">
+        <span className="builder-spinner" />
+        {PENDING_STATUSES[step]}
+      </div>
+    </div>
+  );
+}
+
+function RunCard({ message: m, animate }: { message: ChatMessage; animate: boolean }) {
+  const run = m.run!;
+  const [showFiles, setShowFiles] = useState(false);
+  const done = run.todos.filter((t) => t.done).length;
+  const delay = (i: number) => (animate ? { animationDelay: `${i * 0.25}s` } : { animation: "none" });
+  const chips = showFiles ? run.changedFiles : run.changedFiles.slice(0, 3);
+  let row = 0;
+  return (
+    <div className="builder-run">
+      <div className="builder-run-head">
+        <span className="builder-run-brand">Kittie</span>
+        <span className="builder-run-engine">{run.engine}</span>
+      </div>
+      <div className="builder-run-step" style={delay(row++)}>
+        <span className="builder-run-check">✓</span>
+        <span>
+          Created plan: <em>{run.plan.replace(/\*\*/g, "")}</em>
+        </span>
+      </div>
+      {run.todos.length > 0 && (
+        <div className="builder-run-step" style={delay(row++)}>
+          <span className="builder-run-check">✓</span>
+          <span>
+            {done} of {run.todos.length} to-dos completed
+          </span>
+        </div>
+      )}
+      {run.steps.map((s) => (
+        <div key={s.label} className="builder-run-step" style={delay(row++)}>
+          <span className="builder-run-check">✓</span>
+          <span>{s.label}</span>
+        </div>
+      ))}
+      <div className="builder-run-summary" style={delay(row++)}>
+        {mdBold(m.content)}
+      </div>
+      {run.changedFiles.length > 0 && (
+        <div className="builder-run-files" style={delay(row++)}>
+          {chips.map((f) => (
+            <span key={f} className="builder-file-chip">
+              {f.split("/").pop()}
+            </span>
+          ))}
+          {!showFiles && run.changedFiles.length > 3 && (
+            <button className="builder-file-chip more" onClick={() => setShowFiles(true)}>
+              +{run.changedFiles.length - 3} more
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -505,41 +528,59 @@ function PhonePreview({
 function ExportPanel({ project }: { project: ProjectDetail }) {
   const [copied, setCopied] = useState(false);
 
-  const download = () => {
-    window.location.href = `/api/v1/builder/projects/${project.id}/zip`;
-  };
-
   return (
     <div className="builder-export">
-      <h3>Run it on your phone</h3>
+      <h3>Native SwiftUI · Xcode</h3>
       <ol>
-        <li>Download the project zip and unzip it.</li>
+        <li>Download and unzip the Xcode project.</li>
         <li>
-          <code>unzip {project.projectName}.zip</code>
+          <code>open {project.swiftProjectName ?? project.name}.xcodeproj</code>
         </li>
+        <li>⌘R — runs on any iOS 17+ simulator or device.</li>
+      </ol>
+      <div className="builder-export-actions">
+        <button
+          className="builder-go"
+          onClick={() => {
+            window.location.href = `/api/v1/builder/projects/${project.id}/zip?target=xcode`;
+          }}
+        >
+          Download Xcode project
+        </button>
+        <button
+          onClick={() => {
+            void navigator.clipboard.writeText(
+              (project.swiftFiles ?? project.files).map((f) => `--- ${f.path} ---\n${f.contents}`).join("\n\n"),
+            );
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+          }}
+        >
+          {copied ? "Copied!" : "Copy Swift files"}
+        </button>
+      </div>
+
+      <h3>Expo · React Native</h3>
+      <ol>
+        <li>Download the Expo project zip and unzip it.</li>
         <li>
           <code>cd {project.projectName} && npx expo install && npx expo start</code>
         </li>
         <li>Scan the QR code with <strong>Expo Go</strong> on your iPhone.</li>
       </ol>
       <div className="builder-export-actions">
-        <button className="builder-go" onClick={download}>
-          Download .zip
-        </button>
         <button
+          className="builder-go"
           onClick={() => {
-            void navigator.clipboard.writeText(
-              project.files.map((f) => `--- ${f.path} ---\n${f.contents}`).join("\n\n"),
-            );
-            setCopied(true);
-            setTimeout(() => setCopied(false), 1500);
+            window.location.href = `/api/v1/builder/projects/${project.id}/zip`;
           }}
         >
-          {copied ? "Copied!" : "Copy all files"}
+          Download Expo project
         </button>
       </div>
       <p className="builder-dim">
-        {project.files.length} files · bundle id <code>{project.blueprint.bundleId}</code>
+        {(project.swiftFiles ?? []).length} Swift files · {project.files.length} Expo files · bundle id{" "}
+        <code>{project.blueprint.bundleId}</code>
       </p>
     </div>
   );
