@@ -97,6 +97,8 @@ function packageJson(slug: string): string {
       dependencies: {
         "@expo/vector-icons": "^14.0.0",
         expo: "~52.0.0",
+        "expo-asset": "~11.0.0",
+        "expo-font": "~13.0.0",
         "expo-constants": "~17.0.0",
         "expo-linking": "~7.0.0",
         "expo-router": "~4.0.0",
