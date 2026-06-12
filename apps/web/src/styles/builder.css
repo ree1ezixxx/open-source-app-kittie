@@ -695,6 +695,20 @@ button.builder-file-chip.more:hover { opacity: 1; }
 }
 @keyframes builder-spin { to { transform: rotate(360deg); } }
 
+/* ---- build/repair timeline (iteration 5) ---- */
+.builder-run-step.error { opacity: 1; }
+.builder-run-step.repair { opacity: 0.9; font-style: italic; }
+.builder-run-check.error { color: #ff5c5c; font-weight: 800; }
+.builder-run-check.repair { color: #f5b54a; }
+.builder-run.failed {
+  border-color: rgba(255, 92, 92, 0.45);
+  background: linear-gradient(0deg, rgba(255, 92, 92, 0.06), rgba(255, 92, 92, 0.06)), var(--surface, #17171e);
+}
+.builder-run-summary.failed {
+  color: #ff8b8b;
+  border-top-color: rgba(255, 92, 92, 0.3);
+}
+
 /* ---- composer (Rork-style panel) ---- */
 .builder-composer {
   flex-direction: column;

@@ -71,6 +71,11 @@ export async function addBuilderMessage(
   return row;
 }
 
+/** Patch an assistant message's content in place (used to note self-repairs). */
+export async function updateBuilderMessageContent(db: Db, id: string, content: string): Promise<void> {
+  await db.update(builderMessages).set({ content }).where(eq(builderMessages.id, id));
+}
+
 export async function listBuilderMessages(db: Db, projectId: string): Promise<BuilderMessage[]> {
   return db
     .select()

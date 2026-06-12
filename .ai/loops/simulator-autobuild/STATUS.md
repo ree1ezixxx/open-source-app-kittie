@@ -6,21 +6,23 @@ feat/simulator-first-builder
 
 ## Current phase
 
-Milestone 8 — repair loop (milestone 7 ✅ COMPLETE: real SSE run events +
-live Logs tab)
+Milestone 9 — chat iteration → live preview (milestone 8 ✅ COMPLETE:
+async pipeline + tsc build check + deterministic self-repair)
 
 ## Last completed iteration
 
-4
+5
 
 ## Current objective
 
-Async run pipeline (POST returns runId immediately), real build check in the
-Validating phase, error classifier + smallest-patch repair loop (≤5 attempts,
-repair_attempt events).
+Close the PRD core loop: run_success → live preview shows the new app
+(fix Metro CI no-watch staleness), auto-reload iframe, e2e demo.
 
 ## What works
 
+- SELF-REPAIR: async runs validate with real tsc; classifier + deterministic
+  patches (reescape/add-import/regenerate), ≤5 attempts, honest failures,
+  all streamed to the run card (iteration 005)
 - REAL RUN EVENTS: SSE /runs/:runId/events with replay buffer; studio run
   cards animate the actual pipeline phases; Logs tab streams live preview
   output with levels/sources (iteration 004)
@@ -44,7 +46,6 @@ repair_attempt events).
 
 ## What does not work yet
 
-- Build/error repair loop
 - Visual QA loop
 - Project clone
 

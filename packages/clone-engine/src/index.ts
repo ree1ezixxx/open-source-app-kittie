@@ -15,6 +15,8 @@ export {
   heuristicRevise,
 } from "./builder.js";
 export { generateExpoProject, slugFor, ioniconFor } from "./expo-codegen.js";
+export { classify, proposeRepair, errorSignature } from "./repair.js";
+export type { Diagnostic, RepairCategory, RepairPatch, RepairProposal } from "./repair.js";
 
 function buildCommands(projectName: string): string[] {
   return [

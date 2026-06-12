@@ -13,6 +13,7 @@ import {
   getBuilderProject,
   listBuilderMessages,
   listBuilderProjects,
+  updateBuilderMessageContent,
   updateBuilderProjectBlueprint,
 } from "@kittie/db";
 import { zipSync } from "fflate";
@@ -32,6 +33,7 @@ import {
   subscribe,
   type RunEvent,
 } from "../lib/run-events.js";
+import { runRepairLoop } from "../lib/repair-runner.js";
 import { pruneRuns, readWorkspaceTree, syncWorkspace, workspaceRoot } from "../lib/workspace.js";
 
 /* ============================================================
@@ -255,13 +257,31 @@ builderRouter.post("/projects/:id/messages", async (c) => {
   if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
   const { content } = parsed.data;
 
-  // runId is generated up-front so events can be emitted DURING synchronous
-  // processing. The client only learns runId from the response below (which
-  // resolves after processing), so it would miss every live event — the
-  // run-events replay buffer closes that gap: the SSE endpoint replays all
-  // buffered events for the run, then streams any remainder.
   const runId = randomUUID();
 
+  // Persist the user message synchronously so a reload mid-run still shows it,
+  // then kick the heavy pipeline off without awaiting. The client learns runId
+  // from this fast 202 and immediately subscribes to the SSE stream; the
+  // run-events replay buffer guarantees no event is missed even on a late join.
+  await addBuilderMessage(db, { projectId: project.id, role: "user", content });
+  void processMessageRun(runId, project.id, project.blueprintJson, content);
+
+  return c.json({ runId, status: "running" }, 202);
+});
+
+/**
+ * The background message pipeline: engine revise -> persist blueprint -> sync
+ * workspace -> build check + deterministic repair loop -> persist assistant
+ * message -> emit run_success/run_failed. Emits run-timeline events throughout.
+ * Never throws to the caller (it's fire-and-forget); errors become run_failed.
+ */
+async function processMessageRun(
+  runId: string,
+  projectId: string,
+  blueprintJson: string,
+  content: string,
+): Promise<void> {
+  const db = getDb();
   const phase = async <T>(name: string, fn: () => Promise<T> | T): Promise<T> => {
     emitRunEvent(runId, { type: "phase_started", phase: name });
     const out = await fn();
@@ -270,7 +290,7 @@ builderRouter.post("/projects/:id/messages", async (c) => {
   };
 
   try {
-    const current = await phase("Reading blueprint", () => JSON.parse(project.blueprintJson) as AppBlueprint);
+    const current = await phase("Reading blueprint", () => JSON.parse(blueprintJson) as AppBlueprint);
     const { kind, gen } = await resolveEngine();
     emitRunEvent(runId, { type: "log", level: "info", line: `Engine: ${kind}` });
 
@@ -279,11 +299,10 @@ builderRouter.post("/projects/:id/messages", async (c) => {
     );
 
     const changed = JSON.stringify(revised) !== JSON.stringify(current);
-    await addBuilderMessage(db, { projectId: project.id, role: "user", content });
 
     let reply: string;
     if (changed) {
-      await updateBuilderProjectBlueprint(db, project.id, {
+      await updateBuilderProjectBlueprint(db, projectId, {
         name: revised.appName,
         blueprintJson: JSON.stringify(revised),
         engine: kind,
@@ -303,7 +322,7 @@ builderRouter.post("/projects/:id/messages", async (c) => {
     });
 
     const assistant = await addBuilderMessage(db, {
-      projectId: project.id,
+      projectId,
       role: "assistant",
       content: reply,
       blueprintJson: changed ? JSON.stringify(revised) : undefined,
@@ -314,10 +333,10 @@ builderRouter.post("/projects/:id/messages", async (c) => {
       // Snapshot before/after into runs/<assistant message id>/ then prune.
       await phase("Syncing workspace", async () => {
         try {
-          await syncWorkspace(project.id, fromBlueprintExpo(revised).files, assistant.id);
-          await pruneRuns(project.id);
+          await syncWorkspace(projectId, fromBlueprintExpo(revised).files, assistant.id);
+          await pruneRuns(projectId);
         } catch (err) {
-          console.warn(`[builder] workspace sync failed for ${project.id}:`, err);
+          console.warn(`[builder] workspace sync failed for ${projectId}:`, err);
           emitRunEvent(runId, {
             type: "error_detected",
             line: `workspace sync failed: ${err instanceof Error ? err.message : String(err)}`,
@@ -326,32 +345,46 @@ builderRouter.post("/projects/:id/messages", async (c) => {
       });
     }
 
-    await phase("Validating", () => {
-      /* blueprint already validated by the engine; placeholder for build hook */
-    });
+    // Validating: a REAL build check (tsc --noEmit) with a deterministic repair
+    // loop. Honest about outcome — self-repairs are noted, exhaustion fails.
+    const outcome = await phase("Validating", () => runRepairLoop(runId, projectId, revised));
+
+    if (!outcome.ok) {
+      const n = outcome.errors.length;
+      const failReply = `The generated build has ${n} unresolved error${n === 1 ? "" : "s"} I couldn't auto-repair after ${outcome.attempts} attempt${outcome.attempts === 1 ? "" : "s"}. Top issues: ${outcome.diagnosis}`;
+      await addBuilderMessage(db, {
+        projectId,
+        role: "assistant",
+        content: failReply,
+        runJson: JSON.stringify({ ...run, steps: [...run.steps, { label: "Build check failed" }] }),
+      });
+      emitRunEvent(runId, {
+        type: "run_failed",
+        error: failReply,
+        errors: outcome.errors.slice(0, 3),
+        attempts: outcome.attempts,
+      });
+      return;
+    }
+
+    if (outcome.repaired > 0) {
+      const note = `\n\n_Self-repaired ${outcome.repaired} build issue${outcome.repaired === 1 ? "" : "s"} (${outcome.attempts} attempt${outcome.attempts === 1 ? "" : "s"})._`;
+      await updateBuilderMessageContent(db, assistant.id, reply + note);
+    }
 
     emitRunEvent(runId, {
       type: "run_success",
       changed,
       messageId: assistant.id,
       changedFiles: run.changedFiles,
-    });
-
-    const fresh = await getBuilderProject(db, project.id);
-    return c.json({
-      data: {
-        ...projectPayload(fresh ?? project),
-        changed,
-        runId,
-        reply: { id: assistant.id, role: "assistant", content: reply, run, createdAt: assistant.createdAt },
-      },
+      repaired: outcome.repaired,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    console.warn(`[builder] run ${runId} failed:`, err);
     emitRunEvent(runId, { type: "run_failed", error: message });
-    return c.json({ error: message, runId }, 500);
   }
-});
+}
 
 /* ---- live run events over SSE -----------------------------------------
    GET /api/v1/builder/runs/:runId/events

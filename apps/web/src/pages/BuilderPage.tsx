@@ -101,6 +101,10 @@ interface RunEvent {
   path?: string;
   line?: string;
   error?: string;
+  message?: string;
+  category?: string;
+  attempt?: number;
+  max?: number;
 }
 
 /** Route prefix this Builder instance lives under (dashboard vs /studio). */
@@ -371,17 +375,35 @@ function BuilderWorkspace({
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [project?.messages.length]);
 
+  /** Re-pull the project (persisted assistant message, updated blueprint). */
+  const refetchProject = useCallback(async () => {
+    const r = await fetch(`/api/v1/builder/projects/${projectId}`);
+    if (!r.ok) return;
+    const json = await r.json();
+    const data = json.data as ProjectDetail;
+    setProject(data);
+    setActiveTab(0);
+    // Animate the newest assistant run card on arrival.
+    const lastAssistant = [...data.messages].reverse().find((m) => m.role === "assistant" && m.run);
+    if (lastAssistant) setFreshRunId(lastAssistant.id);
+  }, [projectId]);
+
   const send = useCallback(async () => {
     const content = draft.trim();
     if (content.length < 2 || sending || !project) return;
     setSending(true);
     setDraft("");
     setLiveRunId(null);
+    setFreshRunId(null);
     // optimistic user bubble
     setProject((p) =>
       p ? { ...p, messages: [...p.messages, { id: `tmp-${Date.now()}`, role: "user", content }] } : p,
     );
     try {
+      // The POST now resolves fast (202 { runId }) — the heavy pipeline runs in
+      // the background. We immediately subscribe to the SSE stream keyed on runId
+      // and render phases live into the pending run card; when the run ends we
+      // refetch the project to pull the persisted assistant message + blueprint.
       const res = await fetch(`/api/v1/builder/projects/${projectId}/messages`, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -389,26 +411,8 @@ function BuilderWorkspace({
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error?.message ?? "message failed");
-      const d = json.data;
-      setProject((p) =>
-        p
-          ? {
-              ...p,
-              name: d.blueprint.appName,
-              blueprint: d.blueprint,
-              files: d.files,
-              projectName: d.projectName,
-              messages: [...p.messages, d.reply],
-            }
-          : p,
-      );
-      setFreshRunId(d.reply.id);
-      // Drive the freshly-rendered run card from the REAL event sequence (SSE
-      // replay) instead of a synthetic ticker. The runId is what the SSE stream
-      // is keyed on; the replay buffer means we still get every phase even
-      // though the POST only resolved after the run finished server-side.
-      if (d.runId) setLiveRunId(d.runId);
-      if (d.changed) setActiveTab(0);
+      if (json.runId) setLiveRunId(json.runId);
+      // sending stays true until the run ends; PendingLiveRun signals completion.
     } catch (e) {
       setProject((p) =>
         p
@@ -425,10 +429,16 @@ function BuilderWorkspace({
             }
           : p,
       );
-    } finally {
       setSending(false);
     }
   }, [draft, sending, project, projectId]);
+
+  /** When the live run ends, refetch + clear the in-flight state. */
+  const onRunEnded = useCallback(() => {
+    void refetchProject();
+    setSending(false);
+    setLiveRunId(null);
+  }, [refetchProject]);
 
   if (loadError) {
     return (
@@ -474,19 +484,18 @@ function BuilderWorkspace({
           <div className="builder-thread">
             {project.messages.map((m) =>
               m.role === "assistant" && m.run ? (
-                <RunCard
-                  key={m.id}
-                  message={m}
-                  animate={m.id === freshRunId}
-                  liveRunId={m.id === freshRunId ? liveRunId : null}
-                />
+                <RunCard key={m.id} message={m} animate={m.id === freshRunId} />
               ) : (
                 <div key={m.id} className={`builder-msg ${m.role}`}>
                   {mdBold(m.content)}
                 </div>
               ),
             )}
-            {sending && !liveRunId && <PendingRun engine={project.aiEngine} />}
+            {liveRunId ? (
+              <PendingLiveRun runId={liveRunId} engine={project.aiEngine} onEnded={onRunEnded} />
+            ) : (
+              sending && <PendingRun engine={project.aiEngine} />
+            )}
             <div ref={chatEndRef} />
           </div>
           <div className="builder-composer">
@@ -666,61 +675,128 @@ function PendingRun({ engine }: { engine?: string }) {
   );
 }
 
-/** Consume the run-event SSE stream (replay + live) for a finished/in-flight
- *  run and surface the real completed phases in order, with the server's own
- *  timing. Closes itself when the run ends. */
-function useRunEvents(runId: string | null): { phases: string[]; failed: string | null } {
-  const [phases, setPhases] = useState<string[]>([]);
+/* A single timeline line surfaced live from the SSE stream. */
+interface LiveLine {
+  kind: "phase" | "error" | "repair";
+  text: string;
+}
+
+/** Consume the run-event SSE stream (replay + live) for an in-flight run and
+ *  surface phases, build errors and repair attempts in order, with the server's
+ *  own timing. Reports completion (success/failure) via `onEnded`. Closes itself
+ *  when the run ends. */
+function useRunEvents(
+  runId: string | null,
+  onEnded?: () => void,
+): { lines: LiveLine[]; failed: string | null; ended: boolean } {
+  const [lines, setLines] = useState<LiveLine[]>([]);
   const [failed, setFailed] = useState<string | null>(null);
+  const [ended, setEnded] = useState(false);
 
   useEffect(() => {
     if (!runId) {
-      setPhases([]);
+      setLines([]);
       setFailed(null);
+      setEnded(false);
       return;
     }
-    setPhases([]);
+    setLines([]);
     setFailed(null);
+    setEnded(false);
     const es = new EventSource(`/api/v1/builder/runs/${runId}/events`);
-    const onPhaseDone = (e: MessageEvent) => {
+    const push = (line: LiveLine) =>
+      setLines((p) => (p.some((l) => l.kind === line.kind && l.text === line.text) ? p : [...p, line]));
+
+    es.addEventListener("phase_completed", (e) => {
       try {
-        const ev = JSON.parse(e.data) as RunEvent;
-        if (ev.phase) setPhases((p) => (p.includes(ev.phase!) ? p : [...p, ev.phase!]));
+        const ev = JSON.parse((e as MessageEvent).data) as RunEvent;
+        if (ev.phase) push({ kind: "phase", text: ev.phase });
       } catch {
         /* ignore malformed */
       }
-    };
-    const onFailed = (e: MessageEvent) => {
+    });
+    es.addEventListener("error_detected", (e) => {
       try {
-        const ev = JSON.parse(e.data) as RunEvent;
+        const ev = JSON.parse((e as MessageEvent).data) as RunEvent;
+        push({ kind: "error", text: ev.message ?? ev.line ?? "Build error detected" });
+      } catch {
+        push({ kind: "error", text: "Build error detected" });
+      }
+    });
+    es.addEventListener("repair_attempt", (e) => {
+      try {
+        const ev = JSON.parse((e as MessageEvent).data) as RunEvent;
+        push({ kind: "repair", text: `Fixing build issue, attempt ${ev.attempt ?? "?"}/${ev.max ?? 5}` });
+      } catch {
+        /* ignore malformed */
+      }
+    });
+    es.addEventListener("run_success", () => {
+      setEnded(true);
+      onEnded?.();
+      es.close();
+    });
+    es.addEventListener("run_failed", (e) => {
+      try {
+        const ev = JSON.parse((e as MessageEvent).data) as RunEvent;
         setFailed(ev.error ?? "run failed");
       } catch {
         setFailed("run failed");
       }
+      setEnded(true);
+      onEnded?.();
       es.close();
-    };
-    es.addEventListener("phase_completed", onPhaseDone as EventListener);
-    es.addEventListener("run_success", () => es.close());
-    es.addEventListener("run_failed", onFailed as EventListener);
+    });
     es.onerror = () => es.close();
     return () => es.close();
+    // onEnded intentionally excluded: stable via useCallback, re-subscribing on
+    // identity churn would drop the stream.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runId]);
 
-  return { phases, failed };
+  return { lines, failed, ended };
 }
 
-function RunCard({
-  message: m,
-  animate,
-  liveRunId,
+/** In-flight run card: renders the real phase/error/repair timeline live from
+ *  the SSE stream while the background pipeline runs. */
+function PendingLiveRun({
+  runId,
+  engine,
+  onEnded,
 }: {
-  message: ChatMessage;
-  animate: boolean;
-  liveRunId?: string | null;
+  runId: string;
+  engine?: string;
+  onEnded: () => void;
 }) {
+  const { lines, failed, ended } = useRunEvents(runId, onEnded);
+  return (
+    <div className={`builder-run${failed ? " failed" : ""}`}>
+      <div className="builder-run-head">
+        <span className="builder-run-brand">Kittie</span>
+        <span className="builder-run-engine">{engine ?? "auto"}</span>
+      </div>
+      {lines.map((l, i) => (
+        <div key={`${l.kind}-${i}`} className={`builder-run-step ${l.kind}`}>
+          <span className={`builder-run-check ${l.kind}`}>
+            {l.kind === "error" ? "✗" : l.kind === "repair" ? "⟳" : "✓"}
+          </span>
+          <span>{l.text}</span>
+        </div>
+      ))}
+      {!ended && (
+        <div className="builder-run-step live">
+          <span className="builder-spinner" />
+          Working…
+        </div>
+      )}
+      {failed && <div className="builder-run-summary failed">{failed}</div>}
+    </div>
+  );
+}
+
+function RunCard({ message: m, animate }: { message: ChatMessage; animate: boolean }) {
   const run = m.run!;
   const [showFiles, setShowFiles] = useState(false);
-  const { phases: livePhases } = useRunEvents(liveRunId ?? null);
   const done = run.todos.filter((t) => t.done).length;
   const delay = (i: number) => (animate ? { animationDelay: `${i * 0.25}s` } : { animation: "none" });
   const chips = showFiles ? run.changedFiles : run.changedFiles.slice(0, 3);
@@ -745,19 +821,12 @@ function RunCard({
           </span>
         </div>
       )}
-      {livePhases.length > 0
-        ? livePhases.map((p) => (
-            <div key={p} className="builder-run-step" style={animate ? undefined : { animation: "none" }}>
-              <span className="builder-run-check">✓</span>
-              <span>{p}</span>
-            </div>
-          ))
-        : run.steps.map((s) => (
-            <div key={s.label} className="builder-run-step" style={delay(row++)}>
-              <span className="builder-run-check">✓</span>
-              <span>{s.label}</span>
-            </div>
-          ))}
+      {run.steps.map((s) => (
+        <div key={s.label} className="builder-run-step" style={delay(row++)}>
+          <span className="builder-run-check">✓</span>
+          <span>{s.label}</span>
+        </div>
+      ))}
       <div className="builder-run-summary" style={delay(row++)}>
         {mdBold(m.content)}
       </div>

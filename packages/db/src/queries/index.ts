@@ -63,5 +63,6 @@ export {
   getBuilderProject,
   listBuilderMessages,
   listBuilderProjects,
+  updateBuilderMessageContent,
   updateBuilderProjectBlueprint,
 } from "./builder.js";
