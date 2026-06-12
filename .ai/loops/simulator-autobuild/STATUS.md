@@ -6,20 +6,24 @@ feat/simulator-first-builder
 
 ## Current phase
 
-Milestone 7 — build log capture + live run events (milestone 6 ✅ COMPLETE:
-the real generated Expo app runs inside the phone frame)
+Milestone 8 — repair loop (milestone 7 ✅ COMPLETE: real SSE run events +
+live Logs tab)
 
 ## Last completed iteration
 
-3
+4
 
 ## Current objective
 
-SSE run events + Logs tab; replace the synthetic PendingRun ticker with real
-phases; preview-start revalidation; tagged log lines.
+Async run pipeline (POST returns runId immediately), real build check in the
+Validating phase, error classifier + smallest-patch repair loop (≤5 attempts,
+repair_attempt events).
 
 ## What works
 
+- REAL RUN EVENTS: SSE /runs/:runId/events with replay buffer; studio run
+  cards animate the actual pipeline phases; Logs tab streams live preview
+  output with levels/sources (iteration 004)
 - LIVE PREVIEW: Mockup|Live toggle in the studio — Run boots the generated
   Expo app (npm install → expo start --web :191xx → healthcheck) and the
   REAL app renders interactively inside the phone frame, with boot/failure
@@ -40,7 +44,6 @@ phases; preview-start revalidation; tagged log lines.
 
 ## What does not work yet
 
-- Build log capture + live SSE run events
 - Build/error repair loop
 - Visual QA loop
 - Project clone

@@ -475,11 +475,18 @@ function DetailScreen({
 
 /* ---- live preview overlay -------------------------------------------------- */
 
+export interface LogEntry {
+  ts: number;
+  level: "info" | "warn" | "error";
+  source: "npm" | "expo" | "system";
+  line: string;
+}
+
 export interface LivePreview {
   status: "idle" | "installing" | "starting" | "ready" | "failed" | "stopped";
   url?: string;
   error?: string;
-  logTail?: string[];
+  logTail?: LogEntry[];
   /** bump to force the iframe to re-fetch its src */
   reloadKey?: number;
   onRetry: () => void;
@@ -541,7 +548,7 @@ function LiveOverlay({ live, accent }: { live: LivePreview; accent: string }) {
   );
 }
 
-function LiveLogs({ lines, collapsible }: { lines: string[]; collapsible?: boolean }) {
+function LiveLogs({ lines, collapsible }: { lines: LogEntry[]; collapsible?: boolean }) {
   const [open, setOpen] = useState(!collapsible);
   return (
     <div className="ip-live-logs-wrap">
@@ -553,7 +560,9 @@ function LiveLogs({ lines, collapsible }: { lines: string[]; collapsible?: boole
       {open && (
         <pre className="ip-live-logs">
           {lines.map((l, i) => (
-            <div key={i}>{l}</div>
+            <div key={i} className={`log-${l.level}`}>
+              {l.line}
+            </div>
           ))}
         </pre>
       )}

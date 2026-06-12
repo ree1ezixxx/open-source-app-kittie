@@ -28,6 +28,16 @@ const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 
 export type PreviewStatus = "installing" | "starting" | "ready" | "failed" | "stopped";
 
+export type LogLevel = "info" | "warn" | "error";
+export type LogSource = "npm" | "expo" | "system";
+
+export interface LogEntry {
+  ts: number;
+  level: LogLevel;
+  source: LogSource;
+  line: string;
+}
+
 export interface PreviewSession {
   projectId: string;
   port: number;
@@ -38,7 +48,7 @@ export interface PreviewSession {
   lastHealthAt: number | null;
   lastAccessAt: number;
   error?: string;
-  logTail: string[];
+  logTail: LogEntry[];
   /** non-serialised internals */
   child?: ChildProcess;
 }
@@ -52,20 +62,55 @@ export interface PreviewView {
   startedAt: number;
   lastHealthAt: number | null;
   error?: string;
-  logTail: string[];
+  logTail: LogEntry[];
 }
 
 const sessions = new Map<string, PreviewSession>();
 
 /* ---- helpers ----------------------------------------------------------- */
 
-function pushLog(session: PreviewSession, chunk: string): void {
+/** Heuristic level for a stdout/stderr line. stderr defaults to warn; any line
+ *  matching /error/i is an error; bundling/ready progress stays info. */
+function classifyLevel(line: string, stderr: boolean): LogLevel {
+  if (/\b(error|failed|cannot|exception|unhandled)\b/i.test(line)) return "error";
+  if (stderr) return "warn";
+  if (/\bwarn(ing)?\b/i.test(line)) return "warn";
+  return "info";
+}
+
+/** Pull an Expo "bundling" progress signal out of a line, if present, so the
+ *  boot overlay shows life while the bundler grinds. */
+function bundlingHint(line: string): string | null {
+  const m = line.match(/bundl(?:e|ing)[^\n]*?(\d{1,3}%|complete|finished|\d+ms)?/i);
+  return m ? m[0].trim() : null;
+}
+
+interface PushOpts {
+  source?: LogSource;
+  stderr?: boolean;
+  level?: LogLevel;
+}
+
+function pushEntry(session: PreviewSession, entry: LogEntry): void {
+  session.logTail.push(entry);
+  if (session.logTail.length > LOG_TAIL_MAX) {
+    session.logTail.splice(0, session.logTail.length - LOG_TAIL_MAX);
+  }
+}
+
+function pushLog(session: PreviewSession, chunk: string, opts: PushOpts = {}): void {
+  const source = opts.source ?? "system";
   for (const raw of chunk.split(/\r?\n/)) {
     const line = raw.replace(/\[[0-9;]*m/g, "").trimEnd();
     if (!line) continue;
-    session.logTail.push(line);
-    if (session.logTail.length > LOG_TAIL_MAX) {
-      session.logTail.splice(0, session.logTail.length - LOG_TAIL_MAX);
+    const level = opts.level ?? classifyLevel(line, opts.stderr ?? false);
+    pushEntry(session, { ts: Date.now(), level, source, line });
+    // Surface bundling progress explicitly (still info-level) so the overlay moves.
+    if (source === "expo" && /bundl/i.test(line)) {
+      const hint = bundlingHint(line);
+      if (hint && hint.toLowerCase() !== line.toLowerCase()) {
+        pushEntry(session, { ts: Date.now(), level: "info", source: "expo", line: `bundling: ${hint}` });
+      }
     }
   }
 }
@@ -190,9 +235,17 @@ export function stopPreview(projectId: string): PreviewSession | null {
  * healthcheck run async and mutate the session in place. Poll getPreview().
  */
 export async function startPreview(projectId: string): Promise<PreviewSession> {
-  // Restart semantics: tear down any existing session first.
   const prior = sessions.get(projectId);
   if (prior) {
+    // Idempotent revalidating start: if a session claims to be ready, trust it
+    // only if the port still answers. A live one is returned untouched (no
+    // disruptive restart); a dead one is cleaned up and started fresh.
+    if (prior.status === "ready" && (await healthcheck(prior.port))) {
+      prior.lastHealthAt = Date.now();
+      prior.lastAccessAt = Date.now();
+      pushLog(prior, "[preview] already running — reusing live session", { source: "system" });
+      return prior;
+    }
     killTree(prior.child);
     sessions.delete(projectId);
   }
@@ -260,8 +313,8 @@ function runInstall(session: PreviewSession, cwd: string): Promise<void> {
       reject(new Error("dependency install timed out"));
     }, INSTALL_TIMEOUT_MS);
 
-    child.stdout?.on("data", (b) => pushLog(session, b.toString("utf8")));
-    child.stderr?.on("data", (b) => pushLog(session, b.toString("utf8")));
+    child.stdout?.on("data", (b) => pushLog(session, b.toString("utf8"), { source: "npm" }));
+    child.stderr?.on("data", (b) => pushLog(session, b.toString("utf8"), { source: "npm", stderr: true }));
     child.on("error", (err) => {
       clearTimeout(timer);
       reject(err);
@@ -295,8 +348,8 @@ async function spawnExpo(session: PreviewSession, cwd: string): Promise<void> {
   session.pid = child.pid ?? null;
 
   let exited = false;
-  child.stdout?.on("data", (b) => pushLog(session, b.toString("utf8")));
-  child.stderr?.on("data", (b) => pushLog(session, b.toString("utf8")));
+  child.stdout?.on("data", (b) => pushLog(session, b.toString("utf8"), { source: "expo" }));
+  child.stderr?.on("data", (b) => pushLog(session, b.toString("utf8"), { source: "expo", stderr: true }));
   child.on("error", (err) => {
     exited = true;
     session.status = "failed";

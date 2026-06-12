@@ -17,12 +17,21 @@ import {
 } from "@kittie/db";
 import { zipSync } from "fflate";
 import { Hono } from "hono";
+import { streamSSE } from "hono/streaming";
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 
 import { getDb } from "../lib/db.js";
 import { generateJson, isGeminiConfigured } from "../lib/gemini.js";
 import { generateJsonOllama, isOllamaAvailable, OLLAMA_MODEL } from "../lib/ollama.js";
 import { getPreview, startPreview, stopPreview, toView } from "../lib/preview.js";
+import {
+  bufferedEvents,
+  emitRunEvent,
+  isRunEnded,
+  subscribe,
+  type RunEvent,
+} from "../lib/run-events.js";
 import { pruneRuns, readWorkspaceTree, syncWorkspace, workspaceRoot } from "../lib/workspace.js";
 
 /* ============================================================
@@ -246,55 +255,160 @@ builderRouter.post("/projects/:id/messages", async (c) => {
   if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
   const { content } = parsed.data;
 
-  const current = JSON.parse(project.blueprintJson) as AppBlueprint;
-  const { kind, gen } = await resolveEngine();
-  const revised = gen
-    ? await reviseBlueprint(current, content, gen)
-    : heuristicRevise(current, content);
+  // runId is generated up-front so events can be emitted DURING synchronous
+  // processing. The client only learns runId from the response below (which
+  // resolves after processing), so it would miss every live event — the
+  // run-events replay buffer closes that gap: the SSE endpoint replays all
+  // buffered events for the run, then streams any remainder.
+  const runId = randomUUID();
 
-  const changed = JSON.stringify(revised) !== JSON.stringify(current);
-  await addBuilderMessage(db, { projectId: project.id, role: "user", content });
+  const phase = async <T>(name: string, fn: () => Promise<T> | T): Promise<T> => {
+    emitRunEvent(runId, { type: "phase_started", phase: name });
+    const out = await fn();
+    emitRunEvent(runId, { type: "phase_completed", phase: name });
+    return out;
+  };
 
-  let reply: string;
-  if (changed) {
-    await updateBuilderProjectBlueprint(db, project.id, {
-      name: revised.appName,
-      blueprintJson: JSON.stringify(revised),
-      engine: kind,
-    });
-    reply = assistantSummary(revised, current);
-  } else {
-    // Honest no-op: never pretend a change landed.
-    reply = gen
-      ? "I couldn't map that instruction to a change in the app. Try being more specific — e.g. \"add a stats tab\", \"make the accent #FF375F\", or \"rename it to Pulse\"."
-      : "Offline mode handles: add/remove a tab, rename the app, and accent color changes (named or #RRGGBB). For free-form changes, start Ollama (or configure GEMINI_API_KEY).";
-  }
-  const run = buildRun(kind, current, revised, changed);
-  const assistant = await addBuilderMessage(db, {
-    projectId: project.id,
-    role: "assistant",
-    content: reply,
-    blueprintJson: changed ? JSON.stringify(revised) : undefined,
-    runJson: JSON.stringify(run),
-  });
+  try {
+    const current = await phase("Reading blueprint", () => JSON.parse(project.blueprintJson) as AppBlueprint);
+    const { kind, gen } = await resolveEngine();
+    emitRunEvent(runId, { type: "log", level: "info", line: `Engine: ${kind}` });
 
-  if (changed) {
-    // Snapshot before/after into runs/<assistant message id>/ then prune.
-    try {
-      await syncWorkspace(project.id, fromBlueprintExpo(revised).files, assistant.id);
-      await pruneRuns(project.id);
-    } catch (err) {
-      console.warn(`[builder] workspace sync failed for ${project.id}:`, err);
+    const revised = await phase("Applying changes", () =>
+      gen ? reviseBlueprint(current, content, gen) : heuristicRevise(current, content),
+    );
+
+    const changed = JSON.stringify(revised) !== JSON.stringify(current);
+    await addBuilderMessage(db, { projectId: project.id, role: "user", content });
+
+    let reply: string;
+    if (changed) {
+      await updateBuilderProjectBlueprint(db, project.id, {
+        name: revised.appName,
+        blueprintJson: JSON.stringify(revised),
+        engine: kind,
+      });
+      reply = assistantSummary(revised, current);
+    } else {
+      // Honest no-op: never pretend a change landed.
+      reply = gen
+        ? "I couldn't map that instruction to a change in the app. Try being more specific — e.g. \"add a stats tab\", \"make the accent #FF375F\", or \"rename it to Pulse\"."
+        : "Offline mode handles: add/remove a tab, rename the app, and accent color changes (named or #RRGGBB). For free-form changes, start Ollama (or configure GEMINI_API_KEY).";
     }
-  }
 
-  const fresh = await getBuilderProject(db, project.id);
-  return c.json({
-    data: {
-      ...projectPayload(fresh ?? project),
+    const run = buildRun(kind, current, revised, changed);
+
+    await phase("Regenerating files", () => {
+      for (const f of run.changedFiles) emitRunEvent(runId, { type: "file_changed", path: f });
+    });
+
+    const assistant = await addBuilderMessage(db, {
+      projectId: project.id,
+      role: "assistant",
+      content: reply,
+      blueprintJson: changed ? JSON.stringify(revised) : undefined,
+      runJson: JSON.stringify(run),
+    });
+
+    if (changed) {
+      // Snapshot before/after into runs/<assistant message id>/ then prune.
+      await phase("Syncing workspace", async () => {
+        try {
+          await syncWorkspace(project.id, fromBlueprintExpo(revised).files, assistant.id);
+          await pruneRuns(project.id);
+        } catch (err) {
+          console.warn(`[builder] workspace sync failed for ${project.id}:`, err);
+          emitRunEvent(runId, {
+            type: "error_detected",
+            line: `workspace sync failed: ${err instanceof Error ? err.message : String(err)}`,
+          });
+        }
+      });
+    }
+
+    await phase("Validating", () => {
+      /* blueprint already validated by the engine; placeholder for build hook */
+    });
+
+    emitRunEvent(runId, {
+      type: "run_success",
       changed,
-      reply: { id: assistant.id, role: "assistant", content: reply, run, createdAt: assistant.createdAt },
-    },
+      messageId: assistant.id,
+      changedFiles: run.changedFiles,
+    });
+
+    const fresh = await getBuilderProject(db, project.id);
+    return c.json({
+      data: {
+        ...projectPayload(fresh ?? project),
+        changed,
+        runId,
+        reply: { id: assistant.id, role: "assistant", content: reply, run, createdAt: assistant.createdAt },
+      },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    emitRunEvent(runId, { type: "run_failed", error: message });
+    return c.json({ error: message, runId }, 500);
+  }
+});
+
+/* ---- live run events over SSE -----------------------------------------
+   GET /api/v1/builder/runs/:runId/events
+   Replays the buffered event sequence (so a client connecting after the
+   synchronous POST resolved still sees every phase), then streams new ones,
+   with a heartbeat comment every 15s. Closes once the run ends. */
+
+builderRouter.get("/runs/:runId/events", (c) => {
+  const runId = c.req.param("runId");
+  return streamSSE(c, async (stream) => {
+    let nextIndex = 0;
+    const queue: RunEvent[] = [];
+    let resolveWait: (() => void) | null = null;
+
+    const flush = async () => {
+      // Replay anything buffered we haven't sent, then drain the live queue.
+      const buffered = bufferedEvents(runId);
+      while (nextIndex < buffered.length) {
+        const ev = buffered[nextIndex++];
+        if (!ev) break;
+        await stream.writeSSE({ event: ev.type, data: JSON.stringify(ev) });
+      }
+      while (queue.length) {
+        const ev = queue.shift()!;
+        await stream.writeSSE({ event: ev.type, data: JSON.stringify(ev) });
+        nextIndex = bufferedEvents(runId).length; // keep replay index past live ones
+      }
+    };
+
+    const unsub = subscribe(runId, (ev) => {
+      queue.push(ev);
+      resolveWait?.();
+    });
+
+    const heartbeat = setInterval(() => {
+      void stream.write(": heartbeat\n\n").catch(() => {});
+    }, 15000);
+
+    try {
+      await flush();
+      // If the run already finished before we connected, replay was enough.
+      while (!isRunEnded(runId) || queue.length) {
+        await new Promise<void>((resolve) => {
+          resolveWait = resolve;
+          // wake periodically so an already-ended run doesn't hang
+          setTimeout(resolve, 1000);
+        });
+        resolveWait = null;
+        await flush();
+        if (isRunEnded(runId) && queue.length === 0) break;
+      }
+      // Final drain.
+      await flush();
+    } finally {
+      clearInterval(heartbeat);
+      unsub();
+    }
   });
 });
 

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { PageShell } from "../components/PageShell";
-import { PhonePreview, type LivePreview } from "../components/PhonePreview";
+import { PhonePreview, type LivePreview, type LogEntry } from "../components/PhonePreview";
 import { IconSparkles } from "../icons";
 import type { Theme } from "../lib/theme";
 import "../styles/builder.css";
@@ -81,7 +81,26 @@ interface PreviewView {
   startedAt: number;
   lastHealthAt: number;
   error?: string;
-  logTail: string[];
+  logTail: LogEntry[];
+}
+
+/* Live run events (SSE) — mirrors packages/api/src/lib/run-events.ts */
+interface RunEvent {
+  type:
+    | "phase_started"
+    | "phase_completed"
+    | "log"
+    | "file_changed"
+    | "error_detected"
+    | "repair_attempt"
+    | "preview_ready"
+    | "run_failed"
+    | "run_success";
+  ts: number;
+  phase?: string;
+  path?: string;
+  line?: string;
+  error?: string;
 }
 
 /** Route prefix this Builder instance lives under (dashboard vs /studio). */
@@ -330,6 +349,8 @@ function BuilderWorkspace({
   const [activeFile, setActiveFile] = useState(0);
   const [codeTarget, setCodeTarget] = useState<"swift" | "expo">("swift");
   const [freshRunId, setFreshRunId] = useState<string | null>(null);
+  const [liveRunId, setLiveRunId] = useState<string | null>(null);
+  const [codeTab, setCodeTab] = useState<"files" | "logs">("files");
   const [previewEpoch, setPreviewEpoch] = useState(0);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
@@ -355,6 +376,7 @@ function BuilderWorkspace({
     if (content.length < 2 || sending || !project) return;
     setSending(true);
     setDraft("");
+    setLiveRunId(null);
     // optimistic user bubble
     setProject((p) =>
       p ? { ...p, messages: [...p.messages, { id: `tmp-${Date.now()}`, role: "user", content }] } : p,
@@ -381,6 +403,11 @@ function BuilderWorkspace({
           : p,
       );
       setFreshRunId(d.reply.id);
+      // Drive the freshly-rendered run card from the REAL event sequence (SSE
+      // replay) instead of a synthetic ticker. The runId is what the SSE stream
+      // is keyed on; the replay buffer means we still get every phase even
+      // though the POST only resolved after the run finished server-side.
+      if (d.runId) setLiveRunId(d.runId);
       if (d.changed) setActiveTab(0);
     } catch (e) {
       setProject((p) =>
@@ -447,14 +474,19 @@ function BuilderWorkspace({
           <div className="builder-thread">
             {project.messages.map((m) =>
               m.role === "assistant" && m.run ? (
-                <RunCard key={m.id} message={m} animate={m.id === freshRunId} />
+                <RunCard
+                  key={m.id}
+                  message={m}
+                  animate={m.id === freshRunId}
+                  liveRunId={m.id === freshRunId ? liveRunId : null}
+                />
               ) : (
                 <div key={m.id} className={`builder-msg ${m.role}`}>
                   {mdBold(m.content)}
                 </div>
               ),
             )}
-            {sending && <PendingRun engine={project.aiEngine} />}
+            {sending && !liveRunId && <PendingRun engine={project.aiEngine} />}
             <div ref={chatEndRef} />
           </div>
           <div className="builder-composer">
@@ -566,25 +598,40 @@ function BuilderWorkspace({
           {view === "code" && (
             <div className="builder-code-wrap">
               <div className="builder-code-targets">
-                <button className={codeTarget === "swift" ? "active" : ""} onClick={() => { setCodeTarget("swift"); setActiveFile(0); }}>
-                   SwiftUI · Xcode
+                <button className={codeTab === "files" ? "active" : ""} onClick={() => setCodeTab("files")}>
+                  Files
                 </button>
-                <button className={codeTarget === "expo" ? "active" : ""} onClick={() => { setCodeTarget("expo"); setActiveFile(0); }}>
-                  Expo · React Native
+                <button className={codeTab === "logs" ? "active" : ""} onClick={() => setCodeTab("logs")}>
+                  Logs
                 </button>
-              </div>
-              <div className="builder-code">
-                <div className="builder-filetree">
-                  {codeFiles.map((f, i) => (
-                    <button key={f.path} className={i === activeFile ? "active" : ""} onClick={() => setActiveFile(i)}>
-                      {f.path}
+                {codeTab === "files" && (
+                  <>
+                    <span className="builder-code-targets-sep" />
+                    <button className={codeTarget === "swift" ? "active" : ""} onClick={() => { setCodeTarget("swift"); setActiveFile(0); }}>
+                       SwiftUI · Xcode
                     </button>
-                  ))}
-                </div>
-                <pre className="builder-filebody">
-                  <code>{codeFiles[activeFile]?.contents ?? ""}</code>
-                </pre>
+                    <button className={codeTarget === "expo" ? "active" : ""} onClick={() => { setCodeTarget("expo"); setActiveFile(0); }}>
+                      Expo · React Native
+                    </button>
+                  </>
+                )}
               </div>
+              {codeTab === "files" ? (
+                <div className="builder-code">
+                  <div className="builder-filetree">
+                    {codeFiles.map((f, i) => (
+                      <button key={f.path} className={i === activeFile ? "active" : ""} onClick={() => setActiveFile(i)}>
+                        {f.path}
+                      </button>
+                    ))}
+                  </div>
+                  <pre className="builder-filebody">
+                    <code>{codeFiles[activeFile]?.contents ?? ""}</code>
+                  </pre>
+                </div>
+              ) : (
+                <LogsPanel projectId={projectId} session={livePreview.session} />
+              )}
             </div>
           )}
           {view === "export" && <ExportPanel project={project} />}
@@ -602,20 +649,9 @@ function mdBold(text: string) {
   return parts.map((p, i) => (i % 2 === 1 ? <strong key={i}>{p}</strong> : p));
 }
 
-const PENDING_STATUSES = [
-  "Reading the blueprint…",
-  "Creating a plan…",
-  "Applying changes…",
-  "Regenerating files…",
-  "Validating…",
-];
-
+/** Indeterminate working state while the POST is in flight — no fake phase
+ *  ticker. Real phases are revealed from the SSE replay once runId is known. */
 function PendingRun({ engine }: { engine?: string }) {
-  const [step, setStep] = useState(0);
-  useEffect(() => {
-    const t = setInterval(() => setStep((s) => Math.min(s + 1, PENDING_STATUSES.length - 1)), 2200);
-    return () => clearInterval(t);
-  }, []);
   return (
     <div className="builder-run">
       <div className="builder-run-head">
@@ -624,15 +660,67 @@ function PendingRun({ engine }: { engine?: string }) {
       </div>
       <div className="builder-run-step live">
         <span className="builder-spinner" />
-        {PENDING_STATUSES[step]}
+        Working…
       </div>
     </div>
   );
 }
 
-function RunCard({ message: m, animate }: { message: ChatMessage; animate: boolean }) {
+/** Consume the run-event SSE stream (replay + live) for a finished/in-flight
+ *  run and surface the real completed phases in order, with the server's own
+ *  timing. Closes itself when the run ends. */
+function useRunEvents(runId: string | null): { phases: string[]; failed: string | null } {
+  const [phases, setPhases] = useState<string[]>([]);
+  const [failed, setFailed] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!runId) {
+      setPhases([]);
+      setFailed(null);
+      return;
+    }
+    setPhases([]);
+    setFailed(null);
+    const es = new EventSource(`/api/v1/builder/runs/${runId}/events`);
+    const onPhaseDone = (e: MessageEvent) => {
+      try {
+        const ev = JSON.parse(e.data) as RunEvent;
+        if (ev.phase) setPhases((p) => (p.includes(ev.phase!) ? p : [...p, ev.phase!]));
+      } catch {
+        /* ignore malformed */
+      }
+    };
+    const onFailed = (e: MessageEvent) => {
+      try {
+        const ev = JSON.parse(e.data) as RunEvent;
+        setFailed(ev.error ?? "run failed");
+      } catch {
+        setFailed("run failed");
+      }
+      es.close();
+    };
+    es.addEventListener("phase_completed", onPhaseDone as EventListener);
+    es.addEventListener("run_success", () => es.close());
+    es.addEventListener("run_failed", onFailed as EventListener);
+    es.onerror = () => es.close();
+    return () => es.close();
+  }, [runId]);
+
+  return { phases, failed };
+}
+
+function RunCard({
+  message: m,
+  animate,
+  liveRunId,
+}: {
+  message: ChatMessage;
+  animate: boolean;
+  liveRunId?: string | null;
+}) {
   const run = m.run!;
   const [showFiles, setShowFiles] = useState(false);
+  const { phases: livePhases } = useRunEvents(liveRunId ?? null);
   const done = run.todos.filter((t) => t.done).length;
   const delay = (i: number) => (animate ? { animationDelay: `${i * 0.25}s` } : { animation: "none" });
   const chips = showFiles ? run.changedFiles : run.changedFiles.slice(0, 3);
@@ -657,12 +745,19 @@ function RunCard({ message: m, animate }: { message: ChatMessage; animate: boole
           </span>
         </div>
       )}
-      {run.steps.map((s) => (
-        <div key={s.label} className="builder-run-step" style={delay(row++)}>
-          <span className="builder-run-check">✓</span>
-          <span>{s.label}</span>
-        </div>
-      ))}
+      {livePhases.length > 0
+        ? livePhases.map((p) => (
+            <div key={p} className="builder-run-step" style={animate ? undefined : { animation: "none" }}>
+              <span className="builder-run-check">✓</span>
+              <span>{p}</span>
+            </div>
+          ))
+        : run.steps.map((s) => (
+            <div key={s.label} className="builder-run-step" style={delay(row++)}>
+              <span className="builder-run-check">✓</span>
+              <span>{s.label}</span>
+            </div>
+          ))}
       <div className="builder-run-summary" style={delay(row++)}>
         {mdBold(m.content)}
       </div>
@@ -681,6 +776,67 @@ function RunCard({ message: m, animate }: { message: ChatMessage; animate: boole
         </div>
       )}
     </div>
+  );
+}
+
+/* ---- logs tab ------------------------------------------------------------ */
+
+/** Live preview log stream. Reuses the already-fetched session for an instant
+ *  paint, then polls the status endpoint every 2s while the tab is visible so
+ *  logs keep flowing even after the session goes 'ready' (when useLivePreview
+ *  stops its own polling). Auto-scrolls to the newest line. */
+function LogsPanel({ projectId, session }: { projectId: string; session: PreviewView | null }) {
+  const [logs, setLogs] = useState<LogEntry[]>(session?.logTail ?? []);
+  const endRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (session?.logTail) setLogs(session.logTail);
+  }, [session]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const tick = () => {
+      fetch(`/api/v1/builder/projects/${projectId}/preview/status`)
+        .then((r) => r.json())
+        .then((r) => {
+          if (cancelled) return;
+          const v: PreviewView | null = r.data ?? null;
+          if (v?.logTail) setLogs(v.logTail);
+        })
+        .catch(() => {});
+    };
+    tick();
+    const t = setInterval(tick, 2000);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
+  }, [projectId]);
+
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ block: "end" });
+  }, [logs.length]);
+
+  if (logs.length === 0) {
+    return (
+      <div className="builder-logs empty">
+        <p className="builder-dim">
+          No preview logs yet. Start a live preview (Preview → Live → Run) to stream the dev-server output here.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <pre className="builder-logs">
+      {logs.map((l, i) => (
+        <div key={i} className={`builder-log-line log-${l.level}`}>
+          <span className="builder-log-src">{l.source}</span>
+          <span className="builder-log-msg">{l.line}</span>
+        </div>
+      ))}
+      <div ref={endRef} />
+    </pre>
   );
 }
 
