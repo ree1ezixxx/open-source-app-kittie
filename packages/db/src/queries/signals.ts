@@ -1,5 +1,6 @@
 import { count, eq } from "drizzle-orm";
 import type { GrowthPeriod } from "@kittie/types";
+import { GROWTH_PERIOD_DAYS } from "@kittie/intelligence";
 import type { Db } from "../client.js";
 import {
   apps,
@@ -9,14 +10,6 @@ import {
   type App,
   type AppSnapshot,
 } from "../schema.js";
-
-const GROWTH_PERIOD_DAYS: Record<GrowthPeriod, number> = {
-  "7d": 7,
-  "14d": 14,
-  "30d": 30,
-  "60d": 60,
-  "90d": 90,
-};
 
 export interface SnapshotContext {
   app: App;
