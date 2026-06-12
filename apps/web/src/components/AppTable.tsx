@@ -92,7 +92,7 @@ function GrowthCell({ a }: { a: AppListItemEx }) {
           {pct.toFixed(1)}%
         </span>
       ) : (
-        <span className="delta flat">0%</span>
+        <span className="num-muted">—</span>
       )}
     </span>
   );

@@ -262,9 +262,9 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
                 ) : undefined
               }
             >
-              {media.status === "probing" ? (
+              {media.status === "probing" && app.screenshotUrls.length > 0 ? (
                 <div className="media-grid">
-                  {Array.from({ length: Math.min(6, app.screenshotUrls.length || 6) }).map((_, i) => (
+                  {Array.from({ length: Math.min(6, app.screenshotUrls.length) }).map((_, i) => (
                     <div key={i} className="skel" style={{ aspectRatio: "9 / 16", borderRadius: 15 }} />
                   ))}
                 </div>

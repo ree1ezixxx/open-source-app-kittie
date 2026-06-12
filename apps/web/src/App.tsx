@@ -8,6 +8,7 @@ import { HighlightsPage } from "./pages/HighlightsPage";
 import { TrendingPage } from "./pages/TrendingPage";
 import { RisingPage } from "./pages/RisingPage";
 import { FavoritesPage } from "./pages/FavoritesPage";
+import { AppEnginePage } from "./pages/AppEnginePage";
 import { AppTrackingPage } from "./pages/aso/AppTrackingPage";
 import { KeywordExplorerPage } from "./pages/aso/KeywordExplorerPage";
 import { ScreenshotTranslationPage } from "./pages/ScreenshotTranslationPage";
@@ -42,6 +43,7 @@ export function App() {
         <Route path="/dashboard/highlights" element={<HighlightsPage theme={theme} onToggleTheme={toggleTheme} />} />
         <Route path="/dashboard/trending" element={<TrendingPage theme={theme} onToggleTheme={toggleTheme} />} />
         <Route path="/dashboard/rising" element={<RisingPage theme={theme} onToggleTheme={toggleTheme} />} />
+        <Route path="/dashboard/app-engine" element={<AppEnginePage theme={theme} onToggleTheme={toggleTheme} />} />
         <Route path="/dashboard/favorites" element={<FavoritesPage theme={theme} onToggleTheme={toggleTheme} />} />
         <Route path="/dashboard/favorites/apps" element={<FavoritesPage theme={theme} onToggleTheme={toggleTheme} />} />
 

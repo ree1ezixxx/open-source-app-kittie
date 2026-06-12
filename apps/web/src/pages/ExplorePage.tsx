@@ -98,7 +98,7 @@ export function ExplorePage({
         for (const a of res.data) if (a.category) set.add(a.category);
         setCategories([...set].sort());
       })
-      .catch(() => {});
+      .catch(() => setCategories([]));
   }, []);
 
   useEffect(() => {

@@ -75,7 +75,6 @@ export function TrendingPage({ theme, onToggleTheme }: { theme: Theme; onToggleT
           {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
         </select>
       </div>
-      <span className="pill" style={pillStyle("#9a9aa3")}>🇺🇸 United States</span>
       {updated && <span className="pill" style={pillStyle("#9a9aa3")}>Updated {updated}</span>}
     </div>
   );

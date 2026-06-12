@@ -6,6 +6,7 @@ import {
   IconTrending,
   IconRising,
   IconStar,
+  IconDownload,
   IconGrid,
   IconSearch,
   IconImage,
@@ -32,6 +33,10 @@ const GROUPS: Group[] = [
       { to: "/dashboard/trending", label: "Trending", icon: IconTrending },
       { to: "/dashboard/rising", label: "Rising", icon: IconRising },
     ],
+  },
+  {
+    label: "Developer",
+    items: [{ to: "/dashboard/app-engine", label: "App Engine", icon: IconDownload }],
   },
   {
     label: "Your Apps",

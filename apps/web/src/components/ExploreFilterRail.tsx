@@ -136,6 +136,7 @@ function TimeWindowRow({
             inputMode="numeric"
             min={1}
             placeholder="Days"
+            aria-label={`${label} (days)`}
             value={value || ""}
             onChange={(e) => onValue(e.target.value ? Math.max(0, Number(e.target.value)) : 0)}
           />

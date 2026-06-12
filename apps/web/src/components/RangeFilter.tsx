@@ -59,6 +59,7 @@ export function RangeFilter({
             type="number"
             inputMode="numeric"
             placeholder="Min"
+            aria-label="Minimum value"
             value={min ?? ""}
             onChange={(e) => onChange({ min: e.target.value ? Number(e.target.value) : undefined, max })}
           />
@@ -67,6 +68,7 @@ export function RangeFilter({
             type="number"
             inputMode="numeric"
             placeholder="Max"
+            aria-label="Maximum value"
             value={max ?? ""}
             onChange={(e) => onChange({ min, max: e.target.value ? Number(e.target.value) : undefined })}
           />

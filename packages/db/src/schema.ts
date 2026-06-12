@@ -288,9 +288,51 @@ export const appIdeas = sqliteTable(
   ],
 );
 
+/**
+ * App Engine: cloneable app templates. One row per app that can be cloned
+ * into Xcode or Expo Go. Tracks source repository and platform metadata.
+ */
+export const cloneableApps = sqliteTable(
+  "cloneable_apps",
+  {
+    id: text("id").primaryKey(),
+    /** Reference to the Kittie app (optional — can link to external apps too). */
+    appId: text("app_id").references(() => apps.id),
+    /** GitHub repo URL: https://github.com/owner/repo */
+    repoUrl: text("repo_url").notNull(),
+    /** Platform: 'react-native' | 'ios-native' | 'android-native' | 'multi' */
+    platform: text("platform", {
+      enum: ["react-native", "ios-native", "android-native", "multi"],
+    }).notNull(),
+    /** Display name for the app (override if different from Kittie listing). */
+    title: text("title").notNull(),
+    /** Brief description for the app engine catalog. */
+    description: text("description"),
+    /** Icon/thumbnail URL. */
+    iconUrl: text("icon_url"),
+    /** Why this app is featured: 'trending' | 'top-grossing' | 'curated' */
+    featuredReason: text("featured_reason").notNull(),
+    /** For React Native: expo-project-id or similar. */
+    expoProjectId: text("expo_project_id"),
+    /** For iOS native: iOS deployment target (e.g. '14.0'). */
+    iosDeploymentTarget: text("ios_deployment_target"),
+    /** Star count at last sync (for sorting). */
+    githubStars: integer("github_stars"),
+    /** Last time we fetched repo metadata. */
+    syncedAt: integer("synced_at", { mode: "timestamp" }),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  },
+  (t) => [
+    uniqueIndex("cloneable_apps_repo_idx").on(t.repoUrl),
+    index("cloneable_apps_platform_idx").on(t.platform),
+    index("cloneable_apps_featured_idx").on(t.featuredReason),
+  ],
+);
+
 export type App = typeof apps.$inferSelect;
 export type AppSnapshot = typeof appSnapshots.$inferSelect;
 export type TrackedKeyword = typeof trackedKeywords.$inferSelect;
 export type AiGeneration = typeof aiGenerations.$inferSelect;
 export type SweepState = typeof sweepState.$inferSelect;
 export type AppIdea = typeof appIdeas.$inferSelect;
+export type CloneableApp = typeof cloneableApps.$inferSelect;

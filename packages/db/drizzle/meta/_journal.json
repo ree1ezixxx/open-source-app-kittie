@@ -57,6 +57,13 @@
       "when": 1781099215904,
       "tag": "0007_white_victor_mancha",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1781245366492,
+      "tag": "0008_outgoing_scarecrow",
+      "breakpoints": true
     }
   ]
 }

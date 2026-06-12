@@ -3,6 +3,7 @@ import { cors } from "hono/cors";
 import { SUPPORTED_COUNTRIES } from "./mock/fixtures.js";
 import { adsRouter } from "./routes/ads.js";
 import { aiRouter } from "./routes/ai.js";
+import { appEngineRouter } from "./routes/app-engine.js";
 import { appsRouter } from "./routes/apps.js";
 import { chartsRouter } from "./routes/charts.js";
 import { cloneRouter } from "./routes/clone.js";
@@ -25,6 +26,7 @@ export function createApp() {
   const v1 = new Hono();
   v1.route("/ads", adsRouter);
   v1.route("/ai", aiRouter);
+  v1.route("/app-engine", appEngineRouter);
   v1.route("/apps", appsRouter);
   v1.route("/charts", chartsRouter);
   v1.route("/clone", cloneRouter);

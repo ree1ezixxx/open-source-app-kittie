@@ -76,6 +76,7 @@ export function Topbar({
             value={search}
             onChange={(e) => onSearch(e.target.value)}
             placeholder="Search apps, developers, descriptions..."
+            aria-label="Search apps"
             spellCheck={false}
           />
           <span className="kbd">⌘K</span>
