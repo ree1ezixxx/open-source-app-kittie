@@ -84,10 +84,14 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
   const [tracked, setTracked] = useState<Map<string, TrackedKeyword>>(new Map());
   const [refreshing, setRefreshing] = useState(false);
   const mounted = useRef(true);
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     mounted.current = true;
-    return () => { mounted.current = false; };
+    return () => {
+      mounted.current = false;
+      abortRef.current?.abort();
+    };
   }, []);
 
   // Batch compare (2–10 pasted terms) — no idea generation.
@@ -96,9 +100,12 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
       if (terms.length === 0) return;
       setError(null);
       setPending((p) => [...new Set([...terms, ...p])]);
+      abortRef.current?.abort();
+      const ctrl = new AbortController();
+      abortRef.current = ctrl;
       try {
-        const fetched = await compareKeywords(terms.map((keyword) => ({ keyword, store: forStore })), forCountry);
-        if (!mounted.current) return;
+        const fetched = await compareKeywords(terms.map((keyword) => ({ keyword, store: forStore })), forCountry, ctrl.signal);
+        if (!mounted.current || ctrl.signal.aborted) return;
         setResults((prev) => {
           const incoming = new Map(fetched.map((f) => [keyOf(f), f]));
           const kept = prev.filter((r) => !incoming.has(keyOf(r)));
@@ -107,7 +114,7 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
         if (fetched[0]) setSelectedKey(keyOf(fetched[0]));
         setTab("all");
       } catch (e) {
-        if (mounted.current) setError(e instanceof Error ? e.message : "Lookup failed");
+        if (mounted.current && !ctrl.signal.aborted) setError(e instanceof Error ? e.message : "Lookup failed");
       } finally {
         if (mounted.current) {
           const done = new Set(terms.map((t) => t.toLowerCase()));
@@ -124,24 +131,27 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
       setError(null);
       setGen({ seed, stage: 0, done: 0, total: 0 });
       setPending((p) => [...new Set([seed, ...p])]);
+      abortRef.current?.abort();
+      const ctrl = new AbortController();
+      abortRef.current = ctrl;
       try {
-        const seedKd = await lookupKeyword(seed, forStore, forCountry);
-        if (!mounted.current) return;
+        const seedKd = await lookupKeyword(seed, forStore, forCountry, ctrl.signal);
+        if (!mounted.current || ctrl.signal.aborted) return;
         const seedKey = keyOf(seedKd);
         setResults((prev) => [seedKd, ...prev.filter((r) => keyOf(r) !== seedKey)]);
         setSelectedKey(seedKey);
         setTab("all");
 
         setGen((g) => (g ? { ...g, stage: 1 } : g));
-        const related = await fetchRelated(seed, forStore, forCountry);
-        if (!mounted.current) return;
+        const related = await fetchRelated(seed, forStore, forCountry, ctrl.signal);
+        if (!mounted.current || ctrl.signal.aborted) return;
 
         setGen((g) => (g ? { ...g, stage: 2, total: related.length, done: 0 } : g));
         const scored: KeywordDifficulty[] = [];
         for (let i = 0; i < related.length; i += 5) {
           const chunk = related.slice(i, i + 5).map((keyword) => ({ keyword, store: forStore }));
-          const part = await compareKeywords(chunk, forCountry);
-          if (!mounted.current) return;
+          const part = await compareKeywords(chunk, forCountry, ctrl.signal);
+          if (!mounted.current || ctrl.signal.aborted) return;
           scored.push(...part);
           setGen((g) => (g ? { ...g, done: scored.length } : g));
         }
@@ -150,7 +160,7 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
         scored.sort((a, b) => b.opportunityScore - a.opportunityScore);
         setIdeas((prev) => ({ ...prev, [seedKey]: scored }));
       } catch (e) {
-        if (mounted.current) setError(e instanceof Error ? e.message : "Generation failed");
+        if (mounted.current && !ctrl.signal.aborted) setError(e instanceof Error ? e.message : "Generation failed");
       } finally {
         if (mounted.current) {
           setPending((p) => p.filter((t) => t.toLowerCase() !== seed.toLowerCase()));

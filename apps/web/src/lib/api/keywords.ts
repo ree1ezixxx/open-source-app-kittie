@@ -23,6 +23,7 @@ export interface KeywordDifficulty {
   opportunityScore: number; // (pop×0.4)+((100−diff)×0.3) — computed client-side
   competingAppCount: number;
   topApps: KeywordTopApp[];
+  computedAt?: string; // ISO timestamp of when this data was fetched/cached
 }
 
 export interface KeywordSuggestion {
@@ -43,6 +44,7 @@ function normalize(raw: Omit<KeywordDifficulty, "opportunityScore"> & { opportun
     ...raw,
     topApps,
     opportunityScore: computeOpportunity(raw.popularity, raw.difficulty),
+    computedAt: raw.computedAt,
   };
 }
 
@@ -86,11 +88,13 @@ export async function trackKeyword(
   keyword: string,
   store: Store,
   country = "US",
+  signal?: AbortSignal,
 ): Promise<TrackedKeyword | null> {
   const res = await fetch(`${BASE}/keywords/tracked`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ keyword, country, store }),
+    signal,
   });
   if (!res.ok) throw new Error(`Track failed (${res.status})`);
   const body = (await res.json()) as { data: TrackedKeyword | null };
@@ -98,9 +102,9 @@ export async function trackKeyword(
   return { ...body.data, metrics: body.data.metrics ? normalize(body.data.metrics) : null };
 }
 
-export async function untrackKeyword(keyword: string, store: Store, country = "US"): Promise<void> {
+export async function untrackKeyword(keyword: string, store: Store, country = "US", signal?: AbortSignal): Promise<void> {
   const q = new URLSearchParams({ keyword, country, store });
-  const res = await fetch(`${BASE}/keywords/tracked?${q}`, { method: "DELETE" });
+  const res = await fetch(`${BASE}/keywords/tracked?${q}`, { method: "DELETE", signal });
   if (!res.ok) throw new Error(`Untrack failed (${res.status})`);
 }
 
@@ -311,4 +315,17 @@ function compact(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(n >= 100_000 ? 0 : 1)}K`;
   return String(Math.round(n));
+}
+
+export function isDataFresh(computedAt?: string): boolean {
+  if (!computedAt) return false;
+  const age = Date.now() - new Date(computedAt).getTime();
+  const FRESH_THRESHOLD = 60 * 60 * 1000; // 1 hour
+  return age < FRESH_THRESHOLD;
+}
+
+export function formatDataSource(computedAt?: string): string {
+  if (!computedAt) return "store search";
+  const fresh = isDataFresh(computedAt);
+  return fresh ? "live store search" : "cached store search";
 }

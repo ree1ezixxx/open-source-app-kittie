@@ -90,7 +90,11 @@ export async function batchKeywordDifficulty(
 ): Promise<KeywordDifficulty[]> {
   const results: KeywordDifficulty[] = [];
   for (const item of items.slice(0, 25)) {
-    results.push(await getKeywordDifficulty(item.keyword, item.country, item.store));
+    try {
+      results.push(await getKeywordDifficulty(item.keyword, item.country, item.store));
+    } catch {
+      // Silently skip failed keywords so batch continues. Caller shows errors for missing results.
+    }
   }
   return results.sort((a, b) => b.opportunityScore - a.opportunityScore);
 }

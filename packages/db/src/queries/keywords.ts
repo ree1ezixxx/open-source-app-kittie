@@ -61,6 +61,7 @@ export function keywordRowToDifficulty(row: KeywordRow): KeywordDifficulty | nul
     opportunityScore: computeOpportunityScore(row.popularity, row.difficulty),
     competingAppCount: row.competingAppCount,
     topApps,
+    computedAt: row.computedAt.toISOString(),
   };
 }
 

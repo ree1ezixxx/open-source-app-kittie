@@ -157,6 +157,7 @@ export interface KeywordDifficulty {
     rating: number | null;
     rank: number;
   }>;
+  computedAt?: string;
 }
 
 export interface PaginatedResponse<T> {

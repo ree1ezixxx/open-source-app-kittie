@@ -27,8 +27,20 @@ function loadTracked(): TrackedApp[] {
   try {
     const raw = localStorage.getItem(LS_KEY);
     if (!raw) return [];
-    const parsed = JSON.parse(raw) as TrackedApp[];
-    return Array.isArray(parsed) ? parsed : [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((item): item is TrackedApp => {
+      return (
+        typeof item === "object" &&
+        item !== null &&
+        typeof (item as any).id === "string" &&
+        typeof (item as any).store === "string" &&
+        typeof (item as any).title === "string" &&
+        typeof (item as any).developer === "string" &&
+        typeof (item as any).addedAt === "string" &&
+        Array.isArray((item as any).keywords)
+      );
+    });
   } catch {
     return [];
   }

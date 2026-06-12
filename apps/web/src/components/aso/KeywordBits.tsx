@@ -2,7 +2,7 @@
 import type { ReactNode } from "react";
 import type { Store } from "@kittie/types";
 import { IconApple, IconGooglePlay, IconRank, IconSpark, IconStar, IconUsers } from "../../icons";
-import { computeInsights, type KeywordDifficulty } from "../../lib/api/keywords";
+import { computeInsights, formatDataSource, type KeywordDifficulty } from "../../lib/api/keywords";
 import { formatCompact } from "../../lib/format";
 import { flagOf } from "../../lib/markets";
 
@@ -134,7 +134,7 @@ export function KeywordDetail({
         <div>
           <h1 className="kw-detail-title">{kd.keyword}</h1>
           <div className="kw-detail-sub">
-            {kd.competingAppCount.toLocaleString()} competing apps · live store search
+            {kd.competingAppCount.toLocaleString()} competing apps · {formatDataSource(kd.computedAt)}
           </div>
         </div>
         <div className="spacer" />
