@@ -489,6 +489,8 @@ export interface LivePreview {
   logTail?: LogEntry[];
   /** bump to force the iframe to re-fetch its src */
   reloadKey?: number;
+  /** a revise just landed — show a brief overlay over the iframe until it reloads */
+  updating?: boolean;
   onRetry: () => void;
 }
 
@@ -503,13 +505,21 @@ function LiveOverlay({ live, accent }: { live: LivePreview; accent: string }) {
 
   if (status === "ready" && live.url) {
     return (
-      <iframe
-        key={live.reloadKey ?? 0}
-        className="ip-live-frame"
-        src={live.url}
-        title="Live preview"
-        sandbox="allow-scripts allow-same-origin allow-forms"
-      />
+      <>
+        <iframe
+          key={live.reloadKey ?? 0}
+          className="ip-live-frame"
+          src={live.url}
+          title="Live preview"
+          sandbox="allow-scripts allow-same-origin allow-forms"
+        />
+        {live.updating && (
+          <div className="ip-live-updating">
+            <span className="ip-live-spinner" style={{ borderTopColor: accent }} />
+            <div className="ip-live-title">Updating preview…</div>
+          </div>
+        )}
+      </>
     );
   }
 

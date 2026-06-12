@@ -245,6 +245,7 @@ function BuilderLanding({ theme, onToggleTheme }: { theme: Theme; onToggleTheme:
 function useLivePreview(projectId: string) {
   const [session, setSession] = useState<PreviewView | null>(null);
   const [busy, setBusy] = useState(false);
+  const [updating, setUpdating] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -316,7 +317,37 @@ function useLivePreview(projectId: string) {
 
   const reload = useCallback(() => setReloadKey((k) => k + 1), []);
 
-  return { session, busy, reloadKey, start, stop, reload };
+  /** Called when a revise run signals preview_ready. Metro watches files (no
+   *  CI=1) so the running dev server already has the new code — we just confirm
+   *  the port is still healthy, then bump reloadKey to re-fetch the iframe.
+   *  Shows a brief "Updating preview…" state across the reload so the swap reads
+   *  as intentional rather than a flicker. */
+  const refreshAfterRevise = useCallback(() => {
+    setUpdating(true);
+    let tries = 0;
+    const tick = () => {
+      fetch(`/api/v1/builder/projects/${projectId}/preview/status`)
+        .then((r) => r.json())
+        .then((r) => {
+          const v: PreviewView | null = r.data ?? null;
+          if (v) setSession(v);
+          if ((v?.status === "ready" && v.url) || tries >= 6) {
+            setReloadKey((k) => k + 1);
+            setUpdating(false);
+          } else {
+            tries += 1;
+            setTimeout(tick, 600);
+          }
+        })
+        .catch(() => {
+          setReloadKey((k) => k + 1);
+          setUpdating(false);
+        });
+    };
+    tick();
+  }, [projectId]);
+
+  return { session, busy, updating, reloadKey, start, stop, reload, refreshAfterRevise };
 }
 
 /** Map the live-preview hook state onto the PhonePreview `live` prop. */
@@ -328,6 +359,7 @@ function toLivePreview(lp: ReturnType<typeof useLivePreview>): LivePreview {
     error: s?.error,
     logTail: s?.logTail,
     reloadKey: lp.reloadKey,
+    updating: lp.updating,
     onRetry: () => void lp.start(),
   };
 }
@@ -492,7 +524,14 @@ function BuilderWorkspace({
               ),
             )}
             {liveRunId ? (
-              <PendingLiveRun runId={liveRunId} engine={project.aiEngine} onEnded={onRunEnded} />
+              <PendingLiveRun
+                runId={liveRunId}
+                engine={project.aiEngine}
+                onEnded={onRunEnded}
+                onPreviewReady={
+                  previewMode === "live" ? () => livePreview.refreshAfterRevise() : undefined
+                }
+              />
             ) : (
               sending && <PendingRun engine={project.aiEngine} />
             )}
@@ -688,6 +727,7 @@ interface LiveLine {
 function useRunEvents(
   runId: string | null,
   onEnded?: () => void,
+  onPreviewReady?: () => void,
 ): { lines: LiveLine[]; failed: string | null; ended: boolean } {
   const [lines, setLines] = useState<LiveLine[]>([]);
   const [failed, setFailed] = useState<string | null>(null);
@@ -731,6 +771,12 @@ function useRunEvents(
         /* ignore malformed */
       }
     });
+    es.addEventListener("preview_ready", () => {
+      // The workspace was rewritten and a live preview is running; Metro
+      // (watch mode) re-bundles on the next fetch, so reloading the iframe
+      // pulls the revised app in. Fired before run_success closes the stream.
+      onPreviewReady?.();
+    });
     es.addEventListener("run_success", () => {
       setEnded(true);
       onEnded?.();
@@ -763,12 +809,14 @@ function PendingLiveRun({
   runId,
   engine,
   onEnded,
+  onPreviewReady,
 }: {
   runId: string;
   engine?: string;
   onEnded: () => void;
+  onPreviewReady?: () => void;
 }) {
-  const { lines, failed, ended } = useRunEvents(runId, onEnded);
+  const { lines, failed, ended } = useRunEvents(runId, onEnded, onPreviewReady);
   return (
     <div className={`builder-run${failed ? " failed" : ""}`}>
       <div className="builder-run-head">

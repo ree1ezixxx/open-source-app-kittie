@@ -6,20 +6,23 @@ feat/simulator-first-builder
 
 ## Current phase
 
-Milestone 9 — chat iteration → live preview (milestone 8 ✅ COMPLETE:
-async pipeline + tsc build check + deterministic self-repair)
+Milestone 10 — visual QA loop (milestone 9 ✅ COMPLETE: chat revise
+auto-updates the LIVE preview — the PRD core loop works end-to-end)
 
 ## Last completed iteration
 
-5
+6
 
 ## Current objective
 
-Close the PRD core loop: run_success → live preview shows the new app
-(fix Metro CI no-watch staleness), auto-reload iframe, e2e demo.
+Visual QA loop: screenshot the live preview, score against the PRD §9.3
+rubric, apply UI-only patches, re-screenshot, store artifacts per run.
 
 ## What works
 
+- CORE LOOP CLOSED: chat revise → workspace resync → Metro watch re-bundles
+  → preview_ready event → iframe auto-reloads with the changed app
+  (iteration 006)
 - SELF-REPAIR: async runs validate with real tsc; classifier + deterministic
   patches (reescape/add-import/regenerate), ≤5 attempts, honest failures,
   all streamed to the run card (iteration 005)

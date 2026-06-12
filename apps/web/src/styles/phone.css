@@ -481,6 +481,20 @@
 .ip-live-body.ready {
   padding: 0;
   align-items: stretch;
+  position: relative; /* anchor the "Updating preview…" overlay */
+}
+.ip-live-updating {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: rgba(8, 8, 12, 0.72);
+  backdrop-filter: blur(3px);
+  animation: ip-live-fade 0.18s ease;
+  z-index: 2;
 }
 @keyframes ip-live-fade {
   from { opacity: 0; }

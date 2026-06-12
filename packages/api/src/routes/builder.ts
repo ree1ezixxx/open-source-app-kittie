@@ -379,6 +379,18 @@ async function processMessageRun(
       changedFiles: run.changedFiles,
       repaired: outcome.repaired,
     });
+
+    // Live-preview refresh signal. The workspace was just rewritten on disk; the
+    // running Metro watches files (no CI=1) so it'll re-bundle on the next fetch.
+    // Tell the studio there's a live session so it can reload the iframe and show
+    // the new code without a manual click. Only fires when files actually changed
+    // AND a preview process is up — mockup mode and idle previews are untouched.
+    if (changed && run.changedFiles.length > 0) {
+      const preview = getPreview(projectId);
+      if (preview && (preview.status === "ready" || preview.status === "starting")) {
+        emitRunEvent(runId, { type: "preview_ready", port: preview.port, url: preview.url });
+      }
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.warn(`[builder] run ${runId} failed:`, err);

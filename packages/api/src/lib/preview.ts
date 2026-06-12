@@ -330,18 +330,22 @@ function runInstall(session: PreviewSession, cwd: string): Promise<void> {
 }
 
 async function spawnExpo(session: PreviewSession, cwd: string): Promise<void> {
+  // Strip CI from the inherited env. CI=1 puts Metro in "reloads disabled" mode,
+  // so a revised workspace keeps serving a stale bundle. We keep expo
+  // non-interactive a different way — by closing its stdin (see stdio below) —
+  // which lets Metro's file watcher stay live, so an on-disk edit re-bundles on
+  // the next fetch. That on-demand re-bundle is the whole revise→fresh-preview
+  // loop. The readiness healthcheck + READY_TIMEOUT still catch a wedged boot.
+  const env: NodeJS.ProcessEnv = { ...process.env, EXPO_NO_TELEMETRY: "1", BROWSER: "none" };
+  delete env.CI;
   const child = spawn(
     "npx",
     ["expo", "start", "--web", "--port", String(session.port)],
     {
       cwd,
       detached: true, // own process group so we can kill the whole tree
-      env: {
-        ...process.env,
-        CI: "1",
-        EXPO_NO_TELEMETRY: "1",
-        BROWSER: "none",
-      },
+      stdio: ["ignore", "pipe", "pipe"], // closed stdin => expo can't prompt
+      env,
     },
   );
   session.child = child;
