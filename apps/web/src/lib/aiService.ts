@@ -21,6 +21,8 @@ import {
 
 /* ============================================================ Types */
 
+export type { Slide };
+
 export interface UploadedImage {
   id: string;
   name: string;
@@ -74,14 +76,49 @@ export interface ScreenshotGeneration {
   slides: Slide[];
 }
 
+export interface TranslateScreenshotsInput {
+  appId: string | null;
+  appName: string;
+  sourceImages: UploadedImage[];
+  targetLanguages: string[];
+  device: Device;
+}
+
+export interface TranslatedSlide {
+  id: string;
+  language: string;
+  languageName: string;
+  sourceScreenshot: string;
+  translatedScreenshot: string;
+}
+
+export interface ScreenshotTranslation {
+  id: string;
+  appId: string | null;
+  appName: string;
+  device: Device;
+  createdAt: string; // ISO
+  status: JobStatus;
+  sourceLanguage: string;
+  targetLanguages: string[];
+  slides: TranslatedSlide[];
+}
+
 export interface AiService {
   generateScreenshots(input: GenerateScreenshotsInput): Promise<ScreenshotGeneration>;
+  translateScreenshots(input: TranslateScreenshotsInput): Promise<ScreenshotTranslation>;
   listIdeas(query?: IdeasQuery): Promise<IdeasPage>;
 }
 
 /* ============================================================ Integration flags */
 
+/** Current AI service mode. Set to "live" when integrations are wired. */
 export const AI_SERVICE_MODE: "mock" | "live" = "mock";
+
+/** Check if using mock mode (for UI warnings/badges). */
+export function isAiServiceMocked(): boolean {
+  return AI_SERVICE_MODE === "mock";
+}
 
 export const AI_INTEGRATION_POINTS = [
   {
@@ -90,6 +127,13 @@ export const AI_INTEGRATION_POINTS = [
     title: "Screenshot art-direction model",
     needs:
       "Render, export, and a deterministic design layer (backgrounds, brand palette, fonts, derived copy, flow) are REAL. A vision/LLM model could still upgrade art direction — reading the live App Store listing to write sharper copy and pick palette/layout per app.",
+  },
+  {
+    id: "screenshot-translation",
+    method: "translateScreenshots",
+    title: "Screenshot on-image text translation",
+    needs:
+      "A vision model + translation pipeline to detect on-image text and overlay localized versions. Mock returns copy of source screenshots (no translation applied).",
   },
   {
     id: "ideas-pipeline",
@@ -275,6 +319,27 @@ export const mockAiService: AiService = {
     const device: Device = "iphone";
     const d = STYLE_DESIGN[style];
 
+    if (!input.sourceImages || input.sourceImages.length === 0) {
+      return {
+        id: `gen-error-${Date.now()}`,
+        appId: input.appId,
+        appName: input.appName,
+        style,
+        device,
+        themeId: d.themeId,
+        design: {
+          background: input.background ?? d.background,
+          font: input.font ?? d.font,
+          flow: input.flow ?? d.flow,
+          accent: input.accent ?? d.accent,
+          brand: input.brand ?? d.brand,
+        },
+        createdAt: new Date().toISOString(),
+        status: "error" as const,
+        slides: [],
+      };
+    }
+
     const design: DesignSpec = {
       background: input.background ?? d.background,
       font: input.font ?? d.font,
@@ -293,26 +358,33 @@ export const mockAiService: AiService = {
     // images, the surplus become standalone feature slides instead of repeating
     // the same screenshot.
     let assigned = 0;
-    const slides: Slide[] = layouts.map((layout, i) => {
-      let lay = layout;
-      let screenshot = "";
-      if (lay !== "no-device") {
-        if (assigned < sources.length) {
-          screenshot = sources[assigned]!.dataUrl;
-          assigned++;
-        } else {
-          lay = "no-device";
+    const slides: Slide[] = layouts
+      .map((layout, i) => {
+        let lay = layout;
+        let screenshot = "";
+        if (lay !== "no-device") {
+          if (assigned < sources.length) {
+            const src = sources[assigned]!;
+            if (src.dataUrl && src.dataUrl.startsWith("data:")) {
+              screenshot = src.dataUrl;
+              assigned++;
+            } else {
+              lay = "no-device";
+            }
+          } else {
+            lay = "no-device";
+          }
         }
-      }
-      return {
-        id: `slide-${stamp}-${i}`,
-        layout: lay,
-        label: copy[i]!.label,
-        headline: copy[i]!.headline,
-        screenshot,
-        inverted: false,
-      };
-    });
+        return {
+          id: `slide-${stamp}-${i}`,
+          layout: lay,
+          label: copy[i]!.label,
+          headline: copy[i]!.headline,
+          screenshot,
+          inverted: false,
+        };
+      })
+      .filter((s) => s !== null) as Slide[];
 
     return {
       id: `gen-${stamp}`,
@@ -323,7 +395,58 @@ export const mockAiService: AiService = {
       themeId: d.themeId,
       design,
       createdAt: new Date().toISOString(),
-      status: "done",
+      status: "done" as const,
+      slides,
+    };
+  },
+
+  async translateScreenshots(input) {
+    flagMockOnce("translateScreenshots");
+    await delay(900);
+
+    if (!input.sourceImages || input.sourceImages.length === 0) {
+      return {
+        id: `trans-error-${Date.now()}`,
+        appId: input.appId,
+        appName: input.appName,
+        device: input.device,
+        createdAt: new Date().toISOString(),
+        status: "error" as const,
+        sourceLanguage: "en",
+        targetLanguages: input.targetLanguages,
+        slides: [],
+      };
+    }
+
+    const stamp = Date.now();
+    const slides: TranslatedSlide[] = [];
+
+    // Create one output set per target language; for now, mock returns the source screenshot
+    // (real implementation would overlay translated text on-image).
+    for (const lang of input.targetLanguages) {
+      for (let i = 0; i < input.sourceImages.length; i++) {
+        const src = input.sourceImages[i]!;
+        if (src.dataUrl && src.dataUrl.startsWith("data:")) {
+          slides.push({
+            id: `slide-${stamp}-${input.targetLanguages.indexOf(lang)}-${i}`,
+            language: lang,
+            languageName: getLanguageName(lang),
+            sourceScreenshot: src.dataUrl,
+            translatedScreenshot: src.dataUrl, // Mock: no actual translation applied
+          });
+        }
+      }
+    }
+
+    return {
+      id: `trans-${stamp}`,
+      appId: input.appId,
+      appName: input.appName,
+      device: input.device,
+      createdAt: new Date().toISOString(),
+      status: "done" as const,
+      sourceLanguage: "en",
+      targetLanguages: input.targetLanguages,
       slides,
     };
   },
@@ -334,6 +457,33 @@ export const mockAiService: AiService = {
     return queryIdeas(query);
   },
 };
+
+/** Localization map for language codes. */
+function getLanguageName(code: string): string {
+  const names: Record<string, string> = {
+    es: "Spanish",
+    fr: "French",
+    de: "German",
+    it: "Italian",
+    ja: "Japanese",
+    ko: "Korean",
+    zh: "Chinese",
+    pt: "Portuguese",
+    ru: "Russian",
+    ar: "Arabic",
+    hi: "Hindi",
+    pl: "Polish",
+    nl: "Dutch",
+    tr: "Turkish",
+    vi: "Vietnamese",
+    th: "Thai",
+    sv: "Swedish",
+    da: "Danish",
+    fi: "Finnish",
+    no: "Norwegian",
+  };
+  return names[code] || code;
+}
 
 /** Active service. Swap to a live impl when the integrations above are wired. */
 export const aiService: AiService = mockAiService;

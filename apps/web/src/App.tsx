@@ -4,6 +4,7 @@ import { Sidebar } from "./components/Sidebar";
 import { ExplorePage } from "./pages/ExplorePage";
 import { AppDetailPage } from "./pages/AppDetailPage";
 import { ScreenshotGeneratorPage } from "./pages/ScreenshotGeneratorPage";
+import { ScreenshotTranslationPage } from "./pages/ScreenshotTranslationPage";
 import { HotIdeasPage } from "./pages/HotIdeasPage";
 import { PricingCalculatorPage } from "./pages/PricingCalculatorPage";
 import { useTheme } from "./lib/theme";
@@ -27,6 +28,7 @@ export function App() {
 
         {/* Lane C — AI Studio (rebase onto feat/ui shell router when it lands) */}
         <Route path="/dashboard/aso/screenshots" element={<ScreenshotGeneratorPage />} />
+        <Route path="/dashboard/aso/screenshot-translation" element={<ScreenshotTranslationPage />} />
         <Route path="/dashboard/hot-ideas" element={<HotIdeasPage />} />
         <Route path="/tools/pricing-calculator" element={<PricingCalculatorPage />} />
       </Routes>

@@ -9,4 +9,4 @@ export { Phone, IPad } from "./device-frames";
 export { SlideBackground } from "./backgrounds";
 export { SlideCanvas } from "./SlideCanvas";
 export { SlidePreview } from "./SlidePreview";
-export { exportDeckZip, exportSlidePng, type ExportProgress } from "./export";
+export { exportDeckZip, exportSlidePng, type ExportProgress, type ExportResult } from "./export";

@@ -18,6 +18,12 @@ function triggerDownload(blob: Blob, filename: string) {
 
 export type ExportProgress = { done: number; total: number };
 
+export interface ExportResult {
+  ok: number;
+  failed: number;
+  error?: string;
+}
+
 /**
  * Render every slide at each App Store size and download a zip organised by
  * resolution. `getNode` resolves a slide id to its full-resolution off-screen
@@ -29,8 +35,13 @@ export async function exportDeckZip(opts: {
   getNode: (slideId: string) => HTMLElement | null;
   filename?: string;
   onProgress?: (p: ExportProgress) => void;
-}): Promise<{ ok: number; failed: number }> {
+}): Promise<ExportResult> {
   const { slides, device, getNode, onProgress } = opts;
+
+  if (slides.length === 0) {
+    return { ok: 0, failed: 0, error: "No slides to export" };
+  }
+
   const { w, h } = CANVAS[device];
   const sizes = EXPORT_SIZES[device];
   const zip = new JSZip();
@@ -45,29 +56,40 @@ export async function exportDeckZip(opts: {
     for (let i = 0; i < slides.length; i++) {
       const slide = slides[i]!;
       const el = getNode(slide.id);
-      if (el) {
-        try {
-          const dataUrl = await toPng(el, {
-            width: w,
-            height: h,
-            canvasWidth: size.w,
-            canvasHeight: size.h,
-            pixelRatio: 1,
-            cacheBust: false,
-            backgroundColor: "#ffffff",
-          });
-          const base64 = dataUrl.split(",")[1] ?? "";
+      if (!el) {
+        failed++;
+        done++;
+        onProgress?.({ done, total });
+        continue;
+      }
+
+      try {
+        const dataUrl = await toPng(el, {
+          width: w,
+          height: h,
+          canvasWidth: size.w,
+          canvasHeight: size.h,
+          pixelRatio: 1,
+          cacheBust: false,
+          backgroundColor: "#ffffff",
+        });
+        const base64 = dataUrl.split(",")[1] ?? "";
+        if (!base64) {
+          failed++;
+        } else {
           folder.file(`${String(i + 1).padStart(2, "0")}.png`, base64, { base64: true });
           ok++;
-        } catch {
-          failed++;
         }
-      } else {
+      } catch (e) {
         failed++;
       }
       done++;
       onProgress?.({ done, total });
     }
+  }
+
+  if (ok === 0) {
+    return { ok, failed, error: "All exports failed; try refreshing the page" };
   }
 
   const blob = await zip.generateAsync({ type: "blob" });

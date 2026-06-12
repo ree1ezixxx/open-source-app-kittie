@@ -5,6 +5,7 @@ import {
   aiService,
   AI_INTEGRATION_POINTS,
   designDefaults,
+  isAiServiceMocked,
   type ScreenshotGeneration,
   type ScreenshotStyle,
   type UploadedImage,
@@ -56,6 +57,7 @@ export function ScreenshotGeneratorPage() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [view, setView] = useState<"build" | "result">("build");
   const [generating, setGenerating] = useState(false);
+  const [genError, setGenError] = useState<string | null>(null);
 
   const started = newMode || !!selectedApp;
   const targetChosen = started && details.name.trim().length > 0;
@@ -95,6 +97,7 @@ export function ScreenshotGeneratorPage() {
   async function generate() {
     if (!ready) return;
     setGenerating(true);
+    setGenError(null);
     try {
       const gen = await aiService.generateScreenshots({
         appId: selectedApp?.id ?? null,
@@ -116,9 +119,22 @@ export function ScreenshotGeneratorPage() {
         font: design.font,
         flow: design.flow,
       });
+
+      if (gen.status !== "done") {
+        setGenError("Generation failed; please try again");
+        return;
+      }
+
+      if (!gen.slides || gen.slides.length === 0) {
+        setGenError("No slides were generated");
+        return;
+      }
+
       setHistory((h) => [gen, ...h]);
       setActiveId(gen.id);
       setView("result");
+    } catch (e) {
+      setGenError(e instanceof Error ? e.message : "Generation failed");
     } finally {
       setGenerating(false);
     }
@@ -129,7 +145,11 @@ export function ScreenshotGeneratorPage() {
       <StudioHeader
         icon={<IconImage style={{ width: 18, height: 18 }} />}
         title="AI Screenshot Generator"
-        subtitle="Generate optimized App-Store visuals from your screenshots"
+        subtitle={
+          isAiServiceMocked()
+            ? "Generate optimized App-Store visuals from your screenshots (mock mode)"
+            : "Generate optimized App-Store visuals from your screenshots"
+        }
         actions={
           <button className="btn btn-accent" onClick={resetBuild}>
             <IconPlus /> Add generation
@@ -308,6 +328,12 @@ export function ScreenshotGeneratorPage() {
                   <button className="btn btn-accent" disabled={!ready} onClick={generate} style={{ height: 38 }}>
                     <IconWand /> {generating ? "Generating…" : `Generate ${count} screenshots`}
                   </button>
+
+                  {genError && (
+                    <div className="notice warn" style={{ marginTop: 12 }}>
+                      <span>{genError}</span>
+                    </div>
+                  )}
                 </div>
 
                 {generating && (

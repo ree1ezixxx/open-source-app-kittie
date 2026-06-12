@@ -3,6 +3,8 @@ import type { ScreenshotGeneration } from "../../lib/aiService";
 import { IconDownload } from "../../icons";
 import { IconWand } from "./icons";
 import { timeAgo } from "./util";
+import { canExportGeneration, exportBlockReason, evaluateExportResults, type ValidationError } from "./validation";
+import { prepareSlidesForExport } from "./slide-helpers";
 import {
   CANVAS,
   themeById,
@@ -29,6 +31,7 @@ export function GenerationResult({ generation }: { generation: ScreenshotGenerat
   // these, never the scaled previews.
   const nodes = useRef<Map<string, HTMLDivElement>>(new Map());
   const [exporting, setExporting] = useState<ExportProgress | null>(null);
+  const [exportError, setExportError] = useState<ValidationError | null>(null);
 
   // Inline the iPhone bezel so exports are deterministic (no fetch race).
   useEffect(() => {
@@ -37,14 +40,34 @@ export function GenerationResult({ generation }: { generation: ScreenshotGenerat
 
   async function downloadAll() {
     if (exporting) return;
-    setExporting({ done: 0, total: generation.slides.length });
+
+    const blockReason = exportBlockReason(generation.slides);
+    if (blockReason) {
+      setExportError({ code: "export-failed", message: blockReason });
+      return;
+    }
+
+    setExportError(null);
+    const validSlides = prepareSlidesForExport(generation.slides);
+    setExporting({ done: 0, total: validSlides.length });
     try {
-      await exportDeckZip({
-        slides: generation.slides,
+      const result = await exportDeckZip({
+        slides: validSlides,
         device,
         getNode: (id) => nodes.current.get(id) ?? null,
         filename: `${slug(generation.appName)}-app-store-screenshots.zip`,
         onProgress: setExporting,
+      });
+
+      const resultError = evaluateExportResults(result.ok, result.failed);
+      if (resultError) {
+        setExportError(resultError);
+      }
+    } catch (e) {
+      setExportError({
+        code: "export-failed",
+        message: "Export failed",
+        details: e instanceof Error ? e.message : "Unknown error",
       });
     } finally {
       setExporting(null);
@@ -67,13 +90,23 @@ export function GenerationResult({ generation }: { generation: ScreenshotGenerat
         <button
           className="btn btn-accent"
           onClick={downloadAll}
-          disabled={!!exporting}
+          disabled={!!exporting || !canExportGeneration(generation.slides)}
           style={{ marginLeft: "auto" }}
+          title={exportBlockReason(generation.slides) || undefined}
         >
           <IconDownload />
           {exporting ? `Exporting ${exporting.done}/${exporting.total}…` : "Download PNGs (zip)"}
         </button>
       </div>
+
+      {exportError && (
+        <div className="notice warn">
+          <span>
+            {exportError.message}
+            {exportError.details && ` — ${exportError.details}`}
+          </span>
+        </div>
+      )}
 
       <div className="studio-shots">
         {generation.slides.map((s, i) => (

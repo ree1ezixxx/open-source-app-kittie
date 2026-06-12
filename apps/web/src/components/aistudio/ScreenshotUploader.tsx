@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import type { UploadedImage } from "../../lib/aiService";
 import { fileToDataUrl } from "./util";
+import { validateUploadFile, MAX_FILE_SIZE, FILE_SIZE_WARN, type ValidationError } from "./validation";
 import { IconUpload } from "./icons";
 import { IconClose } from "../../icons";
 
@@ -19,19 +20,39 @@ export function ScreenshotUploader({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [drag, setDrag] = useState(false);
+  const [errors, setErrors] = useState<ValidationError[]>([]);
 
   async function ingest(files: FileList | null) {
     if (!files) return;
     const room = Math.max(0, max - images.length);
-    const picked = Array.from(files).filter((f) => f.type.startsWith("image/")).slice(0, room);
+    const picked = Array.from(files).slice(0, room);
+    const newErrors: ValidationError[] = [];
     const added: UploadedImage[] = [];
+
     for (const f of picked) {
+      const err = validateUploadFile(f);
+      if (err) {
+        newErrors.push(err);
+        continue;
+      }
       try {
-        added.push({ id: `up-${Date.now()}-${added.length}`, name: f.name, dataUrl: await fileToDataUrl(f) });
-      } catch {
-        /* skip unreadable file */
+        const dataUrl = await fileToDataUrl(f);
+        added.push({ id: `up-${Date.now()}-${added.length}`, name: f.name, dataUrl });
+      } catch (e) {
+        newErrors.push({
+          code: "read-error",
+          message: `Could not read ${f.name}`,
+          details: e instanceof Error ? e.message : "Unknown error",
+        });
       }
     }
+
+    if (newErrors.length > 0) {
+      setErrors(newErrors);
+    } else {
+      setErrors([]);
+    }
+
     if (added.length) onChange([...images, ...added]);
   }
 
@@ -56,11 +77,11 @@ export function ScreenshotUploader({
       >
         <IconUpload />
         <div className="t">Drop screenshots or click to browse</div>
-        <div className="s">PNG or JPG · up to {max} frames · {images.length}/{max} added</div>
+        <div className="s">PNG, JPG, or WebP · up to {max} frames · {images.length}/{max} added</div>
         <input
           ref={inputRef}
           type="file"
-          accept="image/*"
+          accept="image/png,image/jpeg,image/webp"
           multiple
           hidden
           onChange={(e) => {
@@ -69,6 +90,15 @@ export function ScreenshotUploader({
           }}
         />
       </div>
+
+      {errors.length > 0 && (
+        <div className="notice warn" style={{ marginTop: 12 }}>
+          <span>
+            {errors.length === 1 ? errors[0]!.message : `${errors.length} files couldn't be added`}
+            {errors[0]!.details && ` — ${errors[0]!.details}`}
+          </span>
+        </div>
+      )}
 
       {images.length > 0 && (
         <div className="studio-thumbs">

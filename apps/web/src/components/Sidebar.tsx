@@ -19,6 +19,7 @@ const NAV: { id: string; label: string; icon: typeof IconDatabase }[] = [
 // Lane C — AI Studio routes (additive; the feat/ui shell sidebar supersedes this on rebase)
 const STUDIO_NAV: { path: string; label: string; icon: typeof IconDatabase }[] = [
   { path: "/dashboard/aso/screenshots", label: "Screenshot Generator", icon: IconImage },
+  { path: "/dashboard/aso/screenshot-translation", label: "Screenshot Translation", icon: IconImage },
   { path: "/dashboard/hot-ideas", label: "Hot ideas", icon: IconSpark },
 ];
 const TOOLS_NAV: { path: string; label: string; icon: typeof IconDatabase }[] = [
