@@ -27,7 +27,12 @@ reviewsRouter.post("/", async (c) => {
   const parsed = reviewRequestSchema.safeParse(body);
   if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
 
-  const reviews = (await getAppReviews(parsed.data.appId)).slice(0, parsed.data.limit);
+  const allReviews = await getAppReviews(parsed.data.appId);
+  // Filter by country if specified (case-insensitive; defaults to all if empty/null)
+  const filtered = parsed.data.country
+    ? allReviews.filter((r) => r.country.toLowerCase() === parsed.data.country.toLowerCase())
+    : allReviews;
+  const reviews = filtered.slice(0, parsed.data.limit);
   return c.json({
     data: reviews,
     meta: { source: "cache", stale: reviews.length === 0 },

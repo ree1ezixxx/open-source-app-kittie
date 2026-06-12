@@ -92,6 +92,19 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
     {
+      name: "get_app_reviews",
+      description: "Get latest reviews for an app by country",
+      inputSchema: {
+        type: "object",
+        properties: {
+          appId: { type: "string" },
+          country: { type: "string", default: "US" },
+          limit: { type: "number", default: 20 },
+        },
+        required: ["appId"],
+      },
+    },
+    {
       name: "get_supported_countries",
       description: "List supported country codes for ASO lookups",
       inputSchema: { type: "object", properties: {} },
@@ -134,6 +147,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
       case "batch_keyword_difficulty": {
         result = await apiPost("/api/v1/keywords/difficulty", args);
+        break;
+      }
+      case "get_app_reviews": {
+        const { appId, country = "US", limit = 20 } = (args ?? {}) as {
+          appId?: string;
+          country?: string;
+          limit?: number;
+        };
+        if (!appId) throw new Error("appId is required");
+        result = await apiPost("/api/v1/reviews", {
+          appId,
+          country,
+          limit: Math.min(limit, 100), // cap at 100
+        });
         break;
       }
       case "get_supported_countries": {
