@@ -14,6 +14,7 @@ import {
   listBuilderMessages,
   listBuilderProjects,
   updateBuilderMessageContent,
+  updateBuilderMessageRun,
   updateBuilderProjectBlueprint,
 } from "@kittie/db";
 import { zipSync } from "fflate";
@@ -34,6 +35,7 @@ import {
   type RunEvent,
 } from "../lib/run-events.js";
 import { runRepairLoop } from "../lib/repair-runner.js";
+import { runVisualQa } from "../lib/visual-qa.js";
 import { pruneRuns, readWorkspaceTree, syncWorkspace, workspaceRoot } from "../lib/workspace.js";
 
 /* ============================================================
@@ -370,6 +372,30 @@ async function processMessageRun(
     if (outcome.repaired > 0) {
       const note = `\n\n_Self-repaired ${outcome.repaired} build issue${outcome.repaired === 1 ? "" : "s"} (${outcome.attempts} attempt${outcome.attempts === 1 ? "" : "s"})._`;
       await updateBuilderMessageContent(db, assistant.id, reply + note);
+    }
+
+    // Visual QA (PRD §9): only when a ready preview session exists. Screenshots
+    // the live preview, scores it against a deterministic rubric, and — for a
+    // poor score with a fixable signal — regenerates screens and re-shoots.
+    // Artifacts land in runs/<assistant.id>/visual/. Log-only; never fails the
+    // run; capped internally so a wedged Chrome can't stall the pipeline.
+    if (changed && run.changedFiles.length > 0) {
+      const preview = getPreview(projectId);
+      if (preview && preview.status === "ready" && preview.url) {
+        const qa = await phase("Visual QA", () =>
+          runVisualQa(runId, projectId, revised, preview.url, assistant.id),
+        );
+        // Persist the QA score into the run transcript so it survives a reload
+        // (the live log line is ephemeral; the AgentRun step is durable).
+        if (qa.ran && qa.before) {
+          const score = qa.patched && qa.after ? qa.after.score : qa.before.score;
+          const label = qa.patched && qa.after
+            ? `Visual QA: ${qa.after.score}/100 (patched, was ${qa.before.score})`
+            : `Visual QA: ${score}/100`;
+          run.steps = [...run.steps, { label }];
+          await updateBuilderMessageRun(db, assistant.id, JSON.stringify(run));
+        }
+      }
     }
 
     emitRunEvent(runId, {

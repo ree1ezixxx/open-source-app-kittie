@@ -716,7 +716,7 @@ function PendingRun({ engine }: { engine?: string }) {
 
 /* A single timeline line surfaced live from the SSE stream. */
 interface LiveLine {
-  kind: "phase" | "error" | "repair";
+  kind: "phase" | "error" | "repair" | "qa";
   text: string;
 }
 
@@ -767,6 +767,17 @@ function useRunEvents(
       try {
         const ev = JSON.parse((e as MessageEvent).data) as RunEvent;
         push({ kind: "repair", text: `Fixing build issue, attempt ${ev.attempt ?? "?"}/${ev.max ?? 5}` });
+      } catch {
+        /* ignore malformed */
+      }
+    });
+    es.addEventListener("log", (e) => {
+      // Surface Visual QA log lines (e.g. "Visual QA: 87/100") in the run card;
+      // ignore other internal logs to keep the timeline focused.
+      try {
+        const ev = JSON.parse((e as MessageEvent).data) as RunEvent;
+        const line = typeof ev.line === "string" ? ev.line : "";
+        if (line.startsWith("Visual QA")) push({ kind: "qa", text: line });
       } catch {
         /* ignore malformed */
       }
@@ -826,7 +837,7 @@ function PendingLiveRun({
       {lines.map((l, i) => (
         <div key={`${l.kind}-${i}`} className={`builder-run-step ${l.kind}`}>
           <span className={`builder-run-check ${l.kind}`}>
-            {l.kind === "error" ? "✗" : l.kind === "repair" ? "⟳" : "✓"}
+            {l.kind === "error" ? "✗" : l.kind === "repair" ? "⟳" : l.kind === "qa" ? "◎" : "✓"}
           </span>
           <span>{l.text}</span>
         </div>

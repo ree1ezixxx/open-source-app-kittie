@@ -64,5 +64,6 @@ export {
   listBuilderMessages,
   listBuilderProjects,
   updateBuilderMessageContent,
+  updateBuilderMessageRun,
   updateBuilderProjectBlueprint,
 } from "./builder.js";

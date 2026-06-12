@@ -6,20 +6,23 @@ feat/simulator-first-builder
 
 ## Current phase
 
-Milestone 10 — visual QA loop (milestone 9 ✅ COMPLETE: chat revise
-auto-updates the LIVE preview — the PRD core loop works end-to-end)
+Milestone 11 — clone/export + hardening (milestone 10 ✅ COMPLETE:
+deterministic visual QA with per-run artifacts)
 
 ## Last completed iteration
 
-6
+7
 
 ## Current objective
 
-Visual QA loop: screenshot the live preview, score against the PRD §9.3
-rubric, apply UI-only patches, re-screenshot, store artifacts per run.
+Project Clone, Expo Go QR, preview persistence across API restarts,
+GitHub export placeholder.
 
 ## What works
 
+- VISUAL QA: post-run headless-Chrome screenshot + deterministic rubric +
+  regenerate patch pass; before/after + score artifacts per run; QA step in
+  the run card (iteration 007)
 - CORE LOOP CLOSED: chat revise → workspace resync → Metro watch re-bundles
   → preview_ready event → iframe auto-reloads with the changed app
   (iteration 006)
@@ -49,7 +52,6 @@ rubric, apply UI-only patches, re-screenshot, store artifacts per run.
 
 ## What does not work yet
 
-- Visual QA loop
 - Project clone
 
 ## Passing checks

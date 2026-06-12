@@ -76,6 +76,12 @@ export async function updateBuilderMessageContent(db: Db, id: string, content: s
   await db.update(builderMessages).set({ content }).where(eq(builderMessages.id, id));
 }
 
+/** Patch an assistant message's run transcript in place (e.g. append a Visual
+ *  QA step once the post-message QA phase finishes). */
+export async function updateBuilderMessageRun(db: Db, id: string, runJson: string): Promise<void> {
+  await db.update(builderMessages).set({ runJson }).where(eq(builderMessages.id, id));
+}
+
 export async function listBuilderMessages(db: Db, projectId: string): Promise<BuilderMessage[]> {
   return db
     .select()
