@@ -296,6 +296,89 @@ const styles = StyleSheet.create({
 `;
 }
 
+function rootLayoutTsx(): string {
+  return `import { Stack } from "expo-router";
+import { theme } from "../lib/theme";
+
+export default function RootLayout() {
+  return (
+    <Stack
+      screenOptions={{
+        headerStyle: { backgroundColor: theme.bg },
+        headerTintColor: theme.text,
+        contentStyle: { backgroundColor: theme.bg },
+      }}
+    >
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="detail" options={{ title: "Detail" }} />
+    </Stack>
+  );
+}
+`;
+}
+
+function detailTsx(b: AppBlueprint): string {
+  return `import { useLocalSearchParams, Stack } from "expo-router";
+import { ScrollView, Text, View, StyleSheet } from "react-native";
+import { sampleData } from "../lib/data";
+import { theme } from "../lib/theme";
+
+export default function DetailScreen() {
+  const { tab, i } = useLocalSearchParams<{ tab: string; i: string }>();
+  const entry = sampleData[tab ?? ""]?.[Number(i ?? 0)];
+  if (!entry) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.dim}>Not found</Text>
+      </View>
+    );
+  }
+  return (
+    <>
+      <Stack.Screen options={{ title: entry.title }} />
+      <ScrollView contentContainerStyle={styles.body}>
+        <View style={styles.hero}>
+          <Text style={styles.heroText}>{entry.detail || entry.title}</Text>
+        </View>
+        <Text style={styles.title}>{entry.title}</Text>
+        {entry.subtitle ? <Text style={styles.sub}>{entry.subtitle}</Text> : null}
+        <View style={styles.metaCard}>
+          <Text style={styles.metaLabel}>${ts(b.primaryEntity)}</Text>
+          <Text style={styles.metaValue}>{entry.detail || "—"}</Text>
+        </View>
+      </ScrollView>
+    </>
+  );
+}
+
+const styles = StyleSheet.create({
+  center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: theme.bg },
+  dim: { color: theme.textDim },
+  body: { padding: 16, gap: 12, backgroundColor: theme.bg, flexGrow: 1 },
+  hero: {
+    height: 180,
+    borderRadius: 18,
+    backgroundColor: theme.accent,
+    alignItems: "flex-start",
+    justifyContent: "flex-end",
+    padding: 16,
+  },
+  heroText: { color: "#fff", fontSize: 20, fontWeight: "800" },
+  title: { color: theme.text, fontSize: 26, fontWeight: "800" },
+  sub: { color: theme.textDim, fontSize: 14, lineHeight: 20 },
+  metaCard: {
+    backgroundColor: theme.surface,
+    borderRadius: 14,
+    padding: 14,
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  metaLabel: { color: theme.textDim, fontSize: 13 },
+  metaValue: { color: theme.accent, fontSize: 13, fontWeight: "700" },
+});
+`;
+}
+
 function layoutTsx(b: AppBlueprint, routes: string[]): string {
   const screens = b.tabs
     .map((tab, i) => {
@@ -313,7 +396,7 @@ function layoutTsx(b: AppBlueprint, routes: string[]): string {
     .join("\n");
   return `import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { theme } from "../lib/theme";
+import { theme } from "../../lib/theme";
 
 export default function RootLayout() {
   return (
@@ -341,7 +424,9 @@ function screenBody(tab: BlueprintTab, i: number): string {
       <ScreenHeader headline="${ts(tab.headline)}" subhead="${ts(tab.subhead)}" />
       <View style={{ paddingHorizontal: 16, gap: 16 }}>
         {items.map((e, idx) => (
-          <EntryCard key={idx} entry={e} />
+          <Link key={idx} href={{ pathname: "/detail", params: { tab: "tab${i}", i: idx } }} asChild>
+            <Pressable><EntryCard entry={e} /></Pressable>
+          </Link>
         ))}
       </View>
     </ScrollView>`;
@@ -350,9 +435,9 @@ function screenBody(tab: BlueprintTab, i: number): string {
       <ScreenHeader headline="${ts(tab.headline)}" subhead="${ts(tab.subhead)}" />
       <View style={{ flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 16, gap: 12 }}>
         {items.map((e, idx) => (
-          <View key={idx} style={{ width: "47%" }}>
-            <EntryTile entry={e} />
-          </View>
+          <Link key={idx} href={{ pathname: "/detail", params: { tab: "tab${i}", i: idx } }} asChild>
+            <Pressable style={{ width: "47%" }}><EntryTile entry={e} /></Pressable>
+          </Link>
         ))}
       </View>
     </ScrollView>`;
@@ -399,7 +484,9 @@ function screenBody(tab: BlueprintTab, i: number): string {
       <ScreenHeader headline="${ts(tab.headline)}" subhead="${ts(tab.subhead)}" />
       <View>
         {items.map((e, idx) => (
-          <EntryRow key={idx} entry={e} />
+          <Link key={idx} href={{ pathname: "/detail", params: { tab: "tab${i}", i: idx } }} asChild>
+            <Pressable><EntryRow entry={e} /></Pressable>
+          </Link>
         ))}
       </View>
     </ScrollView>`;
@@ -409,8 +496,8 @@ function screenBody(tab: BlueprintTab, i: number): string {
 function screenTsx(tab: BlueprintTab, i: number): string {
   const isForm = tab.kind === "form";
   const isProfile = tab.kind === "profile";
-  const imports = ["ScrollView", "View", "Text"];
-  if (isForm) imports.push("TextInput", "Pressable", "StyleSheet");
+  const imports = ["ScrollView", "View", "Text", "Pressable"];
+  if (isForm) imports.push("TextInput", "StyleSheet");
   if (isProfile) imports.push("StyleSheet");
   const hooks = isForm
     ? `  const [title, setTitle] = useState("");\n  const [notes, setNotes] = useState("");\n`
@@ -464,10 +551,11 @@ const profileStyles = StyleSheet.create({
 `
     : "";
 
-  return `${reactImport}import { ${[...new Set(imports)].join(", ")} } from "react-native";
-import { ${compImports.join(", ")} } from "../components/ui";
-import { sampleData } from "../lib/data";
-import { theme } from "../lib/theme";
+  return `${reactImport}import { Link } from "expo-router";
+import { ${[...new Set(imports)].join(", ")} } from "react-native";
+import { ${compImports.join(", ")} } from "../../components/ui";
+import { sampleData } from "../../lib/data";
+import { theme } from "../../lib/theme";
 
 export default function ${screenComponentName(tab, i)}() {
 ${hooks}  const items = sampleData.tab${i} ?? [];
@@ -519,9 +607,11 @@ export function generateExpoProject(b: AppBlueprint): { slug: string; files: Gen
     { path: "lib/theme.ts", contents: themeTs(b) },
     { path: "lib/data.ts", contents: dataTs(b) },
     { path: "components/ui.tsx", contents: componentsTsx() },
-    { path: "app/_layout.tsx", contents: layoutTsx(b, routes) },
+    { path: "app/_layout.tsx", contents: rootLayoutTsx() },
+    { path: "app/detail.tsx", contents: detailTsx(b) },
+    { path: "app/(tabs)/_layout.tsx", contents: layoutTsx(b, routes) },
     ...b.tabs.map((tab, i) => ({
-      path: `app/${routes[i]}.tsx`,
+      path: `app/(tabs)/${routes[i]}.tsx`,
       contents: screenTsx(tab, i),
     })),
   ];

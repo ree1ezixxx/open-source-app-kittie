@@ -529,3 +529,34 @@
     display: none;
   }
 }
+
+/* preview detail screen */
+.phone-tappable { cursor: pointer; }
+.phone-tappable:hover { filter: brightness(1.15); }
+.phone-header-detail {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+.phone-back {
+  position: absolute;
+  left: 10px;
+  bottom: 6px;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  opacity: 0.85;
+}
+.phone-detail-hero {
+  height: 150px;
+  border-radius: 16px;
+  display: flex;
+  align-items: flex-end;
+  padding: 12px;
+  color: #fff;
+  font-weight: 800;
+  font-size: 16px;
+}

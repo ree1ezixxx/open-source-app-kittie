@@ -94,13 +94,16 @@ describe("generateExpoProject — deterministic Expo codegen", () => {
     expect(slug).toMatch(/^[a-z0-9-]+$/);
   });
 
-  it("first tab is index and every tab has a screen registered in the layout", () => {
-    expect(byPath["app/index.tsx"]).toBeTruthy();
-    const layout = byPath["app/_layout.tsx"]!;
-    const screenFiles = files.filter((f) => f.path.startsWith("app/") && f.path !== "app/_layout.tsx");
+  it("first tab is index and every tab has a screen registered in the tabs layout", () => {
+    expect(byPath["app/(tabs)/index.tsx"]).toBeTruthy();
+    expect(byPath["app/detail.tsx"]).toBeTruthy();
+    const layout = byPath["app/(tabs)/_layout.tsx"]!;
+    const screenFiles = files.filter(
+      (f) => f.path.startsWith("app/(tabs)/") && f.path !== "app/(tabs)/_layout.tsx",
+    );
     expect(screenFiles.length).toBe(b.tabs.length);
     for (const f of screenFiles) {
-      const route = f.path.replace(/^app\//, "").replace(/\.tsx$/, "");
+      const route = f.path.replace(/^app\/\(tabs\)\//, "").replace(/\.tsx$/, "");
       expect(layout).toContain(`name="${route}"`);
     }
   });
@@ -111,11 +114,11 @@ describe("generateExpoProject — deterministic Expo codegen", () => {
       tabs: [b.tabs[0]!, { ...b.tabs[0]!, title: "Train" }, { ...b.tabs[0]!, title: "Train" }],
     };
     const out = generateExpoProject(dup);
-    const paths = out.files.filter((f) => f.path.startsWith("app/")).map((f) => f.path);
+    const paths = out.files.filter((f) => f.path.startsWith("app/(tabs)/")).map((f) => f.path);
     expect(new Set(paths).size).toBe(paths.length);
-    const layout = out.files.find((f) => f.path === "app/_layout.tsx")!.contents;
-    for (const p of paths.filter((p) => p !== "app/_layout.tsx")) {
-      const route = p.replace(/^app\//, "").replace(/\.tsx$/, "");
+    const layout = out.files.find((f) => f.path === "app/(tabs)/_layout.tsx")!.contents;
+    for (const p of paths.filter((p) => p !== "app/(tabs)/_layout.tsx")) {
+      const route = p.replace(/^app\/\(tabs\)\//, "").replace(/\.tsx$/, "");
       expect(layout).toContain(`name="${route}"`);
     }
   });

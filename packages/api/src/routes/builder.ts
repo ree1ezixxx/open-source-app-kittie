@@ -14,6 +14,7 @@ import {
   listBuilderProjects,
   updateBuilderProjectBlueprint,
 } from "@kittie/db";
+import { zipSync } from "fflate";
 import { Hono } from "hono";
 import { z } from "zod";
 
@@ -192,3 +193,22 @@ function assistantSummary(b: AppBlueprint, prev: AppBlueprint | null): string {
   if (!changes.length) changes.push("updated the app");
   return `Done — ${changes.join(", ")}. The preview and code are updated.`;
 }
+
+/* Real project export: a zip of the regenerated files. */
+builderRouter.get("/projects/:id/zip", async (c) => {
+  const project = await getBuilderProject(getDb(), c.req.param("id"));
+  if (!project) return c.json({ error: "Project not found" }, 404);
+  const blueprint = JSON.parse(project.blueprintJson) as AppBlueprint;
+  const result = fromBlueprintExpo(blueprint);
+  const entries: Record<string, Uint8Array> = {};
+  for (const f of result.files) {
+    entries[`${result.projectName}/${f.path}`] = new TextEncoder().encode(f.contents);
+  }
+  const zip = zipSync(entries, { level: 6 });
+  return new Response(new Uint8Array(zip), {
+    headers: {
+      "content-type": "application/zip",
+      "content-disposition": `attachment; filename="${result.projectName}.zip"`,
+    },
+  });
+});
