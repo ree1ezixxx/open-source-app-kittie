@@ -22,6 +22,7 @@ import { z } from "zod";
 import { getDb } from "../lib/db.js";
 import { generateJson, isGeminiConfigured } from "../lib/gemini.js";
 import { generateJsonOllama, isOllamaAvailable, OLLAMA_MODEL } from "../lib/ollama.js";
+import { pruneRuns, readWorkspaceTree, syncWorkspace, workspaceRoot } from "../lib/workspace.js";
 
 /* ============================================================
    App Builder (Rork-style) endpoints.
@@ -173,6 +174,13 @@ builderRouter.post("/projects", async (c) => {
     blueprintJson: JSON.stringify(blueprint),
     runJson: JSON.stringify(buildRun(kind, null, blueprint, true)),
   });
+  // Materialise the generated Expo project to disk. Never let a workspace
+  // failure 500 the create — log and carry on.
+  try {
+    await syncWorkspace(project.id, fromBlueprintExpo(blueprint).files);
+  } catch (err) {
+    console.warn(`[builder] workspace sync failed for ${project.id}:`, err);
+  }
   return c.json({ data: projectPayload(project) }, 201);
 });
 
@@ -209,6 +217,13 @@ builderRouter.get("/projects/:id", async (c) => {
       aiEngine: (await isOllamaAvailable()) ? `ollama:${OLLAMA_MODEL}` : isGeminiConfigured() ? "gemini" : "heuristic",
     },
   });
+});
+
+builderRouter.get("/projects/:id/workspace", async (c) => {
+  const project = await getBuilderProject(getDb(), c.req.param("id"));
+  if (!project) return c.json({ error: "Project not found" }, 404);
+  const [root, files] = await Promise.all([workspaceRoot(), readWorkspaceTree(project.id)]);
+  return c.json({ data: { root: `${root}/${project.id}/current`, files } });
 });
 
 builderRouter.delete("/projects/:id", async (c) => {
@@ -261,6 +276,16 @@ builderRouter.post("/projects/:id/messages", async (c) => {
     blueprintJson: changed ? JSON.stringify(revised) : undefined,
     runJson: JSON.stringify(run),
   });
+
+  if (changed) {
+    // Snapshot before/after into runs/<assistant message id>/ then prune.
+    try {
+      await syncWorkspace(project.id, fromBlueprintExpo(revised).files, assistant.id);
+      await pruneRuns(project.id);
+    } catch (err) {
+      console.warn(`[builder] workspace sync failed for ${project.id}:`, err);
+    }
+  }
 
   const fresh = await getBuilderProject(db, project.id);
   return c.json({

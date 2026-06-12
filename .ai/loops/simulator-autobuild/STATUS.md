@@ -6,19 +6,22 @@ feat/simulator-first-builder
 
 ## Current phase
 
-Not started (setup complete)
+Milestone 6 — Expo preview path (milestone 5 ✅ complete)
 
 ## Last completed iteration
 
-0
+1
 
 ## Current objective
 
-Install PRD + autonomous loop system. ✅ Done — next objective is milestone 4/5
-(inspector Diff/Logs tabs + generated workspace on disk), per ROADMAP.md.
+Preview process manager: spawn `expo start --web` per project from its
+workspace, port registry, healthcheck, start/stop/status routes.
 
 ## What works
 
+- Generated workspaces on disk: `generated-workspaces/<projectId>/current/` +
+  per-run `runs/<msgId>/{before,after}` snapshots, synced on create/revise,
+  `GET /projects/:id/workspace` (iteration 001)
 - PRD installed (`docs/simulator-first-builder-prd.md`)
 - Loop structure installed (`.ai/loops/simulator-autobuild/`)
 - Reusable command installed (`.claude/commands/simulator-loop-rip.md`)
@@ -32,7 +35,6 @@ Install PRD + autonomous loop system. ✅ Done — next objective is milestone 4
 
 ## What does not work yet
 
-- Generated workspaces on disk (files are in-memory/zip only)
 - REAL Expo preview in the phone frame (frame is a mockup today)
 - Build log capture + live SSE run events
 - Build/error repair loop
