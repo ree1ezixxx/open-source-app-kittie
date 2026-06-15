@@ -1,3 +1,6 @@
+import type { ChartType } from "@kittie/types";
+import { encodeChartCategory } from "@kittie/db";
+
 export interface AppleChartEntry {
   storeAppId: string;
   title: string;
@@ -21,10 +24,10 @@ interface AppleChartFeed {
   };
 }
 
-const APPLE_CHART_FEEDS = [
-  { chartCategory: "top-free", path: "top-free" },
-  { chartCategory: "top-paid", path: "top-paid" },
-] as const;
+const APPLE_CHART_FEEDS: Array<{ type: ChartType; path: string }> = [
+  { type: "free", path: "top-free" },
+  { type: "paid", path: "top-paid" },
+];
 
 /** Legacy iTunes RSS genre IDs — the modern marketing-tools API has no per-genre charts. */
 const APPLE_GENRES: Array<[string, number]> = [
@@ -37,10 +40,10 @@ const APPLE_GENRES: Array<[string, number]> = [
   ["Weather", 6001],
 ];
 
-const GENRE_FEEDS = [
-  { chartCategory: "top-free", path: "topfreeapplications" },
-  { chartCategory: "top-grossing", path: "topgrossingapplications" },
-] as const;
+const GENRE_FEEDS: Array<{ type: ChartType; path: string }> = [
+  { type: "free", path: "topfreeapplications" },
+  { type: "grossing", path: "topgrossingapplications" },
+];
 
 interface LegacyChartFeed {
   feed?: {
@@ -71,17 +74,21 @@ export async function fetchAppleGenreCharts(
         const response = await fetch(url, { redirect: "follow" });
         if (!response.ok) continue;
         const data = (await response.json()) as LegacyChartFeed;
+        const overallCategory = encodeChartCategory({ type: feed.type, genre: null });
+        const chartCategory = encodeChartCategory({ type: feed.type, genre: genreName });
         (data.feed?.entry ?? []).forEach((item, index) => {
           const storeAppId = item.id?.attributes?.["im:id"];
-          if (!storeAppId || seen.has(`${feed.chartCategory}:${storeAppId}`)) return;
-          seen.add(`${feed.chartCategory}:${storeAppId}`);
+          // Dedup per type across all genres (original semantics: an app already
+          // seen for this type in an earlier genre is skipped).
+          if (!storeAppId || seen.has(`${overallCategory}:${storeAppId}`)) return;
+          seen.add(`${overallCategory}:${storeAppId}`);
           entries.push({
             storeAppId,
             title: item["im:name"]?.label ?? "",
             developer: item["im:artist"]?.label ?? "",
             iconUrl: item["im:image"]?.at(-1)?.label ?? null,
             category: genreName,
-            chartCategory: `${feed.chartCategory}:${genreName}`,
+            chartCategory,
             chartRank: index + 1,
             chartCountry: country.toUpperCase(),
           });
@@ -124,7 +131,7 @@ export async function fetchAppleCharts(
         developer: item.artistName,
         iconUrl: item.artworkUrl100 ?? null,
         category: item.genres?.[0]?.name ?? null,
-        chartCategory: feed.chartCategory,
+        chartCategory: encodeChartCategory({ type: feed.type, genre: null }),
         chartRank: index + 1,
         chartCountry: country.toUpperCase(),
       });
