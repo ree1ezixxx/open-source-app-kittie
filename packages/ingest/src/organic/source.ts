@@ -60,7 +60,7 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-const pick = <T>(rng: () => number, arr: readonly T[]): T => arr[Math.floor(rng() * arr.length)];
+const pick = <T>(rng: () => number, arr: readonly T[]): T => arr[Math.floor(rng() * arr.length)]!;
 
 // Reference epoch for postedAt math — FIXED (not "now"), so postedAt is stable
 // across runs while lastSeenAt still moves. 2026-06-01.
@@ -129,13 +129,14 @@ export const stubOrganicSource: OrganicSource = {
       // @atcspotter / @official_vibrary pattern): the App's own handle plus a
       // few from the global pool.
       const subsetSize = 2 + Math.floor(rng() * 6);
-      const subset = [officialHandle(app.title)];
+      const official = officialHandle(app.title);
+      const subset = [official];
       for (let i = 0; i < subsetSize; i++) subset.push(pick(rng, HANDLE_POOL));
 
       for (let ordinal = 0; ordinal < count; ordinal++) {
-        // Bias toward the App's own handle (index 0) to mimic the recurring
-        // official account in truth's carousels.
-        const handle = rng() < 0.35 ? subset[0] : pick(rng, subset);
+        // Bias toward the App's own handle to mimic the recurring official
+        // account in truth's carousels.
+        const handle = rng() < 0.35 ? official : pick(rng, subset);
         const platform = weightedPlatform(rng);
         const caption = pick(rng, CAPTION_TEMPLATES)
           .replace("{app}", app.title)

@@ -11,6 +11,7 @@ import {
   IconGrid,
   IconSearch,
   IconImage,
+  IconUsers,
   IconGlobe,
   IconMessage,
   IconBulb,
@@ -30,6 +31,7 @@ const GROUPS: Group[] = [
     items: [
       { to: "/dashboard/explore", label: "Database", icon: IconDatabase, badge: "total" },
       { to: "/dashboard/ads", label: "Ads Library", icon: IconImage },
+      { to: "/dashboard/organic", label: "Organic Content", icon: IconUsers },
       { to: "/dashboard/highlights", label: "Highlights", icon: IconSpark },
       { to: "/dashboard/trending", label: "Trending", icon: IconTrending },
       { to: "/dashboard/rising", label: "Rising", icon: IconRising },

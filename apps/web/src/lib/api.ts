@@ -3,6 +3,8 @@ import type {
   AppListItem,
   AppSearchParams,
   ChartType,
+  OrganicResponse,
+  OrganicSearchParams,
   PaginatedResponse,
   Review,
   Store,
@@ -58,6 +60,30 @@ export async function listCharts(
   const res = await fetch(`${BASE}/charts?${q.toString()}`, { signal });
   if (!res.ok) throw new Error(`Failed to load charts (${res.status})`);
   const body = (await res.json()) as { data: TopChartsResult };
+  return body.data;
+}
+
+/** Organic Content — app-grouped creator videos. Mirrors listApps conventions. */
+export async function listOrganic(
+  params: OrganicSearchParams,
+  signal?: AbortSignal,
+): Promise<OrganicResponse> {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v === undefined || v === null || v === "") continue;
+    q.set(k, String(v));
+  }
+  const s = q.toString();
+  const res = await fetch(`${BASE}/organic${s ? `?${s}` : ""}`, { signal });
+  if (!res.ok) throw new Error(`Failed to load organic content (${res.status})`);
+  return (await res.json()) as OrganicResponse;
+}
+
+/** "Refresh organic content" — re-runs the live ingest in-process, like sync-reviews. */
+export async function refreshOrganic(limit = 20): Promise<{ apps: number; videos: number }> {
+  const res = await fetch(`${BASE}/organic/refresh?limit=${limit}`, { method: "POST" });
+  if (!res.ok) throw new Error(`Failed to refresh organic content (${res.status})`);
+  const body = (await res.json()) as { data: { apps: number; videos: number } };
   return body.data;
 }
 
