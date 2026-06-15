@@ -110,7 +110,27 @@ cd packages/ingest
 TARGET=10000 DATABASE_URL=file:/Users/ellis/Documents/open-source-app-kittie/data/kittie.db \
   pnpm exec tsx src/jobs/bulk-seed.ts
 ```
-The explicit `DATABASE_URL` is the **shared** DB every lane's API reads — confirm the running API has *that* file open (`lsof -p <:3007 pid> | grep .db`), don't trust the default path resolution.
+The explicit `DATABASE_URL` is the **shared** DB every lane's API reads — confirm the running API has *that* file open (`lsof -p <api pid> | grep kittie.db`), don't trust the default path resolution.
+
+## Local Dev Port/Data Guardrail
+
+The dashboard must show the full local dataset. Before assuming data is missing, verify the API and web proxy are aligned:
+
+```bash
+curl http://localhost:3008/health
+curl "http://localhost:3008/api/v1/apps?limit=3&sortBy=reviews&sortOrder=desc"
+lsof -p <api pid> | grep /Users/ellis/Documents/open-source-app-kittie/data/kittie.db
+```
+
+`apps/web/vite.config.ts` proxies `/api` to `VITE_API_ORIGIN`, defaulting to `http://localhost:3008`. If the app shell loads but tables are empty or show API errors, check `/tmp/web.log` for Vite proxy `ECONNREFUSED` before touching ingestion or the database.
+
+Use the guardrail script after starting API + web:
+
+```bash
+pnpm dev:check-data
+```
+
+Expected local baseline as of 2026-06-12: ~100K Apps, ~300K Snapshots, ~114K Reviews, 0 Meta ads. An empty Ads Library currently means `meta_ads` has not been ingested; it does not mean the app database is gone.
 
 **Gotchas that bit us once — don't repeat (this is the "no more manual reloads" list):**
 1. **After a reseed, the API still serves the OLD count.** `db-app-service.ts` caches scored rows in-memory with **no TTL**. It runs under `tsx watch`, so reload it by making a **content edit** to any `packages/api/src` file. **`touch`/mtime alone does NOT trigger the watcher** — it must be a real content change.

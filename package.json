@@ -6,6 +6,7 @@
     "typecheck": "pnpm -r build && pnpm -r typecheck",
     "dev:api": "pnpm --filter @kittie/api dev",
     "dev:web": "pnpm --filter @kittie/web dev",
+    "dev:check-data": "bash scripts/check-local-data.sh",
     "dev:mcp": "pnpm --filter @kittie/mcp dev",
     "pluto": "pnpm --filter @kittie/cli dev",
     "db:generate": "pnpm --filter @kittie/db generate",

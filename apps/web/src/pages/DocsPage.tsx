@@ -382,8 +382,8 @@ export function DocsPage({ theme, onToggleTheme }: { theme: Theme; onToggleTheme
               <P>
                 All endpoints live under the base URL <InlineCode>/api/v1</InlineCode>. In
                 development the web app proxies <InlineCode>/api</InlineCode> to the API server
-                on port 3009, so you can hit it directly at{" "}
-                <InlineCode>http://localhost:3009/api/v1</InlineCode> or through the Vite dev
+                on port 3008, so you can hit it directly at{" "}
+                <InlineCode>http://localhost:3008/api/v1</InlineCode> or through the Vite dev
                 server. Success responses wrap payloads as{" "}
                 <InlineCode>{`{ "data": … }`}</InlineCode>, usually with a{" "}
                 <InlineCode>meta</InlineCode> block describing the source; list endpoints add{" "}
@@ -400,7 +400,7 @@ export function DocsPage({ theme, onToggleTheme }: { theme: Theme; onToggleTheme
                 <pre className="mcp-term-body">
                   <code>
                     <span className="mcp-prompt">$ </span>
-                    {`curl "http://localhost:3009/api/v1/apps?limit=3&sortBy=revenue&sortOrder=desc"`}
+                    {`curl "http://localhost:3008/api/v1/apps?limit=3&sortBy=revenue&sortOrder=desc"`}
                   </code>
                 </pre>
               </div>
