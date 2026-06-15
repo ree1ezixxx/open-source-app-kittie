@@ -3,13 +3,10 @@ import { loadEnv } from "@kittie/core";
 import { createDb } from "@kittie/db";
 
 import { discoverAppIds, type DiscoveredApp } from "../apple/discover.js";
-import { lookupAppleApps } from "../apple/lookup.js";
-import { upsertApp, upsertSnapshot } from "../db/apps.js";
+import { enrichAndPersistAppleApps } from "../apple/ingest-apps.js";
 import { todaySnapshotDate } from "../util/dates.js";
-import { sleep } from "../util/rate-limit.js";
 
 const TARGET = Number(process.env.TARGET ?? 10_000);
-const ENRICH_BATCH = 50; // iTunes lookup hard cap is ~200; lookup.ts already chunks at 50
 
 export async function runBulkSeed(): Promise<void> {
   loadEnv();
@@ -32,63 +29,20 @@ export async function runBulkSeed(): Promise<void> {
       }
     },
   });
-  const hintById = new Map(discovered.map((d) => [d.storeAppId, d]));
-  const ids = discovered.map((d) => d.storeAppId);
-  console.log(`[bulk-seed] discovered ${ids.length} unique IDs in ${sec(startedAt)}s\n`);
+  console.log(`[bulk-seed] discovered ${discovered.length} unique IDs in ${sec(startedAt)}s\n`);
 
-  // 2) Enrich + upsert in batches.
+  // 2) Enrich + upsert + snapshot-on-discover (shared pipeline).
   console.log("[bulk-seed] enriching metadata + writing to DB…");
-  let upserted = 0;
-  let failed = 0;
-  for (let i = 0; i < ids.length; i += ENRICH_BATCH) {
-    const slice = ids.slice(i, i + ENRICH_BATCH);
-    let metas;
-    try {
-      metas = await lookupAppleApps(slice);
-    } catch (err) {
-      failed += slice.length;
-      console.warn(`  lookup batch @${i} failed: ${(err as Error).message} — backing off`);
-      await sleep(1500);
-      continue;
-    }
-
-    for (const meta of metas) {
-      const appId = await upsertApp(db, {
-        store: "apple",
-        storeAppId: meta.storeAppId,
-        bundleId: meta.bundleId,
-        title: meta.title,
-        developer: meta.developer,
-        category: meta.category,
-        iconUrl: meta.iconUrl,
-        description: meta.description,
-        websiteUrl: meta.websiteUrl,
-        price: meta.price,
-        contentRating: meta.contentRating,
-        languages: meta.languages,
-        screenshotUrls: meta.screenshotUrls,
-        releasedAt: meta.releasedAt,
-        updatedAt: meta.updatedAt,
-      });
-
-      const hint = hintById.get(meta.storeAppId);
-      await upsertSnapshot(db, {
-        appId,
-        snapshotDate,
-        reviewCount: meta.reviewCount,
-        rating: meta.rating,
-        chartRank: hint?.chartRank ?? null,
-        chartCategory: hint?.chartCategory ?? null,
-        chartCountry: hint?.chartCountry ?? "US",
-      });
-      upserted++;
-    }
-
-    if (upserted - (upserted % 500) > 0 && (i / ENRICH_BATCH) % 10 === 0) {
-      console.log(`  …upserted ${upserted}/${ids.length}`);
-    }
-    await sleep(120);
-  }
+  let lastUpsertLog = 0;
+  const { upserted, failed } = await enrichAndPersistAppleApps(db, discovered, {
+    snapshotDate,
+    onProgress: (n) => {
+      if (n - lastUpsertLog >= 500) {
+        lastUpsertLog = n;
+        console.log(`  …upserted ${n}/${discovered.length}`);
+      }
+    },
+  });
 
   console.log(
     `\n[bulk-seed] done in ${sec(startedAt)}s — upserted ${upserted} apps` +

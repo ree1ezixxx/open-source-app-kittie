@@ -1,0 +1,12 @@
+{
+  "truthBase": "https://www.appkittie.com",
+  "notes": "Polished clone lives in the feat/simulator-first-builder worktree (served on :5173). Main repo apps/web is an old prototype — ignore it. ads/organic are new worktrees branched from feat/simulator-first-builder.",
+  "sections": [
+    { "key": "explore",    "route": "/dashboard/explore",    "port": 5173, "worktree": "../open-source-app-kittie-simulator-first-builder", "status": "needs-work", "gaps": 6, "lastRun": "2026-06-15", "lastSha": "207865b" },
+    { "key": "ads",        "route": "/dashboard/ads",        "port": 5174, "worktree": "../open-source-app-kittie-ads",                    "status": "pending", "gaps": null, "lastRun": null },
+    { "key": "organic",    "route": "/dashboard/organic",    "port": 5175, "worktree": "../open-source-app-kittie-organic",                "status": "needs-work", "gaps": 5, "lastRun": "2026-06-15", "lastSha": "8ce8c12" },
+    { "key": "highlights", "route": "/dashboard/highlights", "port": 5176, "worktree": "../open-source-app-kittie-highlights",             "status": "needs-work", "gaps": 4, "lastRun": "2026-06-15", "lastSha": "1f4c108" },
+    { "key": "trending",   "route": "/dashboard/trending",   "port": 5173, "worktree": "../open-source-app-kittie-simulator-first-builder", "status": "pending", "gaps": null, "lastRun": null },
+    { "key": "rising",     "route": "/dashboard/rising",     "port": 5173, "worktree": "../open-source-app-kittie-simulator-first-builder", "status": "pending", "gaps": null, "lastRun": null }
+  ]
+}
