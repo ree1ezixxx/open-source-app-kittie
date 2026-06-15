@@ -1,4 +1,4 @@
-import { runGoogleExpand, runScore, runSnapshotBulk } from "@kittie/ingest";
+import { runAppleDiscover, runGoogleExpand, runScore, runSnapshotBulk } from "@kittie/ingest";
 import { registerSweep } from "./services/freshness-service.js";
 import { sweepHotIdeas } from "./services/idea-sweep-service.js";
 import { sweepFreshSet } from "./services/review-sweep-service.js";
@@ -16,6 +16,20 @@ export function registerAllSweeps(): void {
     async run() {
       const r = await sweepFreshSet();
       return `refreshed ${r.refreshed}/${r.scanned} apps, +${r.newReviews} reviews`;
+    },
+  });
+
+  // Registered before snapshots-daily so newly-discovered apps are picked up by
+  // the same-day snapshot+score pass (which overwrites the discovery chart-rank
+  // hint with a fresher chart-lookup rank). No free Apple new-releases feed
+  // exists (ADR 0006): discover broadly, filter by releasedAt downstream.
+  registerSweep({
+    name: "apple-discover",
+    cadenceHours: 24,
+    async run() {
+      const r = await runAppleDiscover();
+      return `discovered ${r.discovered}, upserted ${r.upserted}, snapshotted ${r.snapshotted}` +
+        (r.failed ? `, ${r.failed} failed lookup` : "");
     },
   });
 
