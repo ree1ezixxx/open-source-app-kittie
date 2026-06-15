@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import type { CloneableApp } from "@kittie/db";
 import { PageShell } from "../components/PageShell";
 import { EmptyState } from "../components/EmptyState";
 import { Segmented } from "../components/Segmented";
@@ -8,7 +7,19 @@ import { IconDownload } from "../icons";
 import type { Theme } from "../lib/theme";
 import "../styles/app-engine.css";
 
-interface CloneableAppResponse extends CloneableApp {
+// Shape of GET /api/v1/app-engine/cloneable rows. Defined locally so web never
+// imports the server-only @kittie/db package (the parity-pass carve-out). The
+// canonical type is owned by the App Engine lane (feat/simulator-first-builder);
+// keep this in sync when that lane lands.
+interface CloneableAppResponse {
+  id: string;
+  title: string;
+  platform: string;
+  repoUrl: string;
+  iconUrl?: string | null;
+  featuredReason?: string;
+  description?: string | null;
+  githubStars?: number | null;
   cloneUrl?: string;
   deepLink?: string;
   instructions?: string;
