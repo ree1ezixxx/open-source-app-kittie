@@ -1,4 +1,4 @@
-import { fetchAppleCharts, fetchAppleGenreCharts } from "../apple/charts.js";
+import { fetchAppleGenreCharts } from "../apple/charts.js";
 import { fetchGoogleCharts } from "../google/metadata.js";
 
 export interface ChartRankEntry {
@@ -9,8 +9,10 @@ export interface ChartRankEntry {
 
 /** Fresh US chart ranks keyed by `store:storeAppId`. Apps not on a chart are absent. */
 export async function fetchChartRankLookup(country = "us"): Promise<Map<string, ChartRankEntry>> {
-  const [appleCharts, appleGenreCharts, googleCharts] = await Promise.all([
-    fetchAppleCharts(country, 100),
+  const [appleCharts, googleCharts] = await Promise.all([
+    // Covers all 3 Apple chart types (free|paid|grossing) at overall + per-genre.
+    // Emitted in priority order (scarce per-genre paid/grossing first) so the
+    // app-level collapse below keeps the membership the grid most needs.
     fetchAppleGenreCharts(country, 100),
     fetchGoogleCharts(country, 50),
   ]);
@@ -20,8 +22,9 @@ export async function fetchChartRankLookup(country = "us"): Promise<Map<string, 
     if (!lookup.has(key)) lookup.set(key, entry);
   };
 
-  // Overall charts first (more prestigious rank), then per-genre coverage.
-  for (const entry of [...appleCharts, ...appleGenreCharts]) {
+  // One membership per app/day (snapshot is unique on app+date): the first entry
+  // in fetchAppleGenreCharts's priority order wins.
+  for (const entry of appleCharts) {
     setIfAbsent(`apple:${entry.storeAppId}`, {
       chartRank: entry.chartRank,
       chartCategory: entry.chartCategory,
