@@ -8,13 +8,6 @@ import { useApps } from "../hooks/useApps";
 import { IconSpark } from "../icons";
 import type { Theme } from "../lib/theme";
 
-/** Map the clone's internal store token to truth's outbound view-all token. */
-function truthSourceToken(source: Store | undefined): string | undefined {
-  if (source === "apple") return "apple_mobile";
-  if (source === "google") return "google_play";
-  return undefined;
-}
-
 /** A single independent store-source toggle (truth: "Select …" / "Included …"). */
 function StoreToggle({ label, on, onClick }: { label: string; on: boolean; onClick: () => void }) {
   return (
@@ -44,7 +37,6 @@ export function HighlightsPage({ theme, onToggleTheme }: { theme: Theme; onToggl
   const [googleOn, setGoogleOn] = useState(false);
   const source: Store | undefined =
     appleOn && !googleOn ? "apple" : googleOn && !appleOn ? "google" : undefined;
-  const srcToken = truthSourceToken(source);
 
   // New Big Hits — newly released apps by review volume (truth: reviews/desc/7d).
   const releasedAfter = useMemo(() => Math.floor((Date.now() - 7 * 86_400_000) / 1000), []);
@@ -68,11 +60,15 @@ export function HighlightsPage({ theme, onToggleTheme }: { theme: Theme; onToggl
     </Link>
   );
 
-  const bigHitsViewAll = `/dashboard/explore?sortBy=reviews&sortOrder=desc&releasedAfter=7d${
-    srcToken ? `&source=${srcToken}` : ""
-  }`;
-  const gainersViewAll = `/dashboard/rising${srcToken ? `?source=${srcToken}` : ""}`;
-  const losersViewAll = `/dashboard/movers?type=losers${srcToken ? `&source=${srcToken}` : ""}`;
+  // "View all" → Explore with the params our Explore page actually reads
+  // (sort/order/rel/source — see exploreFilters), reproducing each widget's
+  // query so the expanded list matches the card. Truth routes these to
+  // /rising and /movers, but those don't exist (or sort differently) on the
+  // clone, so we land on Explore with the equivalent sort instead.
+  const srcSuffix = source ? `&source=${source}` : "";
+  const bigHitsViewAll = `/dashboard/explore?sort=reviews&order=desc&rel=7${srcSuffix}`;
+  const gainersViewAll = `/dashboard/explore?sort=rankDelta&order=desc${srcSuffix}`;
+  const losersViewAll = `/dashboard/explore?sort=rankDelta&order=asc${srcSuffix}`;
 
   return (
     <PageShell
