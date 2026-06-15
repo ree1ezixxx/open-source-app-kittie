@@ -53,7 +53,8 @@ export type AppSortField =
   | "downloads"
   | "revenue"
   | "trending"
-  | "newest";
+  | "newest"
+  | "rankDelta";
 
 export type SortOrder = "asc" | "desc";
 
@@ -116,6 +117,12 @@ export interface AppListItem {
   /** Estimates recomputed from the prior snapshot's signals — power rank-change deltas. */
   downloadsEstimatePrior: number | null;
   revenueEstimatePrior: number | null;
+  /**
+   * Signed chart-rank movement between this app's two most recent ranked
+   * snapshot days (priorRank − latestRank; positive = climbed). Null when the
+   * app lacks two ranked snapshots. Powers the Highlights "1D" column.
+   */
+  rankDelta: number | null;
   isFirstMover: boolean;
   releasedAt: string | null;
   updatedAt: string | null;

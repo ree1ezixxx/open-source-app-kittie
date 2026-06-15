@@ -48,6 +48,7 @@ const searchParamsSchema = z.object({
       "revenue",
       "trending",
       "newest",
+      "rankDelta",
     ])
     .optional(),
   sortOrder: z.enum(["asc", "desc"]).optional(),
