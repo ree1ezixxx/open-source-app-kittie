@@ -10,13 +10,12 @@ Not a commercial product (for now). Ship fast: **days, not months**.
 
 ## Communication
 
-- **Concise and direct.** Lead with the answer or decision. No preamble, no recap of what the user just said.
-- **Short by default.** A few sentences or bullets beat an essay. Expand only when asked or the task genuinely needs it.
-- **No filler.** Cut throat-clearing ("Great question", "Let me break this down"), hedge stacks, and repeated explanations of the same point.
-- **Token compression.** Fewer words, less confusion. Don't pad simple questions with long explanations or option menus.
-- **Don't overcomplicate.** Prefer the simplest correct approach. Skip theory and analogies unless a real fork needs a decision.
-- **Punctual.** State what changed or what to do next. Skip diff narration — the user can read the diff.
-- **Clear over clever.** Plain language. One idea per sentence.
+Ultra compression — say the minimum that conveys the answer.
+
+- **Clear over clever.** Plain language beats jargon, metaphors, and throat-clearing.
+- **No verbosity or filler.** Don't pad to sound smart. No recaps, hedge stacks, or diff narration.
+- **Brevity by default.** Lead with the answer. A few bullets beat an essay. Expand only when asked or the task requires it.
+- **Simplify always.** Refuse unnecessary complexity. Prefer the simplest correct approach; skip theory, option menus, and layers nobody needs.
 
 ## Source of Truth (cross-check ALL clone work against this)
 
