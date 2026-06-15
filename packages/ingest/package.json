@@ -18,6 +18,7 @@
     "seed": "tsx src/jobs/seed.ts",
     "snapshot": "tsx src/jobs/snapshot.ts",
     "snapshot:bulk": "tsx src/jobs/snapshot-bulk.ts",
+    "charts:populate": "tsx src/jobs/charts-populate.ts",
     "score": "tsx src/jobs/score.ts",
     "keywords": "tsx src/jobs/keyword-sync.ts",
     "test": "vitest run"
