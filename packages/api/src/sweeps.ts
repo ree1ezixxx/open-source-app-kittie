@@ -1,4 +1,4 @@
-import { runGoogleExpand, runScore, runSnapshotBulk } from "@kittie/ingest";
+import { runChartsPopulate, runGoogleExpand, runScore, runSnapshotBulk } from "@kittie/ingest";
 import { registerSweep } from "./services/freshness-service.js";
 import { sweepHotIdeas } from "./services/idea-sweep-service.js";
 import { sweepFreshSet } from "./services/review-sweep-service.js";
@@ -28,6 +28,21 @@ export function registerAllSweeps(): void {
       await runSnapshotBulk();
       await runScore();
       return "snapshots + chart ranks + scores refreshed";
+    },
+  });
+
+  // Full Apple/US chart grid (#6 populate): fetches all 3 chart types
+  // (free|paid|grossing) at overall + per-genre, DISCOVERS apps not yet tracked,
+  // enriches each with its true primary category, and writes today's chart-bearing
+  // snapshot. snapshots-daily only annotates apps already in the DB with overall
+  // ranks; this sweep is what keeps newly-charting apps and the full grid current,
+  // so Store Rankings + day-over-day Rank change refresh on cadence (#7).
+  registerSweep({
+    name: "chart-rankings",
+    cadenceHours: 24,
+    async run() {
+      const r = await runChartsPopulate();
+      return `${r.written} chart snapshots from ${r.chartedApps} charted apps for ${r.snapshotDate}`;
     },
   });
 
