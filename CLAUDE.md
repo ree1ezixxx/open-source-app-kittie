@@ -11,3 +11,9 @@ Read `AGENTS.md` first — it's the source of truth for this repo.
 - **Match length to the question.**
 
 Full rules: see `AGENTS.md` → Communication.
+
+## Browser tabs (Chrome DevTools MCP)
+
+- **Whenever you open/show a localhost tab, rename its title to the clone's sidebar label** (e.g. Organic, Ads, Highlights) for clean per-port separation.
+- Right after navigating, run: `evaluate_script(() => { document.title = "<Section>"; })`.
+- Map: this worktree = **Organic** (web :5175 / api :3018). Each worktree uses its own section name + ports.
