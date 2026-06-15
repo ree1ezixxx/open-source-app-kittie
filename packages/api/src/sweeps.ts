@@ -1,4 +1,5 @@
-import { runGoogleExpand, runScore, runSnapshotBulk } from "@kittie/ingest";
+import { runGoogleExpand, runScore, runSnapshotBulk, syncOrganic } from "@kittie/ingest";
+import { getDb } from "./lib/db.js";
 import { registerSweep } from "./services/freshness-service.js";
 import { sweepHotIdeas } from "./services/idea-sweep-service.js";
 import { sweepFreshSet } from "./services/review-sweep-service.js";
@@ -47,6 +48,19 @@ export function registerAllSweeps(): void {
     async run() {
       const r = await sweepHotIdeas();
       return `${r.existing}/${r.target} ideas (+${r.generated} this run, ${r.failed} failed)`;
+    },
+  });
+
+  // Organic creator videos: same live seam as the Refresh button, on a cadence
+  // so the surface stays current without a manual press. The source adapter is
+  // stubbed today (representative rows), but boot catch-up + this cadence mean
+  // the day a real feed is wired, the page tracks it automatically.
+  registerSweep({
+    name: "organic-videos",
+    cadenceHours: 12,
+    async run() {
+      const r = await syncOrganic(getDb());
+      return `refreshed ${r.videos} videos across ${r.apps} apps`;
     },
   });
 
