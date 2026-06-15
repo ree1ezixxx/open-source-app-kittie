@@ -48,6 +48,18 @@ _Avoid_: Trending, hot
 An App showing strong Growth score in a niche before category saturation — early signal, not proof of long-term success.
 _Avoid_: Winner, validated
 
+**Store ranking**:
+An App's position in a Store's top chart for a given Chart type, country, and category, on a specific date. The "Store Rankings" (Trending) page lists these. Sourced from public Store charts; we surface, not model, them.
+_Avoid_: Trending rank, leaderboard
+
+**Chart type**:
+Which top chart a Store ranking comes from — `free`, `paid`, or `grossing`. Stored packed with the genre in `chart_category` (e.g. `top-free`, `top-paid:Business`).
+_Avoid_: Chart kind, list type
+
+**Rank change**:
+An App's day-over-day movement in a Store ranking (priorRank − rank; positive = climbed). Null when there is no prior day. Shown as the Δ ("24h") column.
+_Avoid_: Trend, delta (in user-facing copy)
+
 **Ad creative**:
 A Meta (Facebook/Instagram) ad asset linked to an App, sourced from the public Ad Library.
 _Avoid_: Campaign (unless referring to a grouped set of creatives); Listing media (that is the App's own store assets, not an ad)
