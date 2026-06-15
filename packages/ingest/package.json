@@ -19,7 +19,8 @@
     "snapshot": "tsx src/jobs/snapshot.ts",
     "snapshot:bulk": "tsx src/jobs/snapshot-bulk.ts",
     "score": "tsx src/jobs/score.ts",
-    "keywords": "tsx src/jobs/keyword-sync.ts"
+    "keywords": "tsx src/jobs/keyword-sync.ts",
+    "test": "vitest run"
   },
   "dependencies": {
     "@kittie/core": "workspace:*",
@@ -32,6 +33,7 @@
   "devDependencies": {
     "@types/node": "^22.15.21",
     "tsx": "^4.19.4",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^4.1.8"
   }
 }
