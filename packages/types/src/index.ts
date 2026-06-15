@@ -3,6 +3,82 @@ export type Store = "apple" | "google";
 
 export type GrowthPeriod = "7d" | "14d" | "30d" | "60d" | "90d";
 
+/**
+ * Minimum fraction of a window's days that must hold a snapshot before that
+ * window may render a number. Below this, growth is "building…", never a value.
+ * See ADR-0001 — growth is a coverage-gated span statistic.
+ */
+export const GROWTH_COVERAGE_MIN = 0.7;
+
+/**
+ * A growth window is either `ready` (enough coverage to render an honest,
+ * outlier-robust number) or `building` (too few days accrued yet). It is never
+ * an endpoint delta — see ADR-0001. All change figures are span statistics
+ * computed across the whole window from the immutable daily series.
+ */
+export type GrowthWindowState = "ready" | "building";
+
+export interface GrowthWindow {
+  /** Window label this result is for. */
+  window: GrowthPeriod;
+  /** Calendar span of the window in days. */
+  windowDays: number;
+  /** `ready` only when coverage clears GROWTH_COVERAGE_MIN. */
+  state: GrowthWindowState;
+  /** Fraction of window days that hold a snapshot (0–1). */
+  coverage: number;
+  /** Count of snapshots present inside the window. */
+  presentDays: number;
+  /** Trailing-average of the recent edge of the window; null while building. */
+  recentAvg: number | null;
+  /** Trailing-average of the baseline edge of the window; null while building. */
+  baselineAvg: number | null;
+  /** recentAvg − baselineAvg (smoothed); null while building. */
+  absoluteChange: number | null;
+  /** (recent − baseline) / |baseline|; null while building or baseline 0. */
+  relativeChange: number | null;
+  /** Least-squares slope per day over present points; null while building. */
+  slopePerDay: number | null;
+}
+
+/**
+ * Canonical store-chart list. The raw `chart_category` column has drifted
+ * across ingest versions (`top-free` vs `topfreeapplications`, etc.); callers
+ * always work in these normalized values — see `normalizeChartType`.
+ */
+export type ChartType = "free" | "paid" | "grossing";
+
+/** One ranked app in a store chart, with its day-over-day movement. */
+export interface ChartEntry {
+  /** 1-based position on the resolved chart date (ascending = better). */
+  rank: number;
+  /** priorRank − rank (positive = climbed); null when there is no prior day. */
+  rankDelta: number | null;
+  app: {
+    id: string;
+    store: Store;
+    storeAppId: string;
+    title: string;
+    developer: string;
+    iconUrl: string | null;
+    category: string | null;
+  };
+  rating: number | null;
+  reviewCount: number;
+}
+
+/** A resolved store-ranking chart — what `GET /api/v1/charts` returns. */
+export interface TopChartsResult {
+  store: Store;
+  country: string;
+  type: ChartType;
+  /** Genre filter applied, or null for the overall chart. */
+  category: string | null;
+  /** Chart date the entries are from (`YYYY-MM-DD`), or null when no data. */
+  date: string | null;
+  entries: ChartEntry[];
+}
+
 export type AppSortField =
   | "growth"
   | "rating"

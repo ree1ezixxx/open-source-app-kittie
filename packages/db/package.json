@@ -19,12 +19,12 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
+    "test": "node --test --experimental-strip-types \"test/**/*.test.ts\"",
     "generate": "drizzle-kit generate",
     "migrate": "drizzle-kit migrate",
     "studio": "drizzle-kit studio"
   },
   "dependencies": {
-    "@kittie/intelligence": "workspace:*",
     "@kittie/types": "workspace:*",
     "drizzle-orm": "^0.44.2",
     "better-sqlite3": "^11.10.0"

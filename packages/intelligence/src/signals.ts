@@ -13,6 +13,8 @@ export function signalsFromContext(ctx: SnapshotContext): AppSignals {
     metaAdCount: ctx.metaAdCount,
     metaAdCountPrior: ctx.metaAdCountPrior,
     chartRankPrior: ctx.prior?.chartRank ?? null,
+    reviewGrowthWindow: ctx.reviewGrowthWindow,
+    rankGrowthWindow: ctx.rankGrowthWindow,
     updatedAt: ctx.app.updatedAt,
     releasedAt: ctx.app.releasedAt,
     categoryAppCount: ctx.categoryAppCount,
