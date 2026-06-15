@@ -10,6 +10,14 @@ import { todaySnapshotDate } from "../util/dates.js";
  *  Apple endpoints and avoid rate-limit bans; the catalog grows run-over-run. */
 const DEFAULT_CAP = 500;
 
+/** Resolve the per-run cap, falling back to the default on a missing or
+ *  malformed APPLE_DISCOVER_CAP so a typo can't silently discover nothing
+ *  (Number("")→0, Number("abc")→NaN → an empty run). */
+function resolveCap(raw: string | undefined): number {
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : DEFAULT_CAP;
+}
+
 export interface AppleDiscoverResult {
   discovered: number;
   upserted: number;
@@ -27,7 +35,7 @@ export interface AppleDiscoverResult {
  * See docs/adr/0006-apple-discovery-by-popularity.md.
  */
 export async function runAppleDiscover(
-  cap: number = Number(process.env.APPLE_DISCOVER_CAP ?? DEFAULT_CAP),
+  cap: number = resolveCap(process.env.APPLE_DISCOVER_CAP),
 ): Promise<AppleDiscoverResult> {
   loadEnv();
   const db = createDb();
