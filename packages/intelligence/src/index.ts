@@ -37,6 +37,7 @@ export function scoreApp(
     | "growthPct"
     | "downloadsEstimatePrior"
     | "revenueEstimatePrior"
+    | "rankDelta"
     | "isFirstMover"
   >,
   signals: AppSignals,
@@ -54,6 +55,9 @@ export function scoreApp(
     growthScore,
     growthPct: computeGrowthPct(signals, "7d"),
     ...prior,
+    // Chart-rank movement is sourced from snapshot history by the caller
+    // (db-app-service); estimators have no rank context, so default to null.
+    rankDelta: null,
     isFirstMover: isFirstMover(signals, growthScore),
   };
 }

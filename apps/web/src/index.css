@@ -108,6 +108,8 @@ a { color: inherit; text-decoration: none; }
   height: 100vh;
   overflow: hidden;
 }
+/* Builder studio mode: full-bleed, no dashboard sidebar. */
+.app-shell.studio { grid-template-columns: 1fr; }
 
 /* ============================================================ Sidebar */
 .sidebar {

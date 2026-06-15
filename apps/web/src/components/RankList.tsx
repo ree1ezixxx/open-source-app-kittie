@@ -19,9 +19,14 @@ const headStyle: CSSProperties = {
   cursor: "default",
 };
 
-/** Real period-scaled growth % from snapshot history (null until a prior exists). */
+/** Signed chart-rank movement between the two latest ranked snapshots (null until two exist). */
 function deltaOf(a: AppListItem): number | null {
-  return a.growthPct;
+  return a.rankDelta;
+}
+
+/** Downloads with truth's sub-100 floor: small/zero estimates render as "<100". */
+function formatDl(n: number | null): string {
+  return n != null && n < 100 ? "<100" : formatCompact(n);
 }
 
 /**
@@ -86,7 +91,7 @@ export function RankList({
               <span style={{ width: DELTA_W, flexShrink: 0 }}>
                 {d != null ? (
                   <span className={`delta ${d > 0 ? "up" : d < 0 ? "down" : "flat"}`}>
-                    {d > 0 ? "+" : ""}{d.toFixed(1)}%
+                    {d > 0 ? "+" : ""}{d}
                   </span>
                 ) : (
                   <span className="num-muted" style={{ fontSize: 11.5 }}>—</span>
@@ -96,9 +101,9 @@ export function RankList({
             <AppIcon url={a.iconUrl} title={a.title} />
             <div className="rr-meta">
               <div className="rr-name" title={a.title}>{a.title}</div>
-              <div className="rr-sub">{a.developer || a.category}</div>
+              <div className="rr-sub">{a.category || a.developer}</div>
             </div>
-            <div className="rr-num" style={{ width: DL_W, flexShrink: 0 }}>{formatCompact(a.downloadsEstimate30d)}</div>
+            <div className="rr-num" style={{ width: DL_W, flexShrink: 0 }}>{formatDl(a.downloadsEstimate30d)}</div>
             <div className="rr-num num-strong" style={{ width: MRR_W, flexShrink: 0 }}>{formatMoney(a.revenueEstimate30d)}</div>
           </div>
         );

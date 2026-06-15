@@ -1,0 +1,1 @@
+ALTER TABLE `builder_messages` ADD `run_json` text;

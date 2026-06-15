@@ -64,6 +64,27 @@
       "when": 1781245366492,
       "tag": "0008_outgoing_scarecrow",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1781271030011,
+      "tag": "0009_shallow_ultragirl",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1781273835553,
+      "tag": "0010_fluffy_dust",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1781298298587,
+      "tag": "0011_fair_archangel",
+      "breakpoints": true
     }
   ]
 }

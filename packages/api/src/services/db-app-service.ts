@@ -41,7 +41,11 @@ function toIso(d: Date | null | undefined): string | null {
   return d ? d.toISOString() : null;
 }
 
-function listItemFromContext(ctx: SnapshotContext, period: GrowthPeriod): AppListItem {
+function listItemFromContext(
+  ctx: SnapshotContext,
+  period: GrowthPeriod,
+  rankDelta: number | null,
+): AppListItem {
   const reviewGrowth7d =
     ctx.prior != null ? ctx.latest.reviewCount - ctx.prior.reviewCount : null;
 
@@ -72,11 +76,12 @@ function listItemFromContext(ctx: SnapshotContext, period: GrowthPeriod): AppLis
       growthScore,
       growthPct: computeGrowthPct(signals, period),
       ...priorEstimates(signals),
+      rankDelta,
       isFirstMover: isFirstMover(signals, growthScore),
     };
   }
 
-  return scoreApp(base, signalsFromContext(ctx));
+  return { ...scoreApp(base, signalsFromContext(ctx)), rankDelta };
 }
 
 function filterMetaFromContext(ctx: SnapshotContext): ScoredAppRow["meta"] {
@@ -93,10 +98,11 @@ function filterMetaFromContext(ctx: SnapshotContext): ScoredAppRow["meta"] {
 
 async function loadScoredRows(period: GrowthPeriod): Promise<ScoredAppRow[]> {
   const db = getDb();
-  const [contexts, appleAdApps, creatorApps] = await Promise.all([
+  const [contexts, appleAdApps, creatorApps, rankDeltas] = await Promise.all([
     listSnapshotContexts(db, period),
     appsWithAppleAds(db),
     appsWithCreators(db),
+    getRankDeltas(),
   ]);
 
   return contexts.map((ctx) => {
@@ -104,7 +110,7 @@ async function loadScoredRows(period: GrowthPeriod): Promise<ScoredAppRow[]> {
     meta.hasAppleAds = appleAdApps.has(ctx.app.id);
     meta.hasCreators = creatorApps.has(ctx.app.id);
     return {
-      item: listItemFromContext(ctx, period),
+      item: listItemFromContext(ctx, period, rankDeltas.get(ctx.app.id) ?? null),
       meta,
     };
   });
@@ -124,6 +130,41 @@ async function getScoredRows(period: GrowthPeriod): Promise<ScoredAppRow[]> {
 
 export async function dbHasApps(): Promise<boolean> {
   return (await countApps(getDb())) > 0;
+}
+
+// Rank-delta cache — appId → signed chart-rank movement between an app's two
+// most recent *ranked* snapshot days (priorRank − latestRank; positive =
+// climbed). Built from ONE grouped query (same no-N+1 / process-lifetime cache
+// semantics as getSparklines). Apps without two ranked snapshots are absent →
+// the caller defaults them to null. Powers the Highlights "1D" column.
+let cachedRankDeltas: Map<string, number> | null = null;
+
+async function getRankDeltas(): Promise<Map<string, number>> {
+  if (cachedRankDeltas) return cachedRankDeltas;
+  const rows = await getDb()
+    .select({ appId: appSnapshots.appId, chartRank: appSnapshots.chartRank })
+    .from(appSnapshots)
+    .orderBy(appSnapshots.appId, appSnapshots.snapshotDate);
+
+  // Keep the last two non-null chart ranks per app (oldest→newest within app).
+  const lastTwo = new Map<string, number[]>();
+  for (const row of rows) {
+    if (row.chartRank == null) continue;
+    const list = lastTwo.get(row.appId);
+    if (!list) {
+      lastTwo.set(row.appId, [row.chartRank]);
+    } else {
+      list.push(row.chartRank);
+      if (list.length > 2) list.shift();
+    }
+  }
+
+  const map = new Map<string, number>();
+  for (const [appId, ranks] of lastTwo) {
+    if (ranks.length === 2) map.set(appId, ranks[0]! - ranks[1]!); // prior − latest
+  }
+  cachedRankDeltas = map;
+  return map;
 }
 
 // Sparkline cache — appId → last ≤7 daily reviewCount values (oldest→newest).
@@ -269,7 +310,8 @@ export async function getAppByIdFromDb(id: string): Promise<AppDetail | null> {
   const ctx = await getSnapshotContext(db, id, "7d");
   if (!ctx) return null;
 
-  const list = listItemFromContext(ctx, "7d");
+  const rankDeltas = await getRankDeltas();
+  const list = listItemFromContext(ctx, "7d", rankDeltas.get(id) ?? null);
   const relations = await loadAppRelations(db, id);
   const mapped = mapRelations(
     relations.iapRows,

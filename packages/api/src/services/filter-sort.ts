@@ -93,7 +93,7 @@ export function matchesSearch(row: ScoredAppRow, params: AppSearchParams): boole
   return true;
 }
 
-function sortValue(item: AppListItem, sortBy: AppSearchParams["sortBy"]): number | string {
+function sortValue(item: AppListItem, sortBy: AppSearchParams["sortBy"]): number | string | null {
   switch (sortBy) {
     case "growth":
     case "trending":
@@ -111,6 +111,9 @@ function sortValue(item: AppListItem, sortBy: AppSearchParams["sortBy"]): number
     case "released":
     case "newest":
       return item.releasedAt ? new Date(item.releasedAt).getTime() : 0;
+    case "rankDelta":
+      // Null (no two ranked snapshots) sinks below every real delta — see sortApps.
+      return item.rankDelta;
     default:
       return item.growthScore ?? 0;
   }
@@ -125,6 +128,11 @@ export function sortApps(rows: ScoredAppRow[], params: AppSearchParams): AppList
     .sort((a, b) => {
       const av = sortValue(a.item, sortBy);
       const bv = sortValue(b.item, sortBy);
+      // Nulls always sink to the bottom, regardless of sort direction, so the
+      // gainers (desc) and losers (asc) widgets never surface unranked apps.
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1;
+      if (bv == null) return -1;
       if (typeof av === "string" && typeof bv === "string") return av.localeCompare(bv) * dir;
       return ((av as number) - (bv as number)) * dir;
     })

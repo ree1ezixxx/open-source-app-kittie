@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Sidebar } from "./components/Sidebar";
 import { ExplorePage } from "./pages/ExplorePage";
 import { AppDetailPage } from "./pages/AppDetailPage";
@@ -9,6 +9,7 @@ import { TrendingPage } from "./pages/TrendingPage";
 import { RisingPage } from "./pages/RisingPage";
 import { FavoritesPage } from "./pages/FavoritesPage";
 import { AppEnginePage } from "./pages/AppEnginePage";
+import { BuilderPage } from "./pages/BuilderPage";
 import { AppTrackingPage } from "./pages/aso/AppTrackingPage";
 import { KeywordExplorerPage } from "./pages/aso/KeywordExplorerPage";
 import { ScreenshotTranslationPage } from "./pages/ScreenshotTranslationPage";
@@ -26,11 +27,15 @@ import { useTheme } from "./lib/theme";
 export function App() {
   const [theme, toggleTheme] = useTheme();
   const [total, setTotal] = useState(0);
+  // /studio/* runs the Builder full-bleed, outside the Kittie dashboard chrome.
+  const studio = useLocation().pathname.startsWith("/studio");
 
   return (
-    <div className="app-shell">
-      <Sidebar total={total} />
+    <div className={studio ? "app-shell studio" : "app-shell"}>
+      {!studio && <Sidebar total={total} />}
       <Routes>
+        <Route path="/studio" element={<BuilderPage theme={theme} onToggleTheme={toggleTheme} />} />
+        <Route path="/studio/:id" element={<BuilderPage theme={theme} onToggleTheme={toggleTheme} />} />
         <Route path="/" element={<Navigate to="/dashboard/explore" replace />} />
         <Route
           path="/dashboard/explore"
@@ -44,6 +49,8 @@ export function App() {
         <Route path="/dashboard/trending" element={<TrendingPage theme={theme} onToggleTheme={toggleTheme} />} />
         <Route path="/dashboard/rising" element={<RisingPage theme={theme} onToggleTheme={toggleTheme} />} />
         <Route path="/dashboard/app-engine" element={<AppEnginePage theme={theme} onToggleTheme={toggleTheme} />} />
+        <Route path="/dashboard/builder" element={<BuilderPage theme={theme} onToggleTheme={toggleTheme} />} />
+        <Route path="/dashboard/builder/:id" element={<BuilderPage theme={theme} onToggleTheme={toggleTheme} />} />
         <Route path="/dashboard/favorites" element={<FavoritesPage theme={theme} onToggleTheme={toggleTheme} />} />
         <Route path="/dashboard/favorites/apps" element={<FavoritesPage theme={theme} onToggleTheme={toggleTheme} />} />
 
