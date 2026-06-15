@@ -16,3 +16,17 @@ export { suggestRelatedKeywords } from "./keyword-suggest.js";
 export { searchPopularity } from "./keyword-popularity.js";
 export { syncKeyword, getCachedKeyword, fetchKeywordRankings } from "./db/keywords.js";
 export { runKeywordSync } from "./jobs/keyword-sync.js";
+export {
+  runOrganic,
+  syncOrganic,
+  type OrganicSyncOptions,
+  type OrganicSyncResult,
+} from "./jobs/organic.js";
+export {
+  stubOrganicSource,
+  type OrganicSource,
+  type OrganicSourceApp,
+  type OrganicVideoInput,
+  type OrganicPlatform,
+} from "./organic/source.js";
+export { pickAppsForOrganic, upsertOrganicVideos } from "./db/organic.js";

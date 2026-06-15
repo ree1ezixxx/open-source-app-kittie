@@ -19,7 +19,8 @@
     "snapshot": "tsx src/jobs/snapshot.ts",
     "snapshot:bulk": "tsx src/jobs/snapshot-bulk.ts",
     "score": "tsx src/jobs/score.ts",
-    "keywords": "tsx src/jobs/keyword-sync.ts"
+    "keywords": "tsx src/jobs/keyword-sync.ts",
+    "organic": "tsx src/jobs/organic.ts"
   },
   "dependencies": {
     "@kittie/core": "workspace:*",

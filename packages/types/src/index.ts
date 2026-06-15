@@ -170,6 +170,64 @@ export interface CreatorPartnership {
   followerCount: number | null;
 }
 
+/**
+ * One creator/UGC video promoting an App — a row of `organic_videos`. The
+ * organic counterpart to MetaAdCreative: not paid, attributed to a creator
+ * `@handle` (stored with its leading "@"). Distinct from the App's own
+ * listing screenshots.
+ */
+export interface OrganicVideo {
+  id: string;
+  appId: string;
+  creatorHandle: string;
+  platform: CreatorPartnership["platform"];
+  videoUrl: string | null;
+  thumbnailUrl: string | null;
+  caption: string | null;
+  postedAt: string | null;
+  firstSeenAt: string | null;
+  lastSeenAt: string | null;
+}
+
+/** Sort fields for the Organic Content page. `videos` = creator-video count. */
+export type OrganicSortField = "videos" | "revenue" | "installs" | "released";
+
+/** What the topbar search matches: app title, creator @handle, or both. */
+export type OrganicSearchScope = "all" | "apps" | "creators";
+
+/** Query params for GET /api/v1/organic — app-grouped, paginated by App. */
+export interface OrganicSearchParams {
+  appId?: string;
+  categories?: string;
+  search?: string;
+  searchScope?: OrganicSearchScope;
+  minDownloads?: number;
+  maxDownloads?: number;
+  minRevenue?: number;
+  maxRevenue?: number;
+  sortBy?: OrganicSortField;
+  sortOrder?: SortOrder;
+  page?: number;
+  limit?: number;
+}
+
+/**
+ * One App card on the Organic Content page: the App's hydrated metrics, its
+ * own store screenshots (Listing media), and the creator videos linked to it.
+ * `videoCount` is the card's VIDEOS metric (= videos.length).
+ */
+export interface OrganicAppGroup {
+  app: AppListItem;
+  screenshotUrls: string[];
+  videoCount: number;
+  videos: OrganicVideo[];
+}
+
+export interface OrganicResponse {
+  data: OrganicAppGroup[];
+  pagination: { page: number; limit: number; totalCount: number };
+}
+
 export interface AppHistoricalPoint {
   date: string;
   reviewCount: number | null;

@@ -15,7 +15,8 @@
     "ingest:snapshot": "pnpm --filter @kittie/ingest snapshot",
     "ingest:score": "pnpm --filter @kittie/ingest score",
     "ingest:reviews": "pnpm --filter @kittie/ingest reviews",
-    "ingest:keywords": "pnpm --filter @kittie/ingest keywords"
+    "ingest:keywords": "pnpm --filter @kittie/ingest keywords",
+    "ingest:organic": "pnpm --filter @kittie/ingest organic"
   },
   "engines": {
     "node": ">=20"
