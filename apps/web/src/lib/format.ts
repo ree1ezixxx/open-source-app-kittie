@@ -1,14 +1,21 @@
+/** Trim a trailing ".0" so 1.0 → "1" (truth shows "1M", never "1.0M"). */
+function trimZero(s: string): string {
+  return s.endsWith(".0") ? s.slice(0, -2) : s;
+}
+
 export function formatMoney(n: number | null | undefined): string {
   if (n == null) return "—";
-  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1)}M`;
+  if (n >= 1_000_000) return `$${trimZero((n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1))}M`;
   if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;
-  return `$${Math.round(n)}`;
+  if (n >= 100) return `$${Math.round(n)}`;
+  // Truth floors any sub-100 MRR (incl. $0) to the literal "$<100".
+  return "$<100";
 }
 
 export function formatCompact(n: number | null | undefined): string {
   if (n == null) return "—";
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(n >= 100_000 ? 0 : 1)}K`;
+  if (n >= 1_000_000) return `${trimZero((n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1))}M`;
+  if (n >= 1_000) return `${Math.round(n / 1_000)}K`;
   return `${Math.round(n)}`;
 }
 
