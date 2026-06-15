@@ -20,7 +20,13 @@ import { todaySnapshotDate } from "../util/dates.js";
  * the FIRST emitted entry — overall charts win, then per-genre paid/grossing,
  * then per-genre free (see fetchAppleGenreCharts ordering).
  */
-export async function runChartsPopulate(): Promise<void> {
+export interface ChartsPopulateResult {
+  snapshotDate: string;
+  chartedApps: number;
+  written: number;
+}
+
+export async function runChartsPopulate(): Promise<ChartsPopulateResult> {
   loadEnv();
   const db = createDb();
   const snapshotDate = todaySnapshotDate();
@@ -80,6 +86,7 @@ export async function runChartsPopulate(): Promise<void> {
   }
 
   console.log(`\nCharts populate complete: ${written} snapshots written for ${snapshotDate}`);
+  return { snapshotDate, chartedApps: appIds.length, written };
 }
 
 const isMain = process.argv[1]?.includes("charts-populate");
