@@ -152,6 +152,35 @@ export const creators = sqliteTable(
   (t) => [index("creators_app_idx").on(t.appId)],
 );
 
+/**
+ * Creator/UGC videos promoting an App — the organic counterpart to `meta_ads`.
+ * Each row is one short video attributed to a creator `@handle` (the public
+ * account of a `creators` Creator partnership; denormalized here in v1, no FK).
+ * Distinct from `meta_ads` (paid Meta) and the App's own listing screenshots.
+ * Powers the Organic Content page. `lastSeenAt` moves on every ingest so the
+ * surface stays live; the source adapter is stubbed until a real feed ships.
+ */
+export const organicVideos = sqliteTable(
+  "organic_videos",
+  {
+    id: text("id").primaryKey(),
+    appId: text("app_id")
+      .notNull()
+      .references(() => apps.id),
+    creatorHandle: text("creator_handle").notNull(),
+    platform: text("platform", {
+      enum: ["tiktok", "instagram", "youtube", "other"],
+    }).notNull(),
+    videoUrl: text("video_url"),
+    thumbnailUrl: text("thumbnail_url"),
+    caption: text("caption"),
+    postedAt: integer("posted_at", { mode: "timestamp" }),
+    firstSeenAt: integer("first_seen_at", { mode: "timestamp" }),
+    lastSeenAt: integer("last_seen_at", { mode: "timestamp" }),
+  },
+  (t) => [index("organic_videos_app_idx").on(t.appId)],
+);
+
 export const keywords = sqliteTable(
   "keywords",
   {
