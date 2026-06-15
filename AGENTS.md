@@ -16,6 +16,10 @@ Not a commercial product (for now). Ship fast: **days, not months**.
 - **Don't overcomplicate.** Prefer the simplest correct approach. Skip theory, analogies, and option menus unless a real fork needs a decision.
 - **Punctual.** State what changed or what to do next. Skip "What changed" diff narration — the user can see the diff.
 - **Clear over clever.** Plain language. One idea per sentence.
+- **Hard default: answer in ≤6 lines.** Most replies are 1–3 sentences or a few bullets. Go longer only when the user asks, or a build genuinely needs a spec.
+- **No multi-section reports by default.** No headers, tables, or "here's everything I found" dumps unless asked. Give the conclusion; offer detail on request.
+- **State findings once.** Don't re-summarise what you just did, re-list evidence, or close with a recap. End on the next action or a question.
+- **Match length to the question.** A factual question gets a factual answer, not a briefing.
 
 ## UI Conventions
 
