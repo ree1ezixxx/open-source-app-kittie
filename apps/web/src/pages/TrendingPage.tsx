@@ -7,7 +7,7 @@ import { Segmented } from "../components/Segmented";
 import { EmptyState } from "../components/EmptyState";
 import { listCharts } from "../lib/api";
 import { categoryColor, pillStyle } from "../lib/palette";
-import { formatCompact } from "../lib/format";
+import { formatCompact, formatMoney } from "../lib/format";
 import { IconTrending, IconChart } from "../icons";
 import type { Theme } from "../lib/theme";
 
@@ -75,6 +75,7 @@ export function TrendingPage({ theme, onToggleTheme }: { theme: Theme; onToggleT
           {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
         </select>
       </div>
+      <span className="pill" style={pillStyle("#3b82f6")}>🇺🇸 United States</span>
       {updated && <span className="pill" style={pillStyle("#9a9aa3")}>Updated {updated}</span>}
     </div>
   );
@@ -107,27 +108,16 @@ export function TrendingPage({ theme, onToggleTheme }: { theme: Theme; onToggleT
             <thead>
               <tr>
                 <th className="num" style={{ width: 56 }}>Rank</th>
-                <th className="num" style={{ width: 64 }}>24h</th>
                 <th className="col-app">App</th>
-                <th className="num">Rating</th>
-                <th className="num">Reviews</th>
+                <th className="num">Downloads</th>
+                <th className="num">Revenue</th>
+                <th className="num" style={{ width: 72 }}>Δ</th>
               </tr>
             </thead>
             <tbody>
               {entries.map((e) => (
                 <tr key={e.app.id} onClick={() => nav(`/apps/${e.app.id}`)}>
                   <td className="num num-strong">{e.rank}</td>
-                  <td className="num">
-                    {e.rankDelta == null ? (
-                      <span className="num-muted">—</span>
-                    ) : e.rankDelta === 0 ? (
-                      <span className="num-muted">0</span>
-                    ) : (
-                      <span className={`delta ${e.rankDelta > 0 ? "up" : "down"}`}>
-                        {e.rankDelta > 0 ? "▲" : "▼"}{Math.abs(e.rankDelta)}
-                      </span>
-                    )}
-                  </td>
                   <td className="col-app">
                     <div className="app-cell">
                       <AppIcon url={e.app.iconUrl} title={e.app.title} />
@@ -143,8 +133,17 @@ export function TrendingPage({ theme, onToggleTheme }: { theme: Theme; onToggleT
                       </div>
                     </div>
                   </td>
-                  <td className="num num-strong">{e.rating != null ? e.rating.toFixed(2) : "—"}</td>
-                  <td className="num num-strong">{formatCompact(e.reviewCount)}</td>
+                  <td className="num num-strong">{formatCompact(e.downloadsEstimate)}</td>
+                  <td className="num num-strong">{formatMoney(e.revenueEstimate)}</td>
+                  <td className="num">
+                    {e.rankDelta == null || e.rankDelta === 0 ? (
+                      <span className="num-muted">{e.rankDelta === 0 ? "0" : "—"}</span>
+                    ) : (
+                      <span className={`delta ${e.rankDelta > 0 ? "up" : "down"}`}>
+                        {e.rankDelta > 0 ? `+${e.rankDelta}` : e.rankDelta}
+                      </span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
