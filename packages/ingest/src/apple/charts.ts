@@ -126,11 +126,12 @@ const RSS_THROTTLE_MS = 250;
  * Feed *ordering* matters downstream. A snapshot stores only one chart
  * membership per app/day (`app_snapshots` is unique on app+date), so when the
  * merge in `chart-lookup.ts` collapses an app to a single membership, the
- * earliest-emitted entry wins. We therefore emit the scarcer charts first —
- * per-genre `paid`/`grossing` (which a handful of apps populate and which the
- * grid most needs filled), then the overall charts, then per-genre `free`
- * (densely covered, last to claim an app). This maximises how many distinct
- * type×category cells end up non-empty.
+ * earliest-emitted entry wins. We emit the OVERALL charts first (all three
+ * types) so each "All categories" tab keeps a clean 1..N ranking, then the
+ * per-genre charts to fill each category cell with the apps not already claimed
+ * by an overall chart — within per-genre we do paid/grossing (the cells that
+ * render empty today) before the densely-covered free charts. This keeps the
+ * three overall tabs intact while filling the most type×category cells.
  */
 export async function fetchAppleGenreCharts(
   country = "us",
@@ -171,8 +172,15 @@ export async function fetchAppleGenreCharts(
 
   const byType = (t: ChartType) => RSS_TYPE_FEEDS.find((f) => f.type === t)!;
 
-  // 1) Scarce per-genre paid & grossing first — these are the cells that render
-  //    empty today, so they get first claim on any shared app.
+  // 1) Overall charts (all three types) first — clean 1..N rankings that keep
+  //    the "All categories" tab intact for every type.
+  for (const type of ["free", "paid", "grossing"] as const) {
+    const feed = byType(type);
+    await fetchFeed(type, feed.path, null, null);
+  }
+
+  // 2) Per-genre paid & grossing next — the cells that render empty today, given
+  //    first claim among the per-genre feeds on any not-yet-overall app.
   for (const type of ["paid", "grossing"] as const) {
     const feed = byType(type);
     for (const [genreName, genreId] of APPLE_GENRES) {
@@ -180,15 +188,7 @@ export async function fetchAppleGenreCharts(
     }
   }
 
-  // 2) Overall charts (all three types) — clean 1..N rankings for the "All
-  //    categories" tab. Emitted overall-first within each type already.
-  for (const type of ["free", "paid", "grossing"] as const) {
-    const feed = byType(type);
-    await fetchFeed(type, feed.path, null, null);
-  }
-
-  // 3) Per-genre free last — densely covered, so it claims only apps not already
-  //    held by a scarcer chart above.
+  // 3) Per-genre free last — densely covered, claims only leftover apps.
   {
     const feed = byType("free");
     for (const [genreName, genreId] of APPLE_GENRES) {
