@@ -58,11 +58,17 @@ export function matchesSearch(row: ScoredAppRow, params: AppSearchParams): boole
     if (updated == null || updated < params.updatedAfter) return false;
   }
 
-  if (params.minGrowth != null && (item.growthScore ?? 0) < params.minGrowth) return false;
-  if (params.maxGrowth != null && (item.growthScore ?? 0) > params.maxGrowth) return false;
+  const filtersGrowth =
+    params.minGrowth != null ||
+    params.maxGrowth != null ||
+    params.growthType === "positive" ||
+    params.growthType === "negative";
+  if (filtersGrowth && item.growthScore == null) return false;
+  if (params.minGrowth != null && item.growthScore! < params.minGrowth) return false;
+  if (params.maxGrowth != null && item.growthScore! > params.maxGrowth) return false;
 
-  if (params.growthType === "positive" && (item.growthScore ?? 0) <= 50) return false;
-  if (params.growthType === "negative" && (item.growthScore ?? 0) >= 50) return false;
+  if (params.growthType === "positive" && item.growthScore! <= 50) return false;
+  if (params.growthType === "negative" && item.growthScore! >= 50) return false;
 
   if (params.hasMetaAds === true && !row.meta.hasMetaAds) return false;
   if (params.hasMetaAds === false && row.meta.hasMetaAds) return false;

@@ -60,7 +60,7 @@ appsRouter.get("/:id/sync-reviews/stream", (c) => {
       }
       await send("done", result);
     } catch (e) {
-      await send("error", { message: e instanceof Error ? e.message : "Sync failed" });
+      await send("failed", { message: e instanceof Error ? e.message : "Sync failed" });
     }
   });
 });

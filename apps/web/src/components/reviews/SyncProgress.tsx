@@ -6,7 +6,8 @@
    ============================================================ */
 import { useEffect, useRef, useState } from "react";
 import { streamSyncReviews, type ReviewSyncResult, type MonitoredApp } from "../../lib/api/reviews";
-import { IconClose, IconCheck, IconApple, IconGooglePlay } from "../../icons";
+import { IconClose, IconCheck } from "../../icons";
+import { StoreGlyph } from "../../lib/storeDisplay";
 
 type Phase = "connecting" | "fetch" | "analyse" | "save" | "done" | "error";
 const ORDER: Phase[] = ["connecting", "fetch", "analyse", "save", "done"];
@@ -71,7 +72,7 @@ export function SyncProgress({
           )}
           <div className="rv-sync-head-meta">
             <div className="rv-sync-title">
-              {app.store === "apple" ? <IconApple style={{ width: 12, height: 12 }} /> : <IconGooglePlay style={{ width: 12, height: 12 }} />}
+              <StoreGlyph store={app.store} style={{ width: 12, height: 12 }} />
               {app.title}
             </div>
             <div className="rv-sync-sub">

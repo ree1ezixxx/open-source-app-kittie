@@ -5,6 +5,7 @@ import { apps, createDb } from "@kittie/db";
 import { lookupAppleApps } from "../apple/lookup.js";
 import { upsertSnapshot } from "../db/apps.js";
 import { fetchGoogleAppMetadata } from "../google/metadata.js";
+import { distributionStoreCapability } from "../store-capability.js";
 import { chartRankForApp, fetchChartRankLookup } from "../util/chart-lookup.js";
 import { todaySnapshotDate } from "../util/dates.js";
 import { sleep } from "../util/rate-limit.js";
@@ -36,7 +37,11 @@ export async function runSnapshotBulk(): Promise<void> {
     .from(apps);
   const appleApps = allApps.filter((a) => a.store === "apple");
   const googleApps = allApps.filter((a) => a.store === "google");
-  console.log(`[snapshot-bulk] ${allApps.length} apps (${appleApps.length} apple, ${googleApps.length} google)`);
+  const unsupportedApps = allApps.filter((a) => !distributionStoreCapability(a.store)?.snapshotRefresh);
+  console.log(
+    `[snapshot-bulk] ${allApps.length} apps (` +
+      `${appleApps.length} apple, ${googleApps.length} google, ${unsupportedApps.length} unsupported)`,
+  );
 
   // 2) Chart-rank lookup once (US).
   console.log("[snapshot-bulk] fetching fresh chart ranks (US)…");
@@ -44,7 +49,10 @@ export async function runSnapshotBulk(): Promise<void> {
   console.log(`  ${chartLookup.size} charted apps across Apple + Google\n`);
 
   let written = 0;
-  let skipped = 0;
+  let skipped = unsupportedApps.length;
+  if (unsupportedApps.length > 0) {
+    console.log(`[snapshot-bulk] unsupported Distribution stores skipped: ${unsupportedApps.length}`);
+  }
 
   // 3) Apple apps in batches of 200, throttled to ~5 req/s.
   const appIdByStoreAppId = new Map(appleApps.map((a) => [a.storeAppId, a.id]));

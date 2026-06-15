@@ -3,30 +3,86 @@
    (shared lib/api.ts — read-only import) so the monitoring list is
    seeded with real listings, not fabricated ones.
 
-   Browses the FULL app database via cursor pagination + infinite scroll —
-   so any of the thousands of indexed apps can be monitored, not just the
-   first page. Search narrows; scrolling loads more.
+   Browses the mobile Store database via cursor pagination + infinite scroll.
+   Reviews are mobile-only, so Steam/itch Distribution store rows are not
+   selectable here.
    ============================================================ */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { listApps } from "../../lib/api";
-import type { AppListItem } from "@kittie/types";
+import type { AppListItem, Store } from "@kittie/types";
 import type { MonitoredApp } from "../../lib/api/reviews";
 import { formatCompact } from "../../lib/format";
-import { IconSearch, IconClose, IconStar, IconApple, IconGooglePlay } from "../../icons";
+import { IconSearch, IconClose, IconStar } from "../../icons";
+import { isMobileStore, StoreGlyph } from "../../lib/storeDisplay";
 
 const PAGE = 50;
+const MOBILE_STORES: Store[] = ["apple", "google"];
+type MobileCursors = Partial<Record<Store, string | null>>;
 
-function toMonitored(a: AppListItem): MonitoredApp {
+function toMonitored(a: AppListItem): MonitoredApp | null {
+  if (!isMobileStore(a.store)) return null;
   return {
     id: a.id,
     title: a.title,
     developer: a.developer,
     iconUrl: a.iconUrl,
-    // Reviews are a mobile-store surface; steam/itch rows never reach this picker.
-    store: a.store === "google" ? "google" : "apple",
+    store: a.store,
     reviewCount: a.reviewCount,
     rating: a.rating,
   };
+}
+
+function hasMore(cursors: MobileCursors): boolean {
+  return MOBILE_STORES.some((store) => cursors[store] !== null);
+}
+
+function mergeMobileApps(apps: AppListItem[]): AppListItem[] {
+  return [...new Map(apps.map((app) => [app.id, app])).values()]
+    .sort((a, b) => b.reviewCount - a.reviewCount || a.title.localeCompare(b.title));
+}
+
+async function fetchMobileApps(
+  q: string,
+  cursors: MobileCursors,
+  signal: AbortSignal,
+): Promise<{ data: AppListItem[]; next: MobileCursors; total: number | null }> {
+  const trimmed = q.trim();
+  const pages = await Promise.all(
+    MOBILE_STORES.map(async (store) => {
+      const cursor = cursors[store];
+      if (cursor === null) return { store, res: null };
+      const res = await listApps(
+        {
+          search: trimmed || undefined,
+          sortBy: "reviews",
+          sortOrder: "desc",
+          source: store,
+          limit: PAGE,
+          cursor: cursor ?? undefined,
+        },
+        signal,
+      );
+      return { store, res };
+    }),
+  );
+
+  const next: MobileCursors = {};
+  let total = 0;
+  let hasTotal = true;
+  const data: AppListItem[] = [];
+
+  for (const page of pages) {
+    if (!page.res) {
+      next[page.store] = null;
+      hasTotal = false;
+      continue;
+    }
+    next[page.store] = page.res.pagination.nextCursor;
+    total += page.res.pagination.totalCount;
+    data.push(...page.res.data);
+  }
+
+  return { data: mergeMobileApps(data), next, total: hasTotal ? total : null };
 }
 
 export function AppPicker({
@@ -40,7 +96,7 @@ export function AppPicker({
 }) {
   const [q, setQ] = useState("");
   const [apps, setApps] = useState<AppListItem[]>([]);
-  const [cursor, setCursor] = useState<string | null>(null);
+  const [cursor, setCursor] = useState<MobileCursors>({});
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true); // first page / new search
   const [loadingMore, setLoadingMore] = useState(false);
@@ -56,12 +112,12 @@ export function AppPicker({
     const t = setTimeout(() => {
       setLoading(true);
       setError(null);
-      listApps({ search: q.trim() || undefined, sortBy: "reviews", sortOrder: "desc", limit: PAGE }, ac.signal)
+      fetchMobileApps(q, {}, ac.signal)
         .then((res) => {
           if (ac.signal.aborted || mine !== gen.current) return;
           setApps(res.data);
-          setCursor(res.pagination.nextCursor ?? null);
-          setTotal(res.pagination.totalCount ?? res.data.length);
+          setCursor(res.next);
+          setTotal(res.total ?? res.data.length);
         })
         .catch((e) => {
           if (!ac.signal.aborted && mine === gen.current) setError(e instanceof Error ? e.message : "Failed to load");
@@ -75,15 +131,15 @@ export function AppPicker({
 
   // next page — appended
   const loadMore = useCallback(() => {
-    if (!cursor || loading || loadingMore) return;
+    if (!hasMore(cursor) || loading || loadingMore) return;
     const mine = gen.current;
     const ac = new AbortController();
     setLoadingMore(true);
-    listApps({ search: q.trim() || undefined, sortBy: "reviews", sortOrder: "desc", limit: PAGE, cursor }, ac.signal)
+    fetchMobileApps(q, cursor, ac.signal)
       .then((res) => {
         if (ac.signal.aborted || mine !== gen.current) return;
-        setApps((prev) => [...prev, ...res.data]);
-        setCursor(res.pagination.nextCursor ?? null);
+        setApps((prev) => mergeMobileApps([...prev, ...res.data]));
+        setCursor(res.next);
       })
       .catch(() => { /* a failed page just stops the scroll; non-fatal */ })
       .finally(() => {
@@ -137,7 +193,10 @@ export function AppPicker({
                     key={a.id}
                     className="rv-pick-row"
                     disabled={added}
-                    onClick={() => { onAdd(toMonitored(a)); }}
+                    onClick={() => {
+                      const monitored = toMonitored(a);
+                      if (monitored) onAdd(monitored);
+                    }}
                   >
                     {a.iconUrl ? (
                       <img className="app-icon" src={a.iconUrl} alt="" referrerPolicy="no-referrer" />
@@ -146,7 +205,7 @@ export function AppPicker({
                     )}
                     <div className="rv-pick-meta">
                       <div className="rv-pick-title">
-                        {a.store === "apple" ? <IconApple style={{ width: 12, height: 12 }} /> : <IconGooglePlay style={{ width: 12, height: 12 }} />}
+                        <StoreGlyph store={a.store} style={{ width: 12, height: 12 }} />
                         {a.title}
                       </div>
                       <div className="rv-pick-dev">{a.developer}</div>
@@ -160,7 +219,7 @@ export function AppPicker({
                 );
               })}
               <div ref={sentinel} className="rv-pick-sentinel">
-                {loadingMore ? "Loading more…" : cursor ? "" : "End of list"}
+                {loadingMore ? "Loading more…" : hasMore(cursor) ? "" : "End of list"}
               </div>
             </>
           )}

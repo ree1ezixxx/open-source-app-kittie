@@ -32,7 +32,7 @@ Run once per calendar day (order matters):
 # or: pnpm ingest:snapshot && pnpm ingest:score
 ```
 
-Same-day reruns overwrite that date's row — they do not add history. Restart the API after scoring if it is running (`db-app-service` caches scored rows in memory).
+Same-day reruns overwrite that date's row — they do not add history. The API's App discovery read cache refreshes within 60s after scoring.
 
 ## Sources (P0)
 

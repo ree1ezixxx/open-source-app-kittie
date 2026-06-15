@@ -4,29 +4,12 @@ import {
   estimateDownloads,
   estimateRevenue,
   isFirstMover,
+  signalsFromContext,
 } from "@kittie/intelligence";
-import type { AppSignals } from "@kittie/intelligence";
 import type { GrowthPeriod } from "@kittie/types";
 import type { Db } from "../client.js";
 import { appSnapshots } from "../schema.js";
-import { getSnapshotContext, type SnapshotContext } from "./signals.js";
-
-function toSignals(ctx: SnapshotContext): AppSignals {
-  return {
-    category: ctx.app.category,
-    chartRank: ctx.latest.chartRank,
-    reviewCount: ctx.latest.reviewCount,
-    reviewCountPrior: ctx.prior?.reviewCount ?? null,
-    rating: ctx.latest.rating,
-    iapCount: ctx.iapCount,
-    metaAdCount: ctx.metaAdCount,
-    metaAdCountPrior: ctx.metaAdCountPrior,
-    chartRankPrior: ctx.prior?.chartRank ?? null,
-    updatedAt: ctx.app.updatedAt,
-    releasedAt: ctx.app.releasedAt,
-    categoryAppCount: ctx.categoryAppCount,
-  };
-}
+import { getSnapshotContext } from "./signals.js";
 
 /** Compute MVP revenue/download/growth estimates and persist on the snapshot row. */
 export async function enrichSnapshotScores(
@@ -38,7 +21,7 @@ export async function enrichSnapshotScores(
   const ctx = await getSnapshotContext(db, appId, period);
   if (!ctx) return;
 
-  const signals = toSignals(ctx);
+  const signals = signalsFromContext(ctx);
   const revenueEstimate = estimateRevenue(signals);
   const downloadsEstimate = estimateDownloads(signals, revenueEstimate);
   const growthScore = computeGrowthScore(signals, period);

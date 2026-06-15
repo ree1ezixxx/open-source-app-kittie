@@ -9,7 +9,7 @@
               moment one exists. Every mock surface carries `mock: true`
               so the UI can label it honestly — never imply it's computed.
    ============================================================ */
-import type { Review, Store } from "@kittie/types";
+import type { DistributionStore, Review, Store } from "@kittie/types";
 
 const BASE = "/api/v1";
 
@@ -60,7 +60,7 @@ export async function fetchReviews(
    ---------------------------------------------------------------- */
 export interface ReviewSyncResult {
   synced: number;
-  store: "apple" | "google";
+  store: DistributionStore | string;
   supported: boolean;
 }
 

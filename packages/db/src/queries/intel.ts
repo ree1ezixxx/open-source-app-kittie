@@ -1,7 +1,14 @@
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import {
+  computeGrowthScore,
+  estimateDownloads,
+  estimateRevenue,
+  signalsFromContext,
+} from "@kittie/intelligence";
 
 import type { Db } from "../client.js";
 import { appSnapshots, apps, keywordRankings, keywords, reviews } from "../schema.js";
+import { listSnapshotContexts } from "./signals.js";
 
 /* ============================================================
    Additive lane — fetchers for the intelligence services
@@ -178,6 +185,10 @@ export interface IdeaCandidateApp {
   growthScore: number | null;
 }
 
+function epochSeconds(date: Date | null): number | null {
+  return date ? Math.floor(date.getTime() / 1000) : null;
+}
+
 /** Proven-demand-but-flawed apps from the latest snapshot per App: rising
     (growthScore > 50), real review volume, and a low-ish rating (the unmet
     need), ranked by revenue then growth. This is the live, self-updating
@@ -189,47 +200,42 @@ export async function listIdeaCandidateApps(
   const ceiling = opts.ratingCeiling ?? 4.0;
   const minReviews = opts.minReviews ?? 200;
   const limit = Math.min(opts.limit ?? 40, 500);
-  const rows = db.all<{
-    id: string;
-    title: string;
-    category: string | null;
-    releasedAt: number | null;
-    price: number | null;
-    rating: number | null;
-    reviewCount: number;
-    downloadsEstimate: number | null;
-    revenueEstimate: number | null;
-    growthScore: number | null;
-  }>(sql`
-    SELECT a.id AS id, a.title AS title, a.category AS category,
-           a.released_at AS releasedAt, a.price AS price,
-           s.rating AS rating, s.review_count AS reviewCount,
-           s.downloads_estimate AS downloadsEstimate,
-           s.revenue_estimate AS revenueEstimate, s.growth_score AS growthScore
-    FROM apps a
-    JOIN app_snapshots s ON s.app_id = a.id
-    JOIN (
-      SELECT app_id, MAX(snapshot_date) AS md FROM app_snapshots GROUP BY app_id
-    ) m ON m.app_id = a.id AND m.md = s.snapshot_date
-    WHERE s.rating IS NOT NULL AND s.rating <= ${ceiling}
-      AND s.review_count >= ${minReviews}
-      AND s.growth_score IS NOT NULL AND s.growth_score > 50
-      AND s.revenue_estimate IS NOT NULL
-    ORDER BY s.revenue_estimate DESC, s.growth_score DESC
-    LIMIT ${limit}
-  `);
-  return rows.map((r) => ({
-    id: String(r.id),
-    title: String(r.title),
-    category: r.category == null ? null : String(r.category),
-    releasedAt: r.releasedAt == null ? null : Number(r.releasedAt),
-    price: r.price == null ? null : Number(r.price),
-    rating: r.rating == null ? null : Number(r.rating),
-    reviewCount: Number(r.reviewCount ?? 0),
-    downloadsEstimate: r.downloadsEstimate == null ? null : Number(r.downloadsEstimate),
-    revenueEstimate: r.revenueEstimate == null ? null : Number(r.revenueEstimate),
-    growthScore: r.growthScore == null ? null : Number(r.growthScore),
-  }));
+  const contexts = await listSnapshotContexts(db, "7d");
+
+  return contexts
+    .map((ctx) => {
+      const signals = signalsFromContext(ctx);
+      const revenueEstimate = estimateRevenue(signals);
+      const downloadsEstimate = estimateDownloads(signals, revenueEstimate);
+      const growthScore = computeGrowthScore(signals, "7d");
+      return {
+        id: ctx.app.id,
+        title: ctx.app.title,
+        category: ctx.app.category,
+        releasedAt: epochSeconds(ctx.app.releasedAt),
+        price: ctx.app.price,
+        rating: ctx.latest.rating,
+        reviewCount: ctx.latest.reviewCount,
+        downloadsEstimate,
+        revenueEstimate,
+        growthScore,
+      } satisfies IdeaCandidateApp;
+    })
+    .filter(
+      (app) =>
+        app.rating !== null &&
+        app.rating <= ceiling &&
+        app.reviewCount >= minReviews &&
+        app.growthScore !== null &&
+        app.growthScore > 50 &&
+        app.revenueEstimate !== null,
+    )
+    .sort(
+      (a, b) =>
+        (b.revenueEstimate ?? 0) - (a.revenueEstimate ?? 0) ||
+        (b.growthScore ?? 0) - (a.growthScore ?? 0),
+    )
+    .slice(0, limit);
 }
 
 export interface ReviewEvidence {

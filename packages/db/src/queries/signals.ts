@@ -22,6 +22,15 @@ export interface SnapshotContext {
   app: App;
   latest: AppSnapshot;
   prior: AppSnapshot | null;
+  growthWindow: {
+    period: GrowthPeriod;
+    periodDays: number;
+    startDate: string;
+    endDate: string;
+    coveredDays: number;
+    requiredDays: number;
+    snapshots: AppSnapshot[];
+  };
   iapCount: number;
   metaAdCount: number;
   metaAdCountPrior: number | null;
@@ -44,24 +53,41 @@ function daysBefore(date: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-async function findPriorSnapshot(
-  db: Db,
-  appId: string,
-  currentDate: string,
-  period: GrowthPeriod,
-): Promise<AppSnapshot | null> {
-  const periodDays = GROWTH_PERIOD_DAYS[period] ?? 7;
-  const targetDate = daysBefore(currentDate, periodDays);
-  const rows = await db
-    .select()
-    .from(appSnapshots)
-    .where(eq(appSnapshots.appId, appId))
-    .orderBy(appSnapshots.snapshotDate);
+function requiredDays(periodDays: number): number {
+  return Math.ceil(periodDays * 0.7);
+}
 
+function buildGrowthWindow(
+  sortedSnaps: AppSnapshot[],
+  latestDate: string,
+  period: GrowthPeriod,
+): SnapshotContext["growthWindow"] {
+  const periodDays = GROWTH_PERIOD_DAYS[period] ?? 7;
+  const startDate = daysBefore(latestDate, periodDays);
+  const snapshots = sortedSnaps.filter(
+    (snap) => snap.snapshotDate >= startDate && snap.snapshotDate <= latestDate,
+  );
+  const coveredDays = Math.min(
+    periodDays,
+    new Set(snapshots.map((snap) => snap.snapshotDate)).size,
+  );
+
+  return {
+    period,
+    periodDays,
+    startDate,
+    endDate: latestDate,
+    coveredDays,
+    requiredDays: requiredDays(periodDays),
+    snapshots,
+  };
+}
+
+function pickPrior(sortedSnaps: AppSnapshot[], startDate: string): AppSnapshot | null {
   let best: AppSnapshot | null = null;
-  for (const row of rows) {
-    if (row.snapshotDate <= targetDate) best = row;
-    if (row.snapshotDate > targetDate) break;
+  for (const row of sortedSnaps) {
+    if (row.snapshotDate <= startDate) best = row;
+    if (row.snapshotDate > startDate) break;
   }
   return best;
 }
@@ -104,10 +130,16 @@ export async function getSnapshotContext(
   const [app] = await db.select().from(apps).where(eq(apps.id, appId)).limit(1);
   if (!app) return null;
 
-  const latest = await getLatestSnapshot(db, appId);
+  const allSnaps = await db
+    .select()
+    .from(appSnapshots)
+    .where(eq(appSnapshots.appId, appId))
+    .orderBy(appSnapshots.snapshotDate);
+  const latest = allSnaps.at(-1) ?? null;
   if (!latest) return null;
 
-  const prior = await findPriorSnapshot(db, appId, latest.snapshotDate, period);
+  const growthWindow = buildGrowthWindow(allSnaps, latest.snapshotDate, period);
+  const prior = pickPrior(allSnaps, growthWindow.startDate);
 
   const [iapRow] = await db
     .select({ value: count() })
@@ -117,16 +149,16 @@ export async function getSnapshotContext(
   const metaRows = await db.select().from(metaAds).where(eq(metaAds.appId, appId));
 
   let metaAdCountPrior: number | null = null;
-  if (prior) {
-    metaAdCountPrior = metaRows.filter(
-      (ad) => ad.firstSeenAt && ad.firstSeenAt <= prior.createdAt,
-    ).length;
-  }
+  const windowStart = new Date(`${growthWindow.startDate}T00:00:00.000Z`);
+  metaAdCountPrior = metaRows.filter(
+    (ad) => ad.firstSeenAt && ad.firstSeenAt < windowStart,
+  ).length;
 
   return {
     app,
     latest,
     prior,
+    growthWindow,
     iapCount: iapRow?.value ?? 0,
     metaAdCount: metaRows.length,
     metaAdCountPrior,
@@ -141,7 +173,6 @@ export async function listSnapshotContexts(
   // Bulk-load everything in a handful of queries, then assemble in memory.
   // The per-app version (getSnapshotContext) fires ~6 queries each — at 100K
   // apps that's ~600K queries and a ~30s cold build. This is the same data in 4.
-  const periodDays = GROWTH_PERIOD_DAYS[period] ?? 7;
   const [allApps, allSnapshots, allIaps, allMetaAds] = await Promise.all([
     db.select().from(apps),
     db.select().from(appSnapshots).orderBy(appSnapshots.appId, appSnapshots.snapshotDate),
@@ -179,23 +210,20 @@ export async function listSnapshotContexts(
     const latest = snaps?.at(-1);
     if (!latest) continue; // mirrors getSnapshotContext: no snapshot → skip
 
-    // Prior = last snapshot on/before (latest.date - periodDays). snaps is date-sorted.
-    const targetDate = daysBefore(latest.snapshotDate, periodDays);
-    let prior: AppSnapshot | null = null;
-    for (const snap of snaps!) {
-      if (snap.snapshotDate <= targetDate) prior = snap;
-      else break;
-    }
+    const growthWindow = buildGrowthWindow(snaps!, latest.snapshotDate, period);
+    const prior = pickPrior(snaps!, growthWindow.startDate);
 
     const metaRows = metaAdsByApp.get(app.id) ?? [];
-    const metaAdCountPrior = prior
-      ? metaRows.filter((ad) => ad.firstSeenAt && ad.firstSeenAt <= prior.createdAt).length
-      : null;
+    const windowStart = new Date(`${growthWindow.startDate}T00:00:00.000Z`);
+    const metaAdCountPrior = metaRows.filter(
+      (ad) => ad.firstSeenAt && ad.firstSeenAt < windowStart,
+    ).length;
 
     contexts.push({
       app,
       latest,
       prior,
+      growthWindow,
       iapCount: iapCountByApp.get(app.id) ?? 0,
       metaAdCount: metaRows.length,
       metaAdCountPrior,

@@ -1,8 +1,6 @@
 import type { AppListItem, AppSortField, SortOrder } from "@kittie/types";
 import {
   IconStar,
-  IconApple,
-  IconGooglePlay,
   IconSpark,
   IconArrowUp,
   IconArrowDown,
@@ -10,6 +8,7 @@ import {
 import { categoryColor, pillStyle } from "../lib/palette";
 import { formatCompact, formatDate, formatMoney, formatRating, relativeTime } from "../lib/format";
 import type { AppListItemEx } from "../lib/api";
+import { StoreGlyph, storeDisplay } from "../lib/storeDisplay";
 import { FavoriteToggle } from "./FavoriteToggle";
 
 type Col = {
@@ -185,7 +184,7 @@ export function AppTable({
           ? Array.from({ length: 12 }).map((_, i) => <SkeletonRow key={i} />)
           : apps.map((a, i) => {
               const cColor = categoryColor(a.category);
-              const StoreGlyph = a.store === "apple" ? IconApple : IconGooglePlay;
+              const store = storeDisplay(a.store);
               return (
                 <tr key={a.id} onClick={() => onSelect(a.id)}>
                   <td className="num rank-cell">{startRank + i + 1}</td>
@@ -207,7 +206,8 @@ export function AppTable({
                         </div>
                         <div className="app-dev" title={a.developer}>
                           <StoreGlyph
-                            aria-label={a.store === "apple" ? "App Store" : "Google Play"}
+                            store={a.store}
+                            aria-label={store.label}
                             style={{ width: 11, height: 11, verticalAlign: -1.5, marginRight: 4, opacity: 0.7 }}
                           />
                           {a.developer}

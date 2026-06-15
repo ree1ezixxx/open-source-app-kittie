@@ -15,8 +15,6 @@ import { Lightbox } from "../components/Lightbox";
 import {
   IconArrowLeft,
   IconStar,
-  IconApple,
-  IconGooglePlay,
   IconSpark,
   IconInfo,
   IconChart,
@@ -28,11 +26,22 @@ import {
   IconGlobe,
   IconMessage,
 } from "../icons";
+import { StoreGlyph, storeDisplay } from "../lib/storeDisplay";
 
 const MIN_COLLECTION = 3;
 
 /** "+1.2K" style — accent-positive prefix for headline flow values; "—" when absent. */
 const plusVal = (s: string) => (s && s !== "—" && s !== "0" ? `+${s}` : s);
+
+function DistributionStorePill({ store }: { store: AppDetail["store"] }) {
+  const meta = storeDisplay(store);
+  return (
+    <span className="pill pill-store" style={pillStyle(meta.color)}>
+      <StoreGlyph store={store} />
+      {meta.label}
+    </span>
+  );
+}
 
 export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => void }) {
   const { id: idParam, slug } = useParams();
@@ -133,7 +142,7 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
         )}
         {app?.websiteUrl && (
           <a className="btn" href={app.websiteUrl} target="_blank" rel="noreferrer">
-            <IconExternal /> Store page
+            <IconExternal /> Website
           </a>
         )}
         <button className="icon-btn" onClick={onToggleTheme} aria-label="Toggle theme">
@@ -164,10 +173,7 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
                 <h1 className="hero-title">{app.title}</h1>
                 <div className="hero-dev">{app.developer}</div>
                 <div className="hero-tags">
-                  <span className="pill pill-store" style={pillStyle(app.store === "apple" ? "#c8c8d0" : "#34d399")}>
-                    {app.store === "apple" ? <IconApple /> : <IconGooglePlay />}
-                    {app.store === "apple" ? "App Store" : "Google Play"}
-                  </span>
+                  <DistributionStorePill store={app.store} />
                   {app.category && (
                     <span className="pill" style={pillStyle(categoryColor(app.category))}>
                       <span className="dot" /> {app.category}

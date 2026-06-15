@@ -9,7 +9,7 @@ import {
   listTrackedAppEntries,
   saveCaptureBaseline,
 } from "@kittie/db";
-import { lookupAppleApp, fetchGoogleAppMetadata } from "@kittie/ingest";
+import { fetchLiveStoreListing } from "@kittie/ingest";
 import {
   captureChanges,
   DEFAULT_RULES,
@@ -61,20 +61,8 @@ async function fetchWatchedFields(
   const db = getDb();
   const fields: Partial<WatchedFields> = {};
 
-  if (store === "apple") {
-    const live = await lookupAppleApp(storeAppId);
-    if (live) {
-      fields.title = live.title;
-      fields.description = live.description;
-      fields.price = live.price;
-      fields.category = live.category;
-      fields.contentRating = live.contentRating;
-      fields.screenshotUrls = live.screenshotUrls;
-      fields.rating = live.rating;
-      fields.reviewCount = live.reviewCount;
-    }
-  } else {
-    const live = await fetchGoogleAppMetadata(storeAppId);
+  const live = await fetchLiveStoreListing(store, storeAppId);
+  if (live) {
     fields.title = live.title;
     fields.description = live.description;
     fields.price = live.price;

@@ -1,6 +1,5 @@
 import type { GrowthPeriod } from "@kittie/types";
-import type { AppSignals } from "./types.js";
-import { GROWTH_PERIOD_DAYS } from "./types.js";
+import type { AppSignals, GrowthSample, GrowthWindow } from "./types.js";
 
 const GROWTH_WEIGHTS = {
   reviewDelta: 0.35,
@@ -18,17 +17,63 @@ function scaleDelta(delta: number, cap: number): number {
   return Math.min(Math.max(delta / cap, -1), 1);
 }
 
-function reviewDeltaScore(signals: AppSignals, periodDays: number): number {
-  const prior = signals.reviewCountPrior ?? signals.reviewCount;
-  const delta = signals.reviewCount - prior;
-  const expectedCap = Math.max(prior * (periodDays / 30), 10);
+function dayNumber(date: string): number {
+  return Date.parse(`${date}T00:00:00.000Z`) / 86_400_000;
+}
+
+function usableWindow(signals: AppSignals, period: GrowthPeriod): GrowthWindow | null {
+  const window = signals.growthWindow;
+  if (!window || window.period !== period) return null;
+  if (window.coveredDays < window.requiredDays) return null;
+  const distinctDays = new Set(window.samples.map((sample) => sample.date));
+  if (distinctDays.size < 2) return null;
+  return window;
+}
+
+function slope(
+  samples: GrowthSample[],
+  valueOf: (sample: GrowthSample) => number | null,
+): number | null {
+  const points = samples
+    .map((sample) => ({ x: dayNumber(sample.date), y: valueOf(sample) }))
+    .filter((point): point is { x: number; y: number } => point.y !== null)
+    .sort((a, b) => a.x - b.x);
+  if (points.length < 2) return null;
+
+  const meanX = points.reduce((sum, point) => sum + point.x, 0) / points.length;
+  const meanY = points.reduce((sum, point) => sum + point.y, 0) / points.length;
+  let numerator = 0;
+  let denominator = 0;
+  for (const point of points) {
+    const dx = point.x - meanX;
+    numerator += dx * (point.y - meanY);
+    denominator += dx * dx;
+  }
+  return denominator === 0 ? null : numerator / denominator;
+}
+
+function firstReviewCount(samples: GrowthSample[]): number {
+  return [...samples].sort((a, b) => a.date.localeCompare(b.date))[0]?.reviewCount ?? 0;
+}
+
+function spanReviewDelta(window: GrowthWindow): number | null {
+  const perDay = slope(window.samples, (sample) => sample.reviewCount);
+  return perDay === null ? null : perDay * window.periodDays;
+}
+
+function reviewDeltaScore(window: GrowthWindow): number {
+  const delta = spanReviewDelta(window);
+  if (delta === null) return 0;
+  const base = Math.max(firstReviewCount(window.samples), 1);
+  const expectedCap = Math.max(base * (window.periodDays / 30), 10);
   return scaleDelta(delta, expectedCap);
 }
 
 /** Negative rank change = climbing charts = positive score. */
-function rankDeltaScore(signals: AppSignals): number {
-  if (signals.chartRank == null || signals.chartRankPrior == null) return 0;
-  const delta = signals.chartRankPrior - signals.chartRank;
+function rankDeltaScore(window: GrowthWindow): number {
+  const perDay = slope(window.samples, (sample) => sample.chartRank);
+  if (perDay === null) return 0;
+  const delta = -perDay * window.periodDays;
   return scaleDelta(delta, 50);
 }
 
@@ -52,18 +97,24 @@ function toGrowthScore(raw: number): number {
 }
 
 /** Composite growth score 0–100 for a given window. */
-export function computeGrowthScore(signals: AppSignals, period: GrowthPeriod = "7d"): number {
-  const periodDays = GROWTH_PERIOD_DAYS[period];
+export function computeGrowthScore(
+  signals: AppSignals,
+  period: GrowthPeriod = "7d",
+): number | null {
+  const window = usableWindow(signals, period);
+  if (!window) return null;
+
   const raw =
-    GROWTH_WEIGHTS.reviewDelta * reviewDeltaScore(signals, periodDays) +
-    GROWTH_WEIGHTS.rankDelta * rankDeltaScore(signals) +
+    GROWTH_WEIGHTS.reviewDelta * reviewDeltaScore(window) +
+    GROWTH_WEIGHTS.rankDelta * rankDeltaScore(window) +
     GROWTH_WEIGHTS.adCreativeDelta * adCreativeDeltaScore(signals) +
     GROWTH_WEIGHTS.updateRecency * updateRecencyScore(signals.updatedAt);
 
   return toGrowthScore(raw);
 }
 
-export function isFirstMover(signals: AppSignals, growthScore: number): boolean {
+export function isFirstMover(signals: AppSignals, growthScore: number | null): boolean {
+  if (growthScore === null) return false;
   if (growthScore < FIRST_MOVER_GROWTH_THRESHOLD) return false;
   if (signals.categoryAppCount >= CATEGORY_SATURATION_THRESHOLD) return false;
   if (!signals.releasedAt) return false;
@@ -73,7 +124,9 @@ export function isFirstMover(signals: AppSignals, growthScore: number): boolean 
   return daysSinceRelease <= FIRST_MOVER_RELEASE_DAYS;
 }
 
-export function reviewGrowth7d(signals: AppSignals): number {
-  const prior = signals.reviewCountPrior ?? signals.reviewCount;
-  return signals.reviewCount - prior;
+export function reviewGrowth7d(signals: AppSignals): number | null {
+  const window = usableWindow(signals, "7d");
+  if (!window) return null;
+  const delta = spanReviewDelta(window);
+  return delta === null ? null : Math.round(delta);
 }

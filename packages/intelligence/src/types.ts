@@ -14,11 +14,28 @@ export interface AppSignals {
   updatedAt: Date | null;
   releasedAt: Date | null;
   categoryAppCount: number;
+  growthWindow: GrowthWindow | null;
 }
 
 export interface GrowthInput {
   signals: AppSignals;
   period: GrowthPeriod;
+}
+
+export interface GrowthSample {
+  date: string;
+  reviewCount: number;
+  chartRank: number | null;
+}
+
+export interface GrowthWindow {
+  period: GrowthPeriod;
+  periodDays: number;
+  startDate: string;
+  endDate: string;
+  coveredDays: number;
+  requiredDays: number;
+  samples: GrowthSample[];
 }
 
 export interface RevenueInput {

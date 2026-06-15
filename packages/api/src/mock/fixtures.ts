@@ -74,6 +74,7 @@ export const MOCK_APPS: RawAppFixture[] = [
       updatedAt: new Date(daysAgo(3)),
       releasedAt: new Date(daysAgo(45)),
       categoryAppCount: 35,
+      growthWindow: null,
     },
     iaps: [
       { name: "Pro Monthly", price: 9.99, currency: "USD" },
@@ -139,6 +140,7 @@ export const MOCK_APPS: RawAppFixture[] = [
       updatedAt: new Date(daysAgo(12)),
       releasedAt: new Date(daysAgo(60)),
       categoryAppCount: 55,
+      growthWindow: null,
     },
     iaps: [{ name: "Premium", price: 4.99, currency: "USD" }],
     metaAds: [],
@@ -182,6 +184,7 @@ export const MOCK_APPS: RawAppFixture[] = [
       updatedAt: new Date(daysAgo(5)),
       releasedAt: new Date(daysAgo(400)),
       categoryAppCount: 120,
+      growthWindow: null,
     },
     iaps: [
       { name: "Pro Pack", price: 14.99, currency: "USD" },
@@ -246,6 +249,7 @@ export const MOCK_APPS: RawAppFixture[] = [
       updatedAt: new Date(daysAgo(2)),
       releasedAt: new Date(daysAgo(25)),
       categoryAppCount: 28,
+      growthWindow: null,
     },
     iaps: [{ name: "Family Plan", price: 7.99, currency: "USD" }],
     metaAds: [
@@ -300,6 +304,7 @@ export const MOCK_APPS: RawAppFixture[] = [
       updatedAt: new Date(daysAgo(45)),
       releasedAt: new Date(daysAgo(200)),
       categoryAppCount: 200,
+      growthWindow: null,
     },
     iaps: [{ name: "Gem Pack", price: 2.99, currency: "USD" }],
     metaAds: [],

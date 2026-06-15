@@ -113,7 +113,7 @@ TARGET=10000 DATABASE_URL=file:/Users/ellis/Documents/open-source-app-kittie/dat
 The explicit `DATABASE_URL` is the **shared** DB every lane's API reads — confirm the running API has *that* file open (`lsof -p <:3007 pid> | grep .db`), don't trust the default path resolution.
 
 **Gotchas that bit us once — don't repeat (this is the "no more manual reloads" list):**
-1. **After a reseed, the API still serves the OLD count.** `db-app-service.ts` caches scored rows in-memory with **no TTL**. It runs under `tsx watch`, so reload it by making a **content edit** to any `packages/api/src` file. **`touch`/mtime alone does NOT trigger the watcher** — it must be a real content change.
+1. **After a reseed, the API can serve the old count briefly.** `db-app-service.ts` caches App discovery rows and sparklines for 60s, then rebuilds from the DB on the next request. No content-edit reload is needed unless you want an immediate manual refresh.
 2. **An app only appears once it has a snapshot row** (`listSnapshotContexts` skips snapshot-less apps). bulk-seed writes one per app, so this is handled — but any other insert path must also write a snapshot.
 3. **GROWTH 7D / Trending / Rising need day-over-day snapshots.** Running bulk-seed 10× in one day adds apps but growth stays flat (all snapshots share today's date). To populate growth, run on **successive days** (or run `jobs/snapshot.ts` daily). This is a time-series requirement, not a missing field.
 4. **The `rss.applemarketingtools.com` feed (old `seed.ts`) is failing.** Use genre-RSS (`itunes.apple.com/<cc>/rss/<feed>/limit/genre/json`) + Search — already wired in `discover.ts`.

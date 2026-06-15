@@ -7,6 +7,7 @@ import { AppAvatar, Meter, OpportunityBadge, StorePill } from "../../components/
 import { listApps } from "../../lib/api";
 import { compareKeywords, type KeywordDifficulty } from "../../lib/api/keywords";
 import { relativeTime } from "../../lib/format";
+import { isMobileStore, StoreGlyph } from "../../lib/storeDisplay";
 import type { Theme } from "../../lib/theme";
 import "../../styles/aso.css";
 
@@ -78,8 +79,17 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
     setSearching(true);
     const ctrl = new AbortController();
     const t = setTimeout(() => {
-      listApps({ search: q, limit: 8 }, ctrl.signal)
-        .then((res) => setSearchResults(res.data))
+      Promise.all([
+        listApps({ search: q, limit: 8, source: "apple" }, ctrl.signal),
+        listApps({ search: q, limit: 8, source: "google" }, ctrl.signal),
+      ])
+        .then(([apple, google]) => {
+          setSearchResults(
+            [...apple.data, ...google.data]
+              .sort((a, b) => b.reviewCount - a.reviewCount || a.title.localeCompare(b.title))
+              .slice(0, 8),
+          );
+        })
         .catch(() => {})
         .finally(() => setSearching(false));
     }, 260);
@@ -107,10 +117,10 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
   }, [selectedId]);
 
   function addApp(a: AppListItem) {
+    if (!isMobileStore(a.store)) return;
     if (tracked.some((t) => t.id === a.id)) { setSelectedId(a.id); setAdding(false); setQuery(""); return; }
     const entry: TrackedApp = {
-      // ASO tracking is a mobile-store surface; steam/itch rows never reach it.
-      id: a.id, store: a.store === "google" ? "google" : "apple", title: a.title, developer: a.developer,
+      id: a.id, store: a.store, title: a.title, developer: a.developer,
       iconUrl: a.iconUrl, category: a.category,
       addedAt: new Date().toISOString(), keywords: [],
     };
@@ -180,7 +190,10 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
                     <AppAvatar title={a.title} iconUrl={a.iconUrl} />
                     <div style={{ minWidth: 0 }}>
                       <div className="t">{a.title}</div>
-                      <div className="s">{a.developer}</div>
+                      <div className="s">
+                        <StoreGlyph store={a.store} style={{ width: 11, height: 11, verticalAlign: -1.5, marginRight: 4 }} />
+                        {a.developer}
+                      </div>
                     </div>
                     <IconPlus className="add-mark" style={{ width: 15, height: 15 }} />
                   </button>

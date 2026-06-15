@@ -33,9 +33,6 @@ function toIso(d: Date | null | undefined): string | null {
 }
 
 function listItemFromContext(ctx: SnapshotContext, period: GrowthPeriod): AppListItem {
-  const reviewGrowth7d =
-    ctx.prior != null ? ctx.latest.reviewCount - ctx.prior.reviewCount : null;
-
   const base = {
     id: ctx.app.id,
     store: ctx.app.store,
@@ -50,18 +47,7 @@ function listItemFromContext(ctx: SnapshotContext, period: GrowthPeriod): AppLis
     updatedAt: toIso(ctx.app.updatedAt),
   };
 
-  if (ctx.latest.revenueEstimate != null && ctx.latest.growthScore != null) {
-    return {
-      ...base,
-      reviewGrowth7d,
-      downloadsEstimate30d: ctx.latest.downloadsEstimate,
-      revenueEstimate30d: ctx.latest.revenueEstimate,
-      growthScore: ctx.latest.growthScore,
-      isFirstMover: ctx.latest.isFirstMover ?? false,
-    };
-  }
-
-  return scoreApp(base, signalsFromContext(ctx));
+  return scoreApp(base, signalsFromContext(ctx), period);
 }
 
 function filterMetaFromContext(ctx: SnapshotContext): ScoredAppRow["meta"] {
@@ -95,30 +81,47 @@ async function loadScoredRows(period: GrowthPeriod): Promise<ScoredAppRow[]> {
   });
 }
 
-// Module-level cache of scored rows, keyed by growth period. Resets on process
-// reload (tsx watch). Rebuilds from the DB on the next request after a reseed.
-let cachedRows: ScoredAppRow[] | null = null;
-let cachePeriod: GrowthPeriod | null = null;
+const APP_DISCOVERY_READ_TTL_MS = 60_000;
+
+interface CacheEntry<T> {
+  value: T;
+  loadedAtMs: number;
+}
+
+const appDiscoveryReadCache = {
+  scoredRows: new Map<GrowthPeriod, CacheEntry<ScoredAppRow[]>>(),
+  sparklines: null as CacheEntry<Map<string, number[]>> | null,
+};
+
+function cacheEntry<T>(value: T): CacheEntry<T> {
+  return { value, loadedAtMs: Date.now() };
+}
+
+function isFresh<T>(entry: CacheEntry<T> | null | undefined): entry is CacheEntry<T> {
+  return entry != null && Date.now() - entry.loadedAtMs < APP_DISCOVERY_READ_TTL_MS;
+}
+
+export function clearAppDiscoveryReadCache(): void {
+  appDiscoveryReadCache.scoredRows.clear();
+  appDiscoveryReadCache.sparklines = null;
+}
 
 async function getScoredRows(period: GrowthPeriod): Promise<ScoredAppRow[]> {
-  if (cachedRows && cachePeriod === period) return cachedRows;
-  cachedRows = await loadScoredRows(period);
-  cachePeriod = period;
-  return cachedRows;
+  const cached = appDiscoveryReadCache.scoredRows.get(period);
+  if (isFresh(cached)) return cached.value;
+
+  const rows = await loadScoredRows(period);
+  appDiscoveryReadCache.scoredRows.set(period, cacheEntry(rows));
+  return rows;
 }
 
 export async function dbHasApps(): Promise<boolean> {
   return (await countApps(getDb())) > 0;
 }
 
-// Sparkline cache — appId → last ≤7 daily reviewCount values (oldest→newest).
-// Built from ONE grouped query over app_snapshots (no per-app N+1), with the
-// same process-lifetime cache semantics as cachedRows above: page handlers
-// just pick out the ids they're returning.
-let cachedSparklines: Map<string, number[]> | null = null;
-
 async function getSparklines(): Promise<Map<string, number[]>> {
-  if (cachedSparklines) return cachedSparklines;
+  if (isFresh(appDiscoveryReadCache.sparklines)) return appDiscoveryReadCache.sparklines.value;
+
   const rows = await getDb()
     .select({ appId: appSnapshots.appId, reviewCount: appSnapshots.reviewCount })
     .from(appSnapshots)
@@ -134,7 +137,8 @@ async function getSparklines(): Promise<Map<string, number[]>> {
       if (list.length > 7) list.shift();
     }
   }
-  cachedSparklines = map;
+
+  appDiscoveryReadCache.sparklines = cacheEntry(map);
   return map;
 }
 

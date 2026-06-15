@@ -1,5 +1,6 @@
-import { listAppsByIds, listSnapshotSeries } from "@kittie/db";
-import { fetchGoogleAppMetadata, lookupAppleApp } from "@kittie/ingest";
+import { getSnapshotContext, listAppsByIds, listSnapshotSeries } from "@kittie/db";
+import { fetchLiveStoreListing } from "@kittie/ingest";
+import { scoreApp, signalsFromContext } from "@kittie/intelligence";
 
 import { getDb } from "../lib/db.js";
 
@@ -52,6 +53,25 @@ export async function compareApps(ids: string[]): Promise<CompareApp[]> {
   const result: CompareApp[] = [];
   for (const a of appRows) {
     const snaps = await listSnapshotSeries(db, a.id);
+    const ctx = await getSnapshotContext(db, a.id, "7d");
+    const scored = ctx
+      ? scoreApp(
+          {
+            id: a.id,
+            store: a.store,
+            storeAppId: a.storeAppId,
+            title: a.title,
+            iconUrl: a.iconUrl,
+            developer: a.developer,
+            category: a.category,
+            rating: ctx.latest.rating,
+            reviewCount: ctx.latest.reviewCount,
+            releasedAt: a.releasedAt?.toISOString() ?? null,
+            updatedAt: a.updatedAt?.toISOString() ?? null,
+          },
+          signalsFromContext(ctx),
+        )
+      : null;
 
     // Freshness contract: overlay the live listing on stored values (2–5
     // sequential lookups — the block is short and honest). Steam/itch rows
@@ -66,8 +86,7 @@ export async function compareApps(ids: string[]): Promise<CompareApp[]> {
       updatedAt?: Date | null;
     } | null = null;
     try {
-      if (a.store === "apple") live = (await lookupAppleApp(a.storeAppId)) ?? null;
-      else if (a.store === "google") live = await fetchGoogleAppMetadata(a.storeAppId);
+      live = await fetchLiveStoreListing(a.store, a.storeAppId);
     } catch {
       live = null; // store hiccup → stored values, honestly flagged
     }
@@ -103,9 +122,9 @@ export async function compareApps(ids: string[]): Promise<CompareApp[]> {
             reviewCount: live?.reviewCount ?? latest.reviewCount,
             rating: live?.rating ?? latest.rating,
             chartRank: latest.chartRank,
-            downloadsEstimate: latest.downloadsEstimate,
-            revenueEstimate: latest.revenueEstimate,
-            growthScore: latest.growthScore,
+            downloadsEstimate: scored?.downloadsEstimate30d ?? latest.downloadsEstimate,
+            revenueEstimate: scored?.revenueEstimate30d ?? latest.revenueEstimate,
+            growthScore: scored?.growthScore ?? null,
           }
         : null,
       history: snaps.map((s) => ({
@@ -115,7 +134,7 @@ export async function compareApps(ids: string[]): Promise<CompareApp[]> {
         chartRank: s.chartRank,
         downloadsEstimate: s.downloadsEstimate,
         revenueEstimate: s.revenueEstimate,
-        growthScore: s.growthScore,
+        growthScore: null,
       })),
     });
   }

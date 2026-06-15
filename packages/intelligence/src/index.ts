@@ -41,6 +41,8 @@ export type {
 } from "./gap/keywordGap.js";
 export type {
   AppSignals,
+  GrowthSample,
+  GrowthWindow,
   GrowthInput,
   RevenueInput,
   KeywordDifficultyInput,
@@ -48,6 +50,7 @@ export type {
 export { GROWTH_PERIOD_DAYS } from "./types.js";
 
 import type { AppListItem } from "@kittie/types";
+import type { GrowthPeriod } from "@kittie/types";
 import { computeGrowthScore, isFirstMover, reviewGrowth7d } from "./growth.js";
 import { estimateDownloads, estimateRevenue } from "./revenue.js";
 import type { AppSignals } from "./types.js";
@@ -63,10 +66,11 @@ export function scoreApp(
     | "isFirstMover"
   >,
   signals: AppSignals,
+  period: GrowthPeriod = "7d",
 ): AppListItem {
   const revenueEstimate30d = estimateRevenue(signals);
   const downloadsEstimate30d = estimateDownloads(signals, revenueEstimate30d);
-  const growthScore = computeGrowthScore(signals, "7d");
+  const growthScore = computeGrowthScore(signals, period);
 
   return {
     ...base,

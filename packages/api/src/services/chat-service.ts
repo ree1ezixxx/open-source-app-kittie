@@ -16,6 +16,7 @@ import {
   listSnapshotContexts,
   listTrackedAppEntries,
 } from "@kittie/db";
+import { scoreApp, signalsFromContext } from "@kittie/intelligence";
 import { getDb } from "../lib/db.js";
 import { generateText, seamStatus } from "./llm-seam.js";
 
@@ -43,13 +44,32 @@ async function topAppsByGrowth(): Promise<TopGrowthApp[]> {
 
   const contexts = await listSnapshotContexts(getDb(), "7d");
   const rows = contexts
-    .filter((ctx) => ctx.latest.growthScore !== null)
-    .sort((a, b) => (b.latest.growthScore ?? 0) - (a.latest.growthScore ?? 0))
-    .slice(0, 10)
     .map((ctx) => ({
+      ctx,
+      item: scoreApp(
+        {
+          id: ctx.app.id,
+          store: ctx.app.store,
+          storeAppId: ctx.app.storeAppId,
+          title: ctx.app.title,
+          iconUrl: ctx.app.iconUrl,
+          developer: ctx.app.developer,
+          category: ctx.app.category,
+          rating: ctx.latest.rating,
+          reviewCount: ctx.latest.reviewCount,
+          releasedAt: ctx.app.releasedAt?.toISOString() ?? null,
+          updatedAt: ctx.app.updatedAt?.toISOString() ?? null,
+        },
+        signalsFromContext(ctx),
+      ),
+    }))
+    .filter(({ item }) => item.growthScore !== null)
+    .sort((a, b) => (b.item.growthScore ?? 0) - (a.item.growthScore ?? 0))
+    .slice(0, 10)
+    .map(({ ctx, item }) => ({
       title: ctx.app.title,
       category: ctx.app.category,
-      growthScore: ctx.latest.growthScore ?? 0,
+      growthScore: item.growthScore ?? 0,
       rating: ctx.latest.rating,
       reviewCount: ctx.latest.reviewCount,
     }));

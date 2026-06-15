@@ -16,5 +16,18 @@ export function signalsFromContext(ctx: SnapshotContext): AppSignals {
     updatedAt: ctx.app.updatedAt,
     releasedAt: ctx.app.releasedAt,
     categoryAppCount: ctx.categoryAppCount,
+    growthWindow: {
+      period: ctx.growthWindow.period,
+      periodDays: ctx.growthWindow.periodDays,
+      startDate: ctx.growthWindow.startDate,
+      endDate: ctx.growthWindow.endDate,
+      coveredDays: ctx.growthWindow.coveredDays,
+      requiredDays: ctx.growthWindow.requiredDays,
+      samples: ctx.growthWindow.snapshots.map((snapshot) => ({
+        date: snapshot.snapshotDate,
+        reviewCount: snapshot.reviewCount,
+        chartRank: snapshot.chartRank,
+      })),
+    },
   };
 }
