@@ -1,4 +1,9 @@
-<<<<<<< HEAD
+# ⚠️ ARCHIVED — superseded handoffs (2026-06-07)
+# Kept for history only. Current handoffs live per-worktree as `HANDOFF-<view>.md`.
+# The data realities below (283 apps / 1 snapshot day / Dia / port 3007) are stale.
+
+---
+
 # LANE A — Explore & Rankings  +  SHELL OWNER
 **Worktree:** `~/Documents/open-source-app-kittie-ui`  ·  **Branch:** `feat/ui`
 **You own the shared shell** — build it FIRST and commit early so Lanes B/C/D can rebase onto it.
@@ -44,7 +49,8 @@ Clone the **full** AppKittie product UI. We now build **all** surfaces (supersed
 
 ## DoD
 All 6 routes render live-matching; shell (sidebar + router + shared components) committed & pushed early; real data where present, honest empty-states elsewhere; no fabricated data shown as real.
-=======
+---
+
 # LANE D — Reviews & Meta
 **Worktree:** `~/Documents/open-source-app-kittie-reviews-meta`  ·  **Branch:** `feat/reviews-meta` (forked from `feat/ui`)
 
@@ -78,4 +84,3 @@ All 6 routes render live-matching; shell (sidebar + router + shared components) 
 
 ## DoD
 Reviews 4 tabs render (real review text; sentiment/semantics/improvements mocked + labelled); MCP landing matches live; Settings sections present with stubbed auth/billing; detail parity sections added with empty-states. No real auth wired.
->>>>>>> feat/reviews-meta

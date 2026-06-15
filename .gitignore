@@ -9,10 +9,7 @@ data/
 .DS_Store
 .turbo
 .worktrees/
-<<<<<<< HEAD
 .secrets/
 **/.secrets/
-=======
 .ab-review/
->>>>>>> feat/reviews-meta
 generated-workspaces/
