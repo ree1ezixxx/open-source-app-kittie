@@ -122,6 +122,22 @@ async function getScoredRows(period: GrowthPeriod): Promise<ScoredAppRow[]> {
   return cachedRows;
 }
 
+/**
+ * Hydrated list items for a specific set of App ids — reuses the same scored
+ * rows (metrics from the latest snapshot) that power `/apps`. The Organic
+ * surface uses this to attach App metrics to its video groups instead of
+ * re-deriving REVENUE/INSTALLS/rating by hand.
+ */
+export async function getAppListItemsByIds(
+  ids: Set<string>,
+  period: GrowthPeriod = "7d",
+): Promise<Map<string, AppListItem>> {
+  const rows = await getScoredRows(period);
+  const map = new Map<string, AppListItem>();
+  for (const r of rows) if (ids.has(r.item.id)) map.set(r.item.id, r.item);
+  return map;
+}
+
 export async function dbHasApps(): Promise<boolean> {
   return (await countApps(getDb())) > 0;
 }

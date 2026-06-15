@@ -11,6 +11,7 @@ import { cloneRouter } from "./routes/clone.js";
 import { freshnessRouter } from "./routes/freshness.js";
 import { ideasRouter } from "./routes/ideas.js";
 import { keywordsRouter } from "./routes/keywords.js";
+import { organicRouter } from "./routes/organic.js";
 import { reviewsRouter } from "./routes/reviews.js";
 
 export function createApp() {
@@ -35,6 +36,7 @@ export function createApp() {
   v1.route("/freshness", freshnessRouter);
   v1.route("/ideas", ideasRouter);
   v1.route("/keywords", keywordsRouter);
+  v1.route("/organic", organicRouter);
   v1.route("/reviews", reviewsRouter);
   app.route("/api/v1", v1);
 
