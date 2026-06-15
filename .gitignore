@@ -13,3 +13,4 @@ data/
 **/.secrets/
 .ab-review/
 generated-workspaces/
+coordinator/.cache/
