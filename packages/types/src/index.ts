@@ -3,6 +3,47 @@ export type Store = "apple" | "google";
 
 export type GrowthPeriod = "7d" | "14d" | "30d" | "60d" | "90d";
 
+/**
+ * Canonical store-chart type. The raw `chart_category` column has drifted
+ * across ingest versions (`top-free` vs `topfreeapplications`, etc.); callers
+ * always work in these normalized values — see `normalizeChartType`.
+ */
+export type ChartType = "free" | "paid" | "grossing";
+
+/** One ranked app in a store chart, with its day-over-day movement. */
+export interface ChartEntry {
+  /** 1-based position on the resolved chart date (ascending = better). */
+  rank: number;
+  /** priorRank − rank (positive = climbed); null when there is no prior day. */
+  rankDelta: number | null;
+  app: {
+    id: string;
+    store: Store;
+    storeAppId: string;
+    title: string;
+    developer: string;
+    iconUrl: string | null;
+    category: string | null;
+  };
+  rating: number | null;
+  reviewCount: number;
+  /** Snapshot estimates on the chart date (for the Downloads / MRR columns). */
+  downloadsEstimate: number | null;
+  revenueEstimate: number | null;
+}
+
+/** A resolved store-ranking chart — what `GET /api/v1/charts` returns. */
+export interface TopChartsResult {
+  store: Store;
+  country: string;
+  type: ChartType;
+  /** Genre filter applied, or null for the overall chart. */
+  category: string | null;
+  /** Chart date the entries are from (`YYYY-MM-DD`), or null when no data. */
+  date: string | null;
+  entries: ChartEntry[];
+}
+
 export type AppSortField =
   | "growth"
   | "rating"
@@ -12,7 +53,8 @@ export type AppSortField =
   | "downloads"
   | "revenue"
   | "trending"
-  | "newest";
+  | "newest"
+  | "rankDelta";
 
 export type SortOrder = "asc" | "desc";
 
@@ -70,6 +112,17 @@ export interface AppListItem {
   downloadsEstimate30d: number | null;
   revenueEstimate30d: number | null;
   growthScore: number | null;
+  /** Real period-scaled growth % (review-velocity proxy); null until a prior snapshot exists. */
+  growthPct: number | null;
+  /** Estimates recomputed from the prior snapshot's signals — power rank-change deltas. */
+  downloadsEstimatePrior: number | null;
+  revenueEstimatePrior: number | null;
+  /**
+   * Signed chart-rank movement between this app's two most recent ranked
+   * snapshot days (priorRank − latestRank; positive = climbed). Null when the
+   * app lacks two ranked snapshots. Powers the Highlights "1D" column.
+   */
+  rankDelta: number | null;
   isFirstMover: boolean;
   releasedAt: string | null;
   updatedAt: string | null;
@@ -83,6 +136,10 @@ export interface AppDetail extends AppListItem {
   price: number | null;
   contentRating: string | null;
   languages: string[];
+  /** Listing facts — lazily backfilled from Apple lookup; null for Google apps. */
+  fileSizeBytes: number | null;
+  minOsVersion: string | null;
+  sellerName: string | null;
   iaps: AppIap[];
   metaAds: MetaAdCreative[];
   appleSearchAds: AppleSearchAd[];
@@ -129,6 +186,20 @@ export interface AppHistoricalPoint {
   revenueEstimate: number | null;
 }
 
+/** Four-way sentiment used across the Reviews surface. */
+export type Sentiment4 = "positive" | "neutral" | "negative" | "mixed";
+
+/** Per-review classification — produced once at ingest, persisted, then
+    aggregated cheaply by every surface. The classifier seam lives in
+    `@kittie/intelligence`. */
+export interface ReviewTags {
+  sentiment: Sentiment4;
+  /** Open-ish descriptive themes — what the review is *about*. */
+  topics: string[];
+  /** Fixed canonical taxonomy — what the app could *fix*. */
+  improvementAreas: string[];
+}
+
 export interface Review {
   id: string;
   appId: string;
@@ -139,6 +210,10 @@ export interface Review {
   body: string;
   author: string | null;
   reviewedAt: string;
+  /** Persisted classification (null on legacy rows ingested before tagging). */
+  sentiment?: Sentiment4 | null;
+  topics?: string[] | null;
+  improvementAreas?: string[] | null;
 }
 
 export interface KeywordDifficulty {

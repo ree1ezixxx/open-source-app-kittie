@@ -1,4 +1,4 @@
-import { apps, appSnapshots, enrichSnapshotScores } from "@kittie/db";
+import { apps, appSnapshots } from "@kittie/db";
 import type { Db } from "@kittie/db";
 import type { Store } from "@kittie/types";
 
@@ -108,8 +108,6 @@ export async function upsertSnapshot(db: Db, input: SnapshotUpsertInput): Promis
         chartCountry: input.chartCountry ?? "US",
       },
     });
-
-  await enrichSnapshotScores(db, input.appId, input.snapshotDate);
 }
 
 export async function listTrackedApps(db: Db) {

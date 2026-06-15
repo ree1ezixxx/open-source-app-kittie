@@ -43,8 +43,8 @@
 
 ## Remaining on `feat/keywords-aso` (ingest/API)
 
-- [x] `opportunityScore` on batch response + server-side sort
-- [x] `GET /api/v1/keywords/suggestions` for suggestion chips
+- [ ] `opportunityScore` on batch response + server-side sort
+- [ ] `GET /api/v1/keywords/suggestions` for suggestion chips
 - [ ] `computeKeywordInsights()` helper for standard insight set
 
 ## Domain glossary

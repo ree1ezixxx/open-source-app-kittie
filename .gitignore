@@ -9,3 +9,7 @@ data/
 .DS_Store
 .turbo
 .worktrees/
+.secrets/
+**/.secrets/
+.ab-review/
+generated-workspaces/

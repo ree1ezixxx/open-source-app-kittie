@@ -11,6 +11,8 @@ export interface AppSignals {
   metaAdCount: number;
   metaAdCountPrior: number | null;
   chartRankPrior: number | null;
+  /** Actual day gap to the prior sample — may be shorter than the growth period. */
+  priorDays?: number | null;
   updatedAt: Date | null;
   releasedAt: Date | null;
   categoryAppCount: number;
@@ -36,6 +38,12 @@ export interface KeywordDifficultyInput {
     rating: number | null;
     rank: number;
   }>;
+  /**
+   * Real search-popularity (0–100) from store autocomplete reach, when available.
+   * Differentiates demand per term; review-based estimate is the fallback. See
+   * `searchPopularity` in @kittie/ingest.
+   */
+  searchPopularity?: number | null;
 }
 
 export const GROWTH_PERIOD_DAYS: Record<GrowthPeriod, number> = {

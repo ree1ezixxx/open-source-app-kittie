@@ -1,0 +1,242 @@
+.app-engine-container {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.app-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 24px;
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.app-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  transition: all 0.2s ease;
+  cursor: default;
+}
+
+.app-card:hover {
+  border-color: var(--border-active);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
+}
+
+.app-card-header {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.app-card-header img {
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.app-card-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.app-card-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+.app-card-badges {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.badge.platform {
+  color: white;
+}
+
+.badge.reason {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text-secondary);
+}
+
+.app-card-description {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.app-card-stats {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  padding: 8px 0;
+}
+
+.app-card-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.btn-clone,
+.btn-github,
+.btn-instructions {
+  padding: 10px 12px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.btn-clone {
+  background: #0066ff;
+  color: white;
+}
+
+.btn-clone:hover {
+  background: #0052cc;
+  transform: translateY(-1px);
+}
+
+.btn-clone:active {
+  transform: translateY(0);
+}
+
+.btn-github {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+.btn-github:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.btn-instructions {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+}
+
+.btn-instructions:hover {
+  border-color: var(--border-active);
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.app-card-instructions {
+  background: rgba(0, 0, 0, 0.03);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 12px;
+  overflow: auto;
+  max-height: 200px;
+}
+
+.app-card-instructions pre {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+  font-family: "Monaco", "Menlo", monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* Dark mode adjustments */
+@media (prefers-color-scheme: dark) {
+  .app-card {
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .badge.reason {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .btn-github {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .btn-github:hover {
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  .app-card-instructions {
+    background: rgba(0, 0, 0, 0.2);
+  }
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .app-engine-container {
+    padding: 16px;
+  }
+
+  .app-grid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+  }
+
+  .app-card {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .app-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .app-card-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .btn-clone,
+  .btn-github,
+  .btn-instructions {
+    flex: 1;
+    min-width: 100px;
+  }
+}

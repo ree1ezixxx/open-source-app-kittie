@@ -50,7 +50,11 @@ _Avoid_: Winner, validated
 
 **Ad creative**:
 A Meta (Facebook/Instagram) ad asset linked to an App, sourced from the public Ad Library.
-_Avoid_: Campaign (unless referring to a grouped set of creatives)
+_Avoid_: Campaign (unless referring to a grouped set of creatives); Listing media (that is the App's own store assets, not an ad)
+
+**Listing media**:
+The visual assets on an App's *own* store listing — screenshots (images) and preview videos — that show what the app looks like before download. Sourced from the App Store / Google Play listing itself, never from advertising. Sub-types: **screenshot** (image; collected today) and **preview** (video; not yet ingested).
+_Avoid_: Ad creative (Meta-only); Screenshot (that is one sub-type, not the whole concept); Asset (too generic)
 
 **Keyword**:
 A search term users type in an app store. ASO intelligence tracks difficulty, traffic proxy, and which Apps rank for it.
@@ -63,6 +67,14 @@ _Avoid_: Search, query (in domain docs)
 **Keyword suggestion**:
 A Keyword proposed by the system for the user to run a Keyword lookup on. Sources: (1) a specific App's metadata and niche, or (2) patterns across the tracked App database (category phrases, recurring title terms).
 _Avoid_: Recommendation, auto-keyword
+
+**Competing app count**:
+The true depth of the field ranking for a Keyword — how many apps the store returns for the term (e.g. ~170 for "learn chinese"), sourced from the search `resultCount`, not the handful displayed. Difficulty is still judged on the top 10; this number is the honest size of the competition.
+_Avoid_: Ranking apps / results shown (those mean the displayed top 10, a different, smaller number)
+
+**Tracked keyword**:
+A Keyword the user has explicitly added to a durable shortlist to monitor. Distinct from a Keyword lookup (an ephemeral, cache-backed scored result): a Tracked keyword persists independently of the lookup cache — it is never cache-evicted — and is the anchor a future rank-history attaches to. Lives in its own store, referencing the lookup row for current metrics.
+_Avoid_: Saved search, favorite, watchlist (in schema names — the table is `tracked_keywords`)
 
 **Keyword difficulty**:
 A modeled 0–100 score for how hard it is to rank in the top results for a Keyword, based on the strength of Apps currently ranking there — not an official store metric.
@@ -120,7 +132,41 @@ _Avoid_: Every other day, batch weekly (for Observed metrics)
 
 **Popularity vs traffic score** — decoupled in v1: popularity from SERP volume signals (total reviews in top 10); traffic from leader avg reviews; difficulty stays separate.
 
-**Keyword storefront scope (v1)** — Apple and Google Play, **US only**. Other countries deferred.
+**Keyword storefront scope** — Apple and Google Play, **multi-market**. v1 was US-only; now 14 markets wired (target: AppKittie's 26). Each Keyword is scored per-country, with a cross-market view that flags untapped markets (high popularity + low difficulty).
+
+**Keyword popularity source** — derived from Apple search **autocomplete rank** (a free signal that reflects real search demand), NOT Apple's official popularity index (which is paid/scraped and has no free equivalent). Directionally accurate for ranking terms; not a calibrated volume figure. Architected pluggable so a real source can drop in later. See ADR.
+
+**Review**:
+A single written, user-submitted review of an App on its Store — rating + optional title + body + author + date. Rating-only reviews (no written body) are not indexed.
+_Avoid_: Rating (that is one field of a Review, not the whole thing); Comment
+
+**Monitored app**:
+An App a person has bookmarked in the Reviews surface to view its reviews and sentiment. A personal bookmark only — it does **not** determine what the server keeps fresh. An App can be kept fresh while monitored by nobody, and monitoring an App never, on its own, adds it to the fresh set.
+_Avoid_: Tracked app, Subscribed app
+
+**Fresh set**:
+The set of Apps the ingestion job keeps continuously up to date — defined as *every App that already has at least one indexed Review*. Membership follows ingestion history, not monitoring. This is how review data stays live without any user/auth backend.
+_Avoid_: Monitored set, Watched apps
+
+**Hot idea**:
+An AI-generated app concept derived from one real fast-growing App (its source App). Pre-generated in batch and stored — never generated per-view. Each Hot idea has a Blueprint.
+_Avoid_: Suggestion, app idea (when meaning the stored entity)
+
+**Blueprint**:
+The structured build plan attached to a Hot idea — difficulty + reasoning, timeline, requirements, MVP/key/V2 features, architecture, tech stack, MVP scope, third-party services. Generated once with the Hot idea, stored in DB.
+_Avoid_: Spec, plan (too generic in this domain)
+
+**Boot catch-up sweep**:
+The freshness mechanism for every derived dataset (Snapshots, Reviews, Tracked keyword scores, Hot ideas): on API boot, anything staler than its cadence regenerates in a paced background pass; an in-process interval keeps it fresh while the API runs. No OS cron, no hosted infra.
+_Avoid_: Cron job, scheduler (implies external infra)
+
+## Resolved decisions
+
+**Continuous-refresh runtime** — runs in-process inside the API: a catch-up sweep on boot (top up anything stale) plus an interval while the API is up. No hosted server, no OS cron. Free to run; the only ceiling is store rate-limiting, so the sweep is *paced* (polite delays, low concurrency) and uses **delta fetches** (only Reviews newer than the latest stored), never full re-pulls.
+
+**On-add flow** — adding an App opens a 5-stage progress modal driven by a **real SSE stream** from the sync endpoint (fetch → parse → analyse → save → done). No faked timers. The App is populated and in the fresh set when the modal closes.
+
+**Classifier seam** — the per-Review tagging (sentiment, topics, improvement areas) moves **server-side** during sync, and tags are **persisted** to the DB (not recomputed in each browser). Engine is the existing **keyword taxonomy** for now ($0). The seam is a single function; swapping in a real LLM later is a one-function change, deliberately deferred to avoid per-review API cost. Future: a positive/negative review filter layered on the stored sentiment.
 
 ## Example dialogue
 

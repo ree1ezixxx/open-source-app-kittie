@@ -7,7 +7,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import type { AppSearchParams } from "@kittie/types";
 
-const API_BASE = process.env.KITTIE_API_URL ?? "http://localhost:3000";
+const API_BASE = process.env.KITTIE_API_URL ?? "http://localhost:3009";
 
 async function apiGet<T>(path: string): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`);
@@ -71,7 +71,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: "batch_keyword_difficulty",
-      description: "Batch keyword difficulty (max 10)",
+      description: "Batch keyword difficulty (max 25)",
       inputSchema: {
         type: "object",
         properties: {
@@ -95,6 +95,30 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       name: "get_supported_countries",
       description: "List supported country codes for ASO lookups",
       inputSchema: { type: "object", properties: {} },
+    },
+    {
+      name: "get_app_reviews",
+      description: "Get recent user reviews for an app (with stored sentiment and topic tags)",
+      inputSchema: {
+        type: "object",
+        properties: {
+          appId: { type: "string" },
+          limit: { type: "number", default: 50 },
+        },
+        required: ["appId"],
+      },
+    },
+    {
+      name: "clone_ios_app",
+      description:
+        "Generate a complete, buildable SwiftUI iOS app that clones a trending app's core UX. " +
+        "Returns an app blueprint plus every source file (project.yml + Swift) for an xcodegen project, " +
+        "ready to write to disk and `xcodegen generate && xcodebuild`. Pass the app id from search_apps/get_app_detail.",
+      inputSchema: {
+        type: "object",
+        properties: { appId: { type: "string" } },
+        required: ["appId"],
+      },
     },
   ],
 }));
@@ -138,6 +162,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
       case "get_supported_countries": {
         result = await apiGet("/api/v1/countries");
+        break;
+      }
+      case "get_app_reviews": {
+        const { appId, limit = 50 } = (args ?? {}) as { appId?: string; limit?: number };
+        if (!appId) throw new Error("appId is required");
+        result = await apiPost("/api/v1/reviews", { appId, limit });
+        break;
+      }
+      case "clone_ios_app": {
+        const { appId } = (args ?? {}) as { appId?: string };
+        if (!appId) throw new Error("appId is required");
+        result = await apiPost("/api/v1/clone/ios", { appId });
         break;
       }
       default:

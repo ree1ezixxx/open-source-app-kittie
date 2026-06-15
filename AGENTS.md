@@ -17,6 +17,12 @@ Not a commercial product (for now). Ship fast: **days, not months**.
 - **Punctual.** State what changed or what to do next. Skip "What changed" diff narration — the user can see the diff.
 - **Clear over clever.** Plain language. One idea per sentence.
 
+## UI Conventions
+
+- **Never loose text in a page — everything lives in a component.** Wrap sections in cards (`DetailCard`), facts in `Fact`, headline metrics in `MetricCard`; honest empty-states via `EmptyCard` for data not ingested yet. Loose `<p>`/`<dl>` blobs read as unfinished.
+- The **app detail template is uniform** across every app — build it once (`pages/AppDetailPage.tsx`) and it repeats. Match AppKittie's section set: headline metric cards (clickable → drive chart) → trend chart (range selector) → details → listing media → about → contact & links → reviews → similar apps → intelligence (Meta/Apple ads, creators — empty-state until ingested).
+- Reusable detail components: `MetricCard`, `DetailCard`/`EmptyCard`/`Fact`, `TrendPanel`, `SimilarApps`.
+
 ## Read First
 
 | File | When |
@@ -93,6 +99,57 @@ pnpm typecheck        # build all packages, then tsc --noEmit
 - `pnpm typecheck` must pass before handoff (runs `build` first — workspace packages resolve from `dist/`).
 - Ingestion jobs: log row counts, not full payloads.
 - API: curl smoke tests documented in package READMEs.
+
+## Bulk App Ingestion — Runbook (read before re-running)
+
+Growing the catalog toward AppKittie's ~2M. Pull **directly from Apple's free APIs** (genre-RSS charts + iTunes Search + Lookup) — never scrape AppKittie's UI. Pipeline: `packages/ingest/src/apple/discover.ts` + `jobs/bulk-seed.ts` (idempotent `upsertApp`/`upsertSnapshot`).
+
+**Run it (turnkey):**
+```bash
+cd packages/ingest
+TARGET=10000 DATABASE_URL=file:/Users/ellis/Documents/open-source-app-kittie/data/kittie.db \
+  pnpm exec tsx src/jobs/bulk-seed.ts
+```
+The explicit `DATABASE_URL` is the **shared** DB every lane's API reads — confirm the running API has *that* file open (`lsof -p <api pid> | grep kittie.db`), don't trust the default path resolution.
+
+## Local Dev Port/Data Guardrail
+
+The dashboard must show the full local dataset. Before assuming data is missing, verify the API and web proxy are aligned:
+
+```bash
+curl http://localhost:3008/health
+curl "http://localhost:3008/api/v1/apps?limit=3&sortBy=reviews&sortOrder=desc"
+lsof -p <api pid> | grep /Users/ellis/Documents/open-source-app-kittie/data/kittie.db
+```
+
+`apps/web/vite.config.ts` proxies `/api` to `VITE_API_ORIGIN`, defaulting to `http://localhost:3008`. If the app shell loads but tables are empty or show API errors, check `/tmp/web.log` for Vite proxy `ECONNREFUSED` before touching ingestion or the database.
+
+Use the guardrail script after starting API + web:
+
+```bash
+pnpm dev:check-data
+```
+
+Expected local baseline as of 2026-06-12: ~100K Apps, ~300K Snapshots, ~114K Reviews, 0 Meta ads. An empty Ads Library currently means `meta_ads` has not been ingested; it does not mean the app database is gone.
+
+**Gotchas that bit us once — don't repeat (this is the "no more manual reloads" list):**
+1. **After a reseed, the API still serves the OLD count.** `db-app-service.ts` caches scored rows in-memory with **no TTL**. It runs under `tsx watch`, so reload it by making a **content edit** to any `packages/api/src` file. **`touch`/mtime alone does NOT trigger the watcher** — it must be a real content change.
+2. **An app only appears once it has a snapshot row** (`listSnapshotContexts` skips snapshot-less apps). bulk-seed writes one per app, so this is handled — but any other insert path must also write a snapshot.
+3. **GROWTH 7D / Trending / Rising need day-over-day snapshots.** Running bulk-seed 10× in one day adds apps but growth stays flat (all snapshots share today's date). To populate growth, run on **successive days** (or run `jobs/snapshot.ts` daily). This is a time-series requirement, not a missing field.
+4. **The `rss.applemarketingtools.com` feed (old `seed.ts`) is failing.** Use genre-RSS (`itunes.apple.com/<cc>/rss/<feed>/limit/genre/json`) + Search — already wired in `discover.ts`.
+5. **Read-path is N+1** (per-app `countAppsInCategory` etc. in `signals.ts`) → first load after a reload is slow and gets worse with N. **Must be optimized (batch the per-app queries) before scaling past ~50K.**
+
+**Data completeness vs AppKittie's Database table (audited 2026-06-08):** their row = #·app·category·growth7d·rating·reviews·downloads·MRR·released·last-update·view. We capture **every underlying field** — rating/reviews from Lookup, downloads/revenue/growth **modeled at read-time** by `intelligence`, category/dates/icon/screenshots/description/price/contentRating/languages from Lookup. Not missing fundamental data. ~7% of apps legitimately have 0 US ratings (Apple returns 0 — not our bug).
+
+**Screenshots — iTunes API is incomplete; backfill from the web listing.** Apple's iTunes Lookup/Search API returns **empty `screenshotUrls` for ~36% of apps** (newer screenshot formats — e.g. HelloChinese, Duolingo). The App Store *web* listing still embeds them. After any bulk-seed, run the web backfill to fill the gap (idempotent — only touches apps still empty):
+```bash
+cd packages/ingest
+CONCURRENCY=6 DATABASE_URL=file:/Users/ellis/Documents/open-source-app-kittie/data/kittie.db \
+  pnpm exec tsx src/jobs/backfill-screenshots-web.ts
+```
+It scrapes `apps.apple.com/us/app/id<ID>` (browser User-Agent required — a bot UA returns 0 bytes), extracts `PurpleSource*` mzstatic templates (skipping `AppIcon`, `/Features` banners, and `Placeholder.mill` video posters), renders at 392×696, dedups by basename, writes ONLY the `screenshot_urls` column. ~96% fill rate, 0 failures observed. `apple/scrape.ts` + `jobs/backfill-screenshots-web.ts`. (The lookup-only `backfill-screenshots.ts` is superseded for these — iTunes returns nothing for them in any storefront.) Note the detail page then probes each URL in-browser and needs ≥3 working to render the collection.
+
+**Forward-compat — capture-now-or-refetch-2M-later:** Apple Lookup also returns fields we currently drop. To avoid re-fetching the whole catalog later, file a `docs/schema-requests.md` entry for `feat/foundation` to add columns for: **trackViewUrl** (App Store listing URL, for the View action), **version**, **fileSizeBytes**, **minimumOsVersion**, **primaryGenreId**, **price currency**. Then map them in `apple/lookup.ts` + `db/apps.ts`. Cheap now, expensive across 2M later.
 
 ## AppKittie Reference (not a dependency)
 

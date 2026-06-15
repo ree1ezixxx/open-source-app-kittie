@@ -2,6 +2,7 @@ import { parseAppleDate } from "../util/dates.js";
 
 export interface AppleLookupResult {
   storeAppId: string;
+  artistId: string | null;
   bundleId: string | null;
   title: string;
   developer: string;
@@ -17,12 +18,19 @@ export interface AppleLookupResult {
   updatedAt: Date | null;
   reviewCount: number;
   rating: number | null;
+  /** Listing facts for App Detail parity. */
+  fileSizeBytes: number | null;
+  minOsVersion: string | null;
+  sellerName: string | null;
 }
 
 interface ItunesLookupResponse {
   resultCount: number;
   results?: Array<{
+    wrapperType?: string;
+    kind?: string;
     trackId: number;
+    artistId?: number;
     bundleId?: string;
     trackName: string;
     artistName: string;
@@ -40,6 +48,9 @@ interface ItunesLookupResponse {
     currentVersionReleaseDate?: string;
     userRatingCount?: number;
     averageUserRating?: number;
+    fileSizeBytes?: string;
+    minimumOsVersion?: string;
+    sellerName?: string;
   }>;
 }
 
@@ -70,6 +81,21 @@ export async function lookupAppleApp(storeAppId: string): Promise<AppleLookupRes
   return results[0] ?? null;
 }
 
+/**
+ * All apps published by one developer (artist). `lookup?id=<artistId>&entity=software`
+ * returns the artist record plus every one of their software titles, with full metadata.
+ * The seam the snowball expands on — fan a known developer out to their whole catalog.
+ */
+export async function lookupDeveloperApps(artistId: string, country = "us"): Promise<AppleLookupResult[]> {
+  const url = `https://itunes.apple.com/lookup?id=${artistId}&entity=software&limit=200&country=${country}`;
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`developer lookup failed: ${response.status}`);
+  const data = (await response.json()) as ItunesLookupResponse;
+  return (data.results ?? [])
+    .filter((item) => item.wrapperType === "software" || item.kind === "software")
+    .map(mapLookupResult);
+}
+
 function mapLookupResult(item: NonNullable<ItunesLookupResponse["results"]>[number]): AppleLookupResult {
   const screenshots = [
     ...(item.screenshotUrls ?? []),
@@ -78,6 +104,7 @@ function mapLookupResult(item: NonNullable<ItunesLookupResponse["results"]>[numb
 
   return {
     storeAppId: String(item.trackId),
+    artistId: item.artistId != null ? String(item.artistId) : null,
     bundleId: item.bundleId ?? null,
     title: item.trackName,
     developer: item.artistName,
@@ -93,5 +120,8 @@ function mapLookupResult(item: NonNullable<ItunesLookupResponse["results"]>[numb
     updatedAt: parseAppleDate(item.currentVersionReleaseDate),
     reviewCount: item.userRatingCount ?? 0,
     rating: item.averageUserRating ?? null,
+    fileSizeBytes: item.fileSizeBytes != null ? Number(item.fileSizeBytes) || null : null,
+    minOsVersion: item.minimumOsVersion ?? null,
+    sellerName: item.sellerName ?? null,
   };
 }

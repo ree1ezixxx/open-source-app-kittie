@@ -26,12 +26,11 @@
   "dependencies": {
     "@kittie/intelligence": "workspace:*",
     "@kittie/types": "workspace:*",
-    "drizzle-orm": "^0.44.2",
-    "better-sqlite3": "^11.10.0"
+    "@libsql/client": "^0.17.3",
+    "drizzle-orm": "^0.44.2"
   },
   "devDependencies": {
     "@types/node": "^22.15.21",
-    "@types/better-sqlite3": "^7.6.13",
     "drizzle-kit": "^0.31.1",
     "typescript": "^5.8.3"
   }

@@ -47,6 +47,9 @@ function toDetail(fixture: RawAppFixture): AppDetail {
     price: fixture.price,
     contentRating: fixture.contentRating,
     languages: fixture.languages,
+    fileSizeBytes: null,
+    minOsVersion: null,
+    sellerName: null,
     iaps: fixture.iaps,
     metaAds: fixture.metaAds,
     appleSearchAds: fixture.appleSearchAds,
@@ -65,6 +68,7 @@ function mockRows(): ScoredAppRow[] {
       hasEmail: Boolean(fixture.supportEmail),
       hasWebsite: Boolean(fixture.websiteUrl),
       price: fixture.price,
+      languages: fixture.languages.map((l) => l.toLowerCase()),
     },
   }));
 }
@@ -73,7 +77,15 @@ function searchAppsMock(params: AppSearchParams): PaginatedResponse<AppListItem>
   const filtered = mockRows().filter((row) => matchesSearch(row, params));
   const sorted = sortApps(filtered, params);
   const { data, nextCursor, totalCount } = paginateApps(sorted, params);
-  return { data, pagination: { nextCursor, totalCount } };
+  // Mirror the DB path: attach last ≤7 daily reviewCount values per returned row.
+  const byId = new Map(MOCK_APPS.map((f) => [f.id, f]));
+  const withSparkline = data.map((item) => ({
+    ...item,
+    sparkline: (byId.get(item.id)?.historicals ?? [])
+      .slice(-7)
+      .map((h) => h.reviewCount ?? 0),
+  }));
+  return { data: withSparkline, pagination: { nextCursor, totalCount } };
 }
 
 export async function searchApps(params: AppSearchParams): Promise<PaginatedResponse<AppListItem>> {

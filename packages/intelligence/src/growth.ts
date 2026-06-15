@@ -18,9 +18,16 @@ function scaleDelta(delta: number, cap: number): number {
   return Math.min(Math.max(delta / cap, -1), 1);
 }
 
+/** Observed delta scaled to the full period when the prior sample is closer. */
+function periodScaledReviewDelta(signals: AppSignals, periodDays: number): number {
+  const prior = signals.reviewCountPrior ?? signals.reviewCount;
+  const actualDays = Math.max(signals.priorDays ?? periodDays, 1);
+  return (signals.reviewCount - prior) * (periodDays / actualDays);
+}
+
 function reviewDeltaScore(signals: AppSignals, periodDays: number): number {
   const prior = signals.reviewCountPrior ?? signals.reviewCount;
-  const delta = signals.reviewCount - prior;
+  const delta = periodScaledReviewDelta(signals, periodDays);
   const expectedCap = Math.max(prior * (periodDays / 30), 10);
   return scaleDelta(delta, expectedCap);
 }
@@ -76,4 +83,21 @@ export function isFirstMover(signals: AppSignals, growthScore: number): boolean 
 export function reviewGrowth7d(signals: AppSignals): number {
   const prior = signals.reviewCountPrior ?? signals.reviewCount;
   return signals.reviewCount - prior;
+}
+
+/**
+ * Real period-scaled review-growth percentage (the proxy behind MRR growth).
+ * Null without a prior sample — the UI shows an honest "—", never a fake 0.
+ */
+export function computeGrowthPct(
+  signals: AppSignals,
+  period: GrowthPeriod = "7d",
+): number | null {
+  if (signals.reviewCountPrior == null) return null;
+  const periodDays = GROWTH_PERIOD_DAYS[period];
+  const scaledDelta = periodScaledReviewDelta(signals, periodDays);
+  // Damp tiny-base noise: 3 new reviews on a 2-review app is not "+150%".
+  const base = Math.max(signals.reviewCountPrior, 10);
+  const pct = (scaledDelta / base) * 100;
+  return Math.round(Math.min(Math.max(pct, -99), 999) * 10) / 10;
 }
