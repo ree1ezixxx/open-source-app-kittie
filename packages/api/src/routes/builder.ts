@@ -8,6 +8,7 @@ import {
 } from "@kittie/clone-engine";
 import {
   addBuilderMessage,
+  cloneBuilderProject,
   createBuilderProject,
   deleteBuilderProject,
   getBuilderProject,
@@ -36,7 +37,13 @@ import {
 } from "../lib/run-events.js";
 import { runRepairLoop } from "../lib/repair-runner.js";
 import { runVisualQa } from "../lib/visual-qa.js";
-import { pruneRuns, readWorkspaceTree, syncWorkspace, workspaceRoot } from "../lib/workspace.js";
+import {
+  cloneWorkspaceFull,
+  pruneRuns,
+  readWorkspaceTree,
+  syncWorkspace,
+  workspaceRoot,
+} from "../lib/workspace.js";
 
 /* ============================================================
    App Builder (Rork-style) endpoints.
@@ -246,6 +253,34 @@ builderRouter.delete("/projects/:id", async (c) => {
   if (!project) return c.json({ error: "Project not found" }, 404);
   await deleteBuilderProject(db, project.id);
   return c.json({ data: { deleted: project.id } });
+});
+
+/* Clone a project (PRD §4.4): duplicate row + full chat history, sync a fresh
+   workspace from the (deep-copied) blueprint, then best-effort copy the source's
+   node_modules in the background so the clone's first Run is instant. */
+builderRouter.post("/projects/:id/clone", async (c) => {
+  const db = getDb();
+  const sourceId = c.req.param("id");
+  const source = await getBuilderProject(db, sourceId);
+  if (!source) return c.json({ error: "Project not found" }, 404);
+
+  const cloned = await cloneBuilderProject(db, sourceId);
+  if (!cloned) return c.json({ error: "Clone failed" }, 500);
+
+  // Materialise the generated Expo project from the clone's own blueprint. Never
+  // let a workspace failure 500 the clone — the files re-derive on first read.
+  try {
+    const blueprint = JSON.parse(cloned.blueprintJson) as AppBlueprint;
+    await syncWorkspace(cloned.id, fromBlueprintExpo(blueprint).files);
+  } catch (err) {
+    console.warn(`[builder] clone workspace sync failed for ${cloned.id}:`, err);
+  }
+
+  // Best-effort: copy the source node_modules over the freshly-synced files so a
+  // first Run skips npm install. Fire-and-forget — the response doesn't wait.
+  void cloneWorkspaceFull(sourceId, cloned.id).catch(() => {});
+
+  return c.json({ data: projectPayload(cloned) }, 201);
 });
 
 const messageSchema = z.object({ content: z.string().trim().min(2).max(1000) });

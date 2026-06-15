@@ -23,11 +23,68 @@ export async function createBuilderProject(
     prompt: input.prompt,
     blueprintJson: input.blueprintJson,
     engine: input.engine,
+    parentProjectId: null,
     createdAt: now,
     updatedAt: now,
   };
   await db.insert(builderProjects).values(row);
   return row;
+}
+
+/**
+ * Clone a project (PRD §4.4): new project row (smart "copy" suffix, same
+ * prompt/engine, deep-copied blueprint, parentProjectId set) plus a verbatim
+ * copy of every message (fresh ids, preserved order/roles/blueprint/runJson).
+ * Workspace + node_modules are handled by the caller; this is pure DB.
+ */
+export async function cloneBuilderProject(db: Db, sourceId: string): Promise<BuilderProject | null> {
+  const source = await getBuilderProject(db, sourceId);
+  if (!source) return null;
+
+  const existing = await listBuilderProjects(db);
+  const name = nextCopyName(source.name, existing.map((p) => p.name));
+
+  const now = new Date();
+  const cloned: BuilderProject = {
+    id: randomUUID(),
+    name,
+    prompt: source.prompt,
+    // Deep copy via JSON round-trip so the clone never shares the blueprint object.
+    blueprintJson: JSON.stringify(JSON.parse(source.blueprintJson)),
+    engine: source.engine,
+    parentProjectId: source.id,
+    createdAt: now,
+    updatedAt: now,
+  };
+  await db.insert(builderProjects).values(cloned);
+
+  // Copy the chat history verbatim (fresh ids, original timestamps preserved so
+  // ordering travels). Insert in createdAt order.
+  const messages = await listBuilderMessages(db, source.id);
+  for (const m of messages) {
+    await db.insert(builderMessages).values({
+      id: randomUUID(),
+      projectId: cloned.id,
+      role: m.role,
+      content: m.content,
+      blueprintJson: m.blueprintJson,
+      runJson: m.runJson,
+      createdAt: m.createdAt,
+    });
+  }
+  return cloned;
+}
+
+/** "Pulse" -> "Pulse copy"; "Pulse copy" -> "Pulse copy 2"; avoids collisions. */
+function nextCopyName(baseName: string, existing: string[]): string {
+  const stem = baseName.replace(/ copy(?: \d+)?$/, "");
+  const taken = new Set(existing);
+  const first = `${stem} copy`;
+  if (!taken.has(first)) return first;
+  for (let n = 2; ; n++) {
+    const candidate = `${stem} copy ${n}`;
+    if (!taken.has(candidate)) return candidate;
+  }
 }
 
 export async function listBuilderProjects(db: Db): Promise<BuilderProject[]> {

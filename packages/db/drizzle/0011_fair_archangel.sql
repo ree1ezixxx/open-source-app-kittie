@@ -1,0 +1,1 @@
+ALTER TABLE `builder_projects` ADD `parent_project_id` text;

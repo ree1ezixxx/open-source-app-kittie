@@ -352,6 +352,8 @@ export const builderProjects = sqliteTable(
     blueprintJson: text("blueprint_json").notNull(),
     /** Which engine produced the current blueprint. */
     engine: text("engine", { enum: ["ollama", "gemini", "heuristic"] }).notNull(),
+    /** Source project when this row was created via Clone (PRD §4.4); null for originals. */
+    parentProjectId: text("parent_project_id"),
     createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
   },
