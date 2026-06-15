@@ -40,7 +40,13 @@ export {
 } from "./tracked-keywords.js";
 export { getAiGeneration, saveAiGeneration } from "./ai-generations.js";
 export { getSweepState, listSweepStates, recordSweepRun } from "./sweep-state.js";
-export { normalizeChartType, assembleTopCharts, type ChartRow, type TopChartsParams } from "./charts.js";
+export {
+  normalizeChartType,
+  encodeChartCategory,
+  decodeChartCategory,
+  type ChartCategory,
+} from "./chart-category.js";
+export { assembleTopCharts, type ChartRow, type TopChartsParams } from "./charts.js";
 export { getTopCharts } from "./charts-query.js";
 export {
   countIdeas,

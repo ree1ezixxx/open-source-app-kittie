@@ -5,30 +5,22 @@ import type {
   TopChartsResult,
 } from "@kittie/types";
 
+import { normalizeChartType } from "./chart-category.js";
+
 /**
  * Store-ranking charts (Trending / "Store Rankings"), computed on read.
  *
  * The chart *type* is stored in `app_snapshots.chart_category`, but that column
  * has drifted across ingest generations — older rows use the raw Apple feed
  * ids (`topfreeapplications`), newer rows use slugs (`top-free`). All reads go
- * through {@link normalizeChartType} so both collapse to one canonical
- * {@link ChartType}; the assembly is a pure function over already-fetched rows
- * so the date-resolution and 24h-delta logic is unit-testable without a DB.
+ * through the shared chart-category codec ({@link normalizeChartType}) so both
+ * collapse to one canonical {@link ChartType}; the assembly is a pure function
+ * over already-fetched rows so the date-resolution and 24h-delta logic is
+ * unit-testable without a DB.
  *
  * This module is deliberately DB-free (pure) — the database shell that loads
  * the rows lives in `charts-query.ts`.
  */
-
-/** Collapse any historical `chart_category` encoding to a canonical chart type. */
-export function normalizeChartType(raw: string | null): ChartType | null {
-  if (!raw) return null;
-  const v = raw.toLowerCase();
-  // Order matters: "grossing" is the most specific; "free"/"paid" never co-occur.
-  if (v.includes("grossing")) return "grossing";
-  if (v.includes("paid")) return "paid";
-  if (v.includes("free")) return "free";
-  return null;
-}
 
 /** A chart-bearing snapshot row joined to its app — the pure assembler's input. */
 export interface ChartRow {
