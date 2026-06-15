@@ -1,5 +1,6 @@
 import gplay from "google-play-scraper";
 
+import { clampReleaseDate } from "../util/dates.js";
 import { sleep } from "../util/rate-limit.js";
 
 /** Runtime enum objects — package types declare enums but don't expose values to TS. */
@@ -92,7 +93,7 @@ export async function fetchGoogleAppMetadata(
     websiteUrl: app.developerWebsite ?? null,
     contentRating: app.contentRating ?? null,
     screenshotUrls: app.screenshots ?? [],
-    releasedAt: app.released ? new Date(app.released) : null,
+    releasedAt: clampReleaseDate(app.released),
     updatedAt: app.updated ? new Date(app.updated) : null,
     reviewCount: app.reviews ?? 0,
     rating: app.score ?? null,

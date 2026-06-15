@@ -1,4 +1,4 @@
-import { parseAppleDate } from "../util/dates.js";
+import { clampReleaseDate, parseAppleDate } from "../util/dates.js";
 
 export interface AppleLookupResult {
   storeAppId: string;
@@ -116,7 +116,7 @@ function mapLookupResult(item: NonNullable<ItunesLookupResponse["results"]>[numb
     contentRating: item.contentAdvisoryRating ?? null,
     languages: item.languageCodesISO2A ?? [],
     screenshotUrls: screenshots,
-    releasedAt: parseAppleDate(item.releaseDate),
+    releasedAt: clampReleaseDate(item.releaseDate),
     updatedAt: parseAppleDate(item.currentVersionReleaseDate),
     reviewCount: item.userRatingCount ?? 0,
     rating: item.averageUserRating ?? null,
