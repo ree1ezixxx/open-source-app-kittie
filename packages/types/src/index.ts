@@ -60,9 +60,14 @@ export type SortOrder = "asc" | "desc";
 
 export type PriceType = "all" | "free" | "paid";
 
+/** Fields the list search can match — mirrors AppKittie `textSearchFields`. */
+export type TextSearchField = "title" | "developer" | "description";
+
 /** Query params for GET /api/v1/apps — AppKittie-compatible subset. */
 export interface AppSearchParams {
   search?: string;
+  /** Comma-separated subset of title / developer / description; default = all three. */
+  textSearchFields?: string;
   categories?: string;
   excludedCategories?: string;
   source?: Store;

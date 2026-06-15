@@ -168,6 +168,16 @@ _Avoid_: Cron job, scheduler (implies external infra)
 
 **Classifier seam** — the per-Review tagging (sentiment, topics, improvement areas) moves **server-side** during sync, and tags are **persisted** to the DB (not recomputed in each browser). Engine is the existing **keyword taxonomy** for now ($0). The seam is a single function; swapping in a real LLM later is a one-function change, deliberately deferred to avoid per-review API cost. Future: a positive/negative review filter layered on the stored sentiment.
 
+**Explore parity bar** — match AppKittie Explore UI and filter *behavior*; do not fake catalog scale or ingested signals. Smaller app count (~100K vs ~2M) and empty marketing-signal filters are OK when shown honestly. Sidebar labels, filter controls, and table interactions should match truth; data volume catches up on separate ingest tracks.
+
+**Explore filter UX** — Category and App Language use **dropdown popovers** (“Select categories”, “Select languages”) matching live AppKittie — not always-visible inline pill grids.
+
+**Clone scope (Explore lane)** — **App-data surfaces in scope** (Apps database, Highlights, Trending, Rising, Favorites, app detail, app-tracking). **Ads-related surfaces deferred** for now (Ads Library, Organic, Meta/Apple ad filters as parity work — links may exist but are not the current clone target).
+
+**Explore marketing-signal filters** — keep Meta Ads / Apple Ads / Creators / Contacts toggles **visible** (UI matches truth) but **do not prioritize ingest or filter wiring** for ad/creator data — AppKittie serves those from pre-ingested DB, not live APIs; our priority is **data-heavy app catalog work** (scale, snapshots, growth, search/filter behavior on app fields).
+
+**Explore data priority** — **snapshots cadence first**: daily day-over-day snapshots so Growth 7d, sparklines, and period filters behave like truth before chasing catalog scale or filter-rail UI polish.
+
 ## Example dialogue
 
 **Dev**: "This app is trending — should we flag it as a first mover?"

@@ -69,6 +69,7 @@ function mockRows(): ScoredAppRow[] {
       hasWebsite: Boolean(fixture.websiteUrl),
       price: fixture.price,
       languages: fixture.languages.map((l) => l.toLowerCase()),
+      description: fixture.description,
     },
   }));
 }

@@ -93,6 +93,7 @@ function filterMetaFromContext(ctx: SnapshotContext): ScoredAppRow["meta"] {
     hasWebsite: Boolean(ctx.app.websiteUrl),
     price: ctx.app.price,
     languages: parseJsonArray(ctx.app.languages).map((l) => l.toLowerCase()),
+    description: ctx.app.description,
   };
 }
 
@@ -117,9 +118,17 @@ async function loadScoredRows(period: GrowthPeriod): Promise<ScoredAppRow[]> {
 }
 
 // Module-level cache of scored rows, keyed by growth period. Resets on process
-// reload (tsx watch). Rebuilds from the DB on the next request after a reseed.
+// reload (tsx watch) or via invalidateAppReadCaches after snapshots-daily.
 let cachedRows: ScoredAppRow[] | null = null;
 let cachePeriod: GrowthPeriod | null = null;
+
+/** Drop in-memory list/sparkline/rank caches so Explore picks up new snapshot days. */
+export function invalidateAppReadCaches(): void {
+  cachedRows = null;
+  cachePeriod = null;
+  cachedSparklines = null;
+  cachedRankDeltas = null;
+}
 
 async function getScoredRows(period: GrowthPeriod): Promise<ScoredAppRow[]> {
   if (cachedRows && cachePeriod === period) return cachedRows;

@@ -193,7 +193,7 @@ export function ExplorePage({
     <main className="main">
       <Topbar
         title="Explore Apps"
-        subtitle="Search and filter the app database"
+        subtitle="Search and filter"
         total={total}
         showing={apps.length}
         loading={loading}
@@ -201,6 +201,8 @@ export function ExplorePage({
         onToggleTheme={onToggleTheme}
         search={searchInput}
         onSearch={setSearchInput}
+        searchScope={filters.scope}
+        onSearchScope={(scope) => patch({ scope })}
         onRefresh={refresh}
         onExportCsv={() => exportRows("csv")}
         onExportJson={() => exportRows("json")}

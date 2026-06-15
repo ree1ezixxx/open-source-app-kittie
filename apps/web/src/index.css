@@ -882,6 +882,53 @@ thead .col-app { z-index: 6; }
 .filter-sublabel { font-size: 10.5px; font-weight: 600; color: var(--text-tertiary); margin-top: 2px; }
 .filter-hint { font-size: 11.5px; color: var(--text-tertiary); }
 
+/* filter select popover (Explore category / language) */
+.fselect-wrap { position: relative; }
+.fselect-trigger {
+  display: flex; align-items: center; width: 100%; cursor: pointer;
+  height: 32px; padding: 0 10px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--surface);
+  color: var(--text-secondary); font-size: 12px; font-weight: 550;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
+}
+.fselect-trigger:hover { color: var(--text); border-color: var(--border-strong); }
+.fselect-trigger.open { border-color: var(--border-strong); color: var(--text); }
+.fselect-trigger.active { color: var(--text); }
+.fselect-trigger-label {
+  flex: 1; min-width: 0; text-align: left;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.fselect-trigger-chev {
+  flex: none; width: 14px; height: 14px; margin-left: 6px;
+  color: var(--text-tertiary); transition: transform 0.15s;
+}
+.fselect-trigger.open .fselect-trigger-chev { transform: rotate(180deg); }
+.fselect-backdrop { position: fixed; inset: 0; z-index: 28; }
+.fselect-popover {
+  position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 29;
+  padding: 8px; border-radius: 10px;
+  background: var(--panel); border: 1px solid var(--border); box-shadow: var(--shadow-pop);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.fselect-header { display: flex; flex-direction: column; gap: 8px; }
+.fselect-list {
+  max-height: 240px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 1px;
+  margin: 0 -4px; padding: 0 4px;
+}
+.fselect-item {
+  display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+  padding: 6px 8px; border-radius: 7px; border: none; cursor: pointer;
+  font-size: 12.5px; font-weight: 500; color: var(--text); background: none;
+  transition: background 0.12s;
+}
+.fselect-item:hover { background: var(--surface-hover); }
+.fselect-item.on { background: var(--accent-soft); }
+.fselect-item-label {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.fselect-item-check { flex: none; width: 13px; height: 13px; color: var(--accent); }
+
 /* pills */
 .pill-row, .pill-wrap { display: flex; flex-wrap: wrap; gap: 6px; }
 .fpill {

@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Store } from "@kittie/types";
 import { IconApple, IconGooglePlay, IconFilter } from "../icons";
 import { FilterGroup, SubLabel } from "./FilterGroup";
+import { FilterSelectPopover } from "./FilterSelectPopover";
 import { Pills, TogglePill } from "./Pills";
 import { RangeFilter } from "./RangeFilter";
 import {
@@ -241,35 +242,37 @@ export function ExploreFilterRail({
           active={f.cats.length > 0}
           summary={f.cats.length ? `${f.cats.length} ${catMode === "exclude" ? "excluded" : "included"}` : undefined}
         >
-          <div className="seg-mini">
-            <button className={catMode === "include" ? "on" : ""} onClick={() => onCatMode("include")}>
-              Include
-            </button>
-            <button className={catMode === "exclude" ? "on" : ""} onClick={() => onCatMode("exclude")}>
-              Exclude
-            </button>
-          </div>
-          {categories.length === 0 ? (
-            <div className="filter-hint">Loading categories…</div>
-          ) : (
-            <>
-              <div className="pill-wrap">
-                {categories.map((cat) => (
+          <FilterSelectPopover
+            label="Select categories"
+            items={categories.map((cat) => ({ id: cat, label: `${catEmoji(cat)} ${cat}` }))}
+            selected={f.cats}
+            onToggle={toggleCat}
+            emptyHint="Loading categories…"
+            header={
+              <div className="fselect-header">
+                <div className="seg-mini">
                   <button
-                    key={cat}
-                    className={`fpill ${f.cats.includes(cat) ? "on" : ""}`}
-                    onClick={() => toggleCat(cat)}
+                    type="button"
+                    className={catMode === "include" ? "on" : ""}
+                    onClick={() => onCatMode("include")}
                   >
-                    <span aria-hidden>{catEmoji(cat)}</span> {cat}
+                    Include
                   </button>
-                ))}
-              </div>
-              {f.cats.length > 0 && (
-                <div className="filter-hint">
-                  {f.cats.length} {catMode === "exclude" ? "excluded" : "included"}
+                  <button
+                    type="button"
+                    className={catMode === "exclude" ? "on" : ""}
+                    onClick={() => onCatMode("exclude")}
+                  >
+                    Exclude
+                  </button>
                 </div>
-              )}
-            </>
+              </div>
+            }
+          />
+          {f.cats.length > 0 && (
+            <div className="filter-hint">
+              {f.cats.length} {catMode === "exclude" ? "excluded" : "included"}
+            </div>
           )}
         </FilterGroup>
 
@@ -279,18 +282,12 @@ export function ExploreFilterRail({
           active={langs.length > 0}
           summary={langs.length ? `${langs.length} selected` : undefined}
         >
-          <SubLabel>Select languages</SubLabel>
-          <div className="pill-wrap">
-            {LANGUAGES.map((l) => (
-              <button
-                key={l.code}
-                className={`fpill ${langs.includes(l.code) ? "on" : ""}`}
-                onClick={() => toggleLang(l.code)}
-              >
-                {l.name}
-              </button>
-            ))}
-          </div>
+          <FilterSelectPopover
+            label="Select languages"
+            items={LANGUAGES.map((l) => ({ id: l.code, label: l.name }))}
+            selected={langs}
+            onToggle={toggleLang}
+          />
         </FilterGroup>
 
         {/* 5 — Marketing Signals */}
@@ -323,7 +320,13 @@ export function ExploreFilterRail({
           <SubLabel>Reviews growth window</SubLabel>
           <div className="seg-mini">
             {(["7d", "14d", "30d", "60d", "90d"] as const).map((p) => (
-              <button key={p} className={f.period === p ? "on" : ""} onClick={() => onPatch({ period: p })}>
+              <button
+                key={p}
+                className={f.period === p ? "on" : ""}
+                onClick={() =>
+                  onPatch(p !== "7d" ? { period: p, sort: "growth" } : { period: p, sort: "revenue" })
+                }
+              >
                 {p}
               </button>
             ))}

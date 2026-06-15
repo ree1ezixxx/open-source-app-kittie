@@ -1,7 +1,18 @@
 import { runAppleDiscover, runGoogleExpand, runScore, runSnapshotBulk } from "@kittie/ingest";
+import { invalidateAppReadCaches } from "./services/db-app-service.js";
 import { registerSweep } from "./services/freshness-service.js";
 import { sweepHotIdeas } from "./services/idea-sweep-service.js";
 import { sweepFreshSet } from "./services/review-sweep-service.js";
+
+/** snapshots-daily body — in-process bulk snapshot + score, then cache bust. */
+export async function runSnapshotsDailySweep(): Promise<string> {
+  // CONTEXT.md "Daily cadence": snapshot then score, once per calendar day.
+  // snapshot-bulk also captures chart ranks; same-day reruns overwrite.
+  await runSnapshotBulk();
+  await runScore();
+  invalidateAppReadCaches();
+  return "snapshots + chart ranks + scores refreshed";
+}
 
 /* Freshness scheduler (ADR 0004): every derived dataset registers here.
    Sweeps run serialized in registration order — fastest-cadence first so a
@@ -36,13 +47,7 @@ export function registerAllSweeps(): void {
   registerSweep({
     name: "snapshots-daily",
     cadenceHours: 24,
-    async run() {
-      // CONTEXT.md "Daily cadence": snapshot then score, once per calendar day.
-      // snapshot-bulk also captures chart ranks; same-day reruns overwrite.
-      await runSnapshotBulk();
-      await runScore();
-      return "snapshots + chart ranks + scores refreshed";
-    },
+    run: runSnapshotsDailySweep,
   });
 
   registerSweep({

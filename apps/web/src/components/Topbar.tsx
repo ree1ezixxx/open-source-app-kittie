@@ -9,10 +9,10 @@ import {
   IconGrid,
 } from "../icons";
 import { formatCompact } from "../lib/format";
+import { SEARCH_SCOPE_LABELS, type SearchScope } from "../lib/exploreFilters";
 import type { Theme } from "../lib/theme";
 
-const SEARCH_SCOPES = ["All", "Title", "Developer", "Description"] as const;
-type SearchScope = (typeof SEARCH_SCOPES)[number];
+const SEARCH_SCOPES = Object.keys(SEARCH_SCOPE_LABELS) as SearchScope[];
 
 /** Explore header strip — title, search (+ scope), refresh, theme, export. Filters live in the rail. */
 export function Topbar({
@@ -25,6 +25,8 @@ export function Topbar({
   onToggleTheme,
   search,
   onSearch,
+  searchScope,
+  onSearchScope,
   onRefresh,
   onExportCsv,
   onExportJson,
@@ -39,15 +41,15 @@ export function Topbar({
   onToggleTheme: () => void;
   search: string;
   onSearch: (v: string) => void;
+  searchScope: SearchScope;
+  onSearchScope: (scope: SearchScope) => void;
   onRefresh: () => void;
   onExportCsv: () => void;
   onExportJson: () => void;
 }) {
   const [exportOpen, setExportOpen] = useState(false);
   const [scopeOpen, setScopeOpen] = useState(false);
-  // The REST API has no field-scope param yet — every scope searches All under
-  // the hood; non-All options are visual with a tooltip saying so.
-  const [scope, setScope] = useState<SearchScope>("All");
+  const scopeLabel = SEARCH_SCOPE_LABELS[searchScope];
 
   return (
     <div className="topbar">
@@ -90,7 +92,7 @@ export function Topbar({
             aria-haspopup="menu"
             aria-expanded={scopeOpen}
           >
-            Search in: {scope} <IconChevron />
+            Search in: {scopeLabel} <IconChevron />
           </button>
           {scopeOpen && (
             <div className="export-menu" role="menu">
@@ -98,14 +100,13 @@ export function Topbar({
                 <button
                   key={s}
                   role="menuitem"
-                  title={s === "All" ? undefined : "Field scoping coming soon — searches All for now"}
-                  style={s === scope ? { color: "var(--accent)" } : undefined}
+                  style={s === searchScope ? { color: "var(--accent)" } : undefined}
                   onClick={() => {
-                    setScope(s);
+                    onSearchScope(s);
                     setScopeOpen(false);
                   }}
                 >
-                  {s}
+                  {SEARCH_SCOPE_LABELS[s]}
                 </button>
               ))}
             </div>
