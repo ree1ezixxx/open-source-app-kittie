@@ -34,7 +34,7 @@ Charts need **≥2 distinct `snapshot_date` values**. Running snapshot twice on 
 ## What the pipeline does
 
 1. **`pnpm ingest:seed`** — pull top charts, upsert apps, write **today's** snapshot (includes chart rank).
-2. **`pnpm ingest:snapshot`** — for every tracked app, fetch live review count + rating from store APIs, write **today's** row. Chart rank is copied from the prior snapshot (ranks do not refresh until re-seed).
+2. **`pnpm ingest:snapshot`** — for every tracked app, fetch live review count + rating from store APIs, write **today's** row. Chart rank refreshed from US chart feeds each run (`chart-lookup.ts`); off-chart apps get null rank.
 3. **`pnpm ingest:score`** — run `enrichSnapshotScores` on each app's **latest** snapshot → fills `revenue_estimate`, `downloads_estimate`, `growth_score`, `is_first_mover`.
 
 Growth/trend logic in `@kittie/db` compares snapshot A vs snapshot B N days ago. No second day → flat trends.
@@ -68,7 +68,7 @@ Optional `scripts/daily-ingest.sh` + launchd/cron example in `packages/ingest/RE
 
 | Gap | Detail |
 |-----|--------|
-| **Frozen chart ranks** | `snapshot.ts` copies `chartRank` from prior row. Re-run `pnpm ingest:seed` weekly, or add chart refresh into snapshot/seed job. |
+| **Frozen chart ranks** | ~~Fixed~~ — `snapshot.ts` fetches fresh ranks via `chart-lookup.ts`. Re-run `pnpm ingest:seed` to discover new chart apps. |
 | **Score only latest** | `ingest:score` scores latest snapshot per app. After historical days accumulate, consider scoring each new day's row on write (already happens in `upsertSnapshot` via `enrichSnapshotScores` in `db/apps.ts` — confirm still wired). |
 | **Dev backfill (optional)** | For testing without waiting overnight: script that shifts/copies prior day or writes synthetic prior snapshot. Not for production. |
 
