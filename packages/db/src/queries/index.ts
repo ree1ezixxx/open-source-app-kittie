@@ -38,6 +38,12 @@ export {
   untrackKeyword,
   type TrackedKeywordEntry,
 } from "./tracked-keywords.js";
+export {
+  listTrackedApps,
+  trackApp,
+  untrackApp,
+  type TrackedAppEntry,
+} from "./tracked-apps.js";
 export { getAiGeneration, saveAiGeneration } from "./ai-generations.js";
 export { getSweepState, listSweepStates, recordSweepRun } from "./sweep-state.js";
 export { normalizeChartType, assembleTopCharts, type ChartRow, type TopChartsParams } from "./charts.js";
