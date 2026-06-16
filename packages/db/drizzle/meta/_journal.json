@@ -85,6 +85,13 @@
       "when": 1781298298587,
       "tag": "0011_fair_archangel",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1781616171641,
+      "tag": "0012_wandering_corsair",
+      "breakpoints": true
     }
   ]
 }

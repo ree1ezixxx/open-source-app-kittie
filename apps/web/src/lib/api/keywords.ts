@@ -104,6 +104,51 @@ export async function untrackKeyword(keyword: string, store: Store, country = "U
   if (!res.ok) throw new Error(`Untrack failed (${res.status})`);
 }
 
+// ── Tracked apps (durable, server-persisted — survives reload). PRD #20 ──────
+// Persist-only at this slice (#22): adding an app records it server-side; no
+// keyword generation or rank ingestion yet (slices #23/#24).
+
+export interface TrackedApp {
+  id: string;
+  appId: string;
+  store: Store;
+  country: string;
+  title: string;
+  developer: string;
+  iconUrl: string | null;
+  category: string | null;
+  addedAt: string;
+  /** AI-generated keyword count — zero until slice #23. */
+  generatedKeywordCount: number;
+  /** When rank analysis last ran — null until slice #24. */
+  lastAnalyzedAt: string | null;
+}
+
+export async function fetchTrackedApps(signal?: AbortSignal): Promise<TrackedApp[]> {
+  const res = await fetch(`${BASE}/keywords/tracked-apps`, { signal });
+  if (!res.ok) throw new Error(`Tracked apps fetch failed (${res.status})`);
+  const body = (await res.json()) as { data: TrackedApp[] };
+  return body.data;
+}
+
+/** Persist an app to the tracked list. Idempotent server-side. Returns the entry. */
+export async function trackApp(appId: string, country = "US"): Promise<TrackedApp | null> {
+  const res = await fetch(`${BASE}/keywords/tracked-apps`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ appId, country }),
+  });
+  if (!res.ok) throw new Error(`Track app failed (${res.status})`);
+  const body = (await res.json()) as { data: TrackedApp | null };
+  return body.data;
+}
+
+export async function untrackApp(appId: string, store: Store, country = "US"): Promise<void> {
+  const q = new URLSearchParams({ appId, store, country });
+  const res = await fetch(`${BASE}/keywords/tracked-apps?${q}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(`Untrack app failed (${res.status})`);
+}
+
 /** Batch compare ≤10 keywords — sorted by opportunity score descending (we sort, not the server). */
 export async function compareKeywords(
   terms: { keyword: string; store: Store }[],

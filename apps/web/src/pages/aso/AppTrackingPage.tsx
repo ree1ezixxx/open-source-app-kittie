@@ -5,34 +5,17 @@ import { IconChart, IconClose, IconInfo, IconMoon, IconRank, IconSearch, IconSpa
 import { IconCheck, IconPlus, IconTrash } from "../../components/aso/icons";
 import { AppAvatar, Meter, OpportunityBadge, StorePill } from "../../components/aso/KeywordBits";
 import { listApps } from "../../lib/api";
-import { compareKeywords, type KeywordDifficulty } from "../../lib/api/keywords";
+import {
+  compareKeywords,
+  fetchTrackedApps,
+  trackApp as trackAppApi,
+  untrackApp as untrackAppApi,
+  type KeywordDifficulty,
+  type TrackedApp,
+} from "../../lib/api/keywords";
 import { relativeTime } from "../../lib/format";
 import type { Theme } from "../../lib/theme";
 import "../../styles/aso.css";
-
-interface TrackedApp {
-  id: string;
-  store: Store;
-  title: string;
-  developer: string;
-  iconUrl: string | null;
-  category: string | null;
-  addedAt: string;
-  keywords: string[];
-}
-
-const LS_KEY = "kittie.aso.trackedApps";
-
-function loadTracked(): TrackedApp[] {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as TrackedApp[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
 
 const STOPWORDS = new Set(["the", "and", "for", "with", "app", "apps", "your", "free", "pro", "plus", "lite", "ios", "android"]);
 
@@ -52,23 +35,29 @@ function candidateKeywords(app: TrackedApp): string[] {
 
 export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => void }) {
   const navigate = useNavigate();
-  const [tracked, setTracked] = useState<TrackedApp[]>(() => loadTracked());
+  const [tracked, setTracked] = useState<TrackedApp[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [query, setQuery] = useState("");
   const [searchResults, setSearchResults] = useState<AppListItem[]>([]);
   const [searching, setSearching] = useState(false);
+  // Per-app tracked-keyword selection — UI-only this slice; server-side
+  // keyword persistence lands in #23. Keyed by tracked-app id.
+  const [trackedKeywords, setTrackedKeywords] = useState<Record<string, string[]>>({});
 
   const [opps, setOpps] = useState<KeywordDifficulty[]>([]);
   const [oppLoading, setOppLoading] = useState(false);
   const [oppError, setOppError] = useState<string | null>(null);
 
-  // persist
+  // Load the server-persisted tracked apps (survives reload).
   useEffect(() => {
-    try { localStorage.setItem(LS_KEY, JSON.stringify(tracked)); } catch { /* ignore */ }
-  }, [tracked]);
+    const ctrl = new AbortController();
+    fetchTrackedApps(ctrl.signal).then(setTracked).catch(() => {});
+    return () => ctrl.abort();
+  }, []);
 
-  const selected = tracked.find((t) => t.id === selectedId) ?? null;
+  const selected = tracked.find((t) => t.appId === selectedId) ?? null;
+  const selectedKeywords = selected ? (trackedKeywords[selected.id] ?? []) : [];
 
   // debounced app search for the Add picker
   useEffect(() => {
@@ -106,32 +95,40 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
 
-  function addApp(a: AppListItem) {
-    if (tracked.some((t) => t.id === a.id)) { setSelectedId(a.id); setAdding(false); setQuery(""); return; }
-    const entry: TrackedApp = {
-      id: a.id, store: a.store, title: a.title, developer: a.developer,
-      iconUrl: a.iconUrl, category: a.category,
-      addedAt: new Date().toISOString(), keywords: [],
-    };
-    setTracked((prev) => [entry, ...prev]);
-    setSelectedId(a.id);
+  async function addApp(a: AppListItem) {
+    // Already tracked → just select it (server add is idempotent regardless).
+    if (tracked.some((t) => t.appId === a.id)) {
+      setSelectedId(a.id); setAdding(false); setQuery(""); return;
+    }
     setAdding(false);
     setQuery("");
+    setSelectedId(a.id);
+    try {
+      await trackAppApi(a.id, "US");
+      const fresh = await fetchTrackedApps();
+      setTracked(fresh);
+    } catch {
+      /* leave list as-is on failure; the empty/select states stay coherent */
+    }
   }
 
-  function untrack(id: string) {
-    setTracked((prev) => prev.filter((t) => t.id !== id));
-    if (selectedId === id) setSelectedId(null);
+  async function untrack(appId: string, store: Store) {
+    setTracked((prev) => prev.filter((t) => t.appId !== appId));
+    if (selectedId === appId) setSelectedId(null);
+    try {
+      await untrackAppApi(appId, store, "US");
+    } catch {
+      // Re-sync from the server so the UI reflects the true persisted state.
+      fetchTrackedApps().then(setTracked).catch(() => {});
+    }
   }
 
-  function toggleKeyword(appId: string, kw: string) {
-    setTracked((prev) =>
-      prev.map((t) =>
-        t.id === appId
-          ? { ...t, keywords: t.keywords.includes(kw) ? t.keywords.filter((k) => k !== kw) : [...t.keywords, kw] }
-          : t,
-      ),
-    );
+  function toggleKeyword(rowId: string, kw: string) {
+    setTrackedKeywords((prev) => {
+      const cur = prev[rowId] ?? [];
+      const next = cur.includes(kw) ? cur.filter((k) => k !== kw) : [...cur, kw];
+      return { ...prev, [rowId]: next };
+    });
   }
 
   return (
@@ -197,23 +194,26 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
             </div>
           )}
 
-          {tracked.map((t) => (
-            <button key={t.id} className={`track-app ${t.id === selectedId ? "active" : ""}`} onClick={() => setSelectedId(t.id)}>
-              <AppAvatar title={t.title} iconUrl={t.iconUrl} />
-              <div className="meta">
-                <div className="title">{t.title}</div>
-                <div className="sub">
-                  <span className="flag">🇺🇸</span>
-                  <span>{t.keywords.length} {t.keywords.length === 1 ? "keyword" : "keywords"}</span>
-                  <span>·</span>
-                  <span>{relativeTime(t.addedAt)}</span>
+          {tracked.map((t) => {
+            const kwCount = trackedKeywords[t.id]?.length ?? 0;
+            return (
+              <button key={t.id} className={`track-app ${t.appId === selectedId ? "active" : ""}`} onClick={() => setSelectedId(t.appId)}>
+                <AppAvatar title={t.title} iconUrl={t.iconUrl} />
+                <div className="meta">
+                  <div className="title">{t.title}</div>
+                  <div className="sub">
+                    <span className="flag">🇺🇸</span>
+                    <span>{kwCount} {kwCount === 1 ? "keyword" : "keywords"}</span>
+                    <span>·</span>
+                    <span>{relativeTime(t.addedAt)}</span>
+                  </div>
                 </div>
-              </div>
-              <span className="track-untrack" role="button" aria-label="Untrack" onClick={(e) => { e.stopPropagation(); untrack(t.id); }}>
-                <IconTrash />
-              </span>
-            </button>
-          ))}
+                <span className="track-untrack" role="button" aria-label="Untrack" onClick={(e) => { e.stopPropagation(); untrack(t.appId, t.store); }}>
+                  <IconTrash />
+                </span>
+              </button>
+            );
+          })}
         </div>
 
         {/* right — detail */}
@@ -251,7 +251,7 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
                 <div className="section-label" style={{ margin: 0, display: "flex", alignItems: "center", gap: 7 }}>
                   <IconSpark style={{ width: 13, height: 13, color: "var(--accent)" }} /> Keyword opportunities
                 </div>
-                <span className="section-count">{selected.keywords.length} tracked</span>
+                <span className="section-count">{selectedKeywords.length} tracked</span>
               </div>
 
               {oppError && (
@@ -273,7 +273,7 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
               ) : (
                 <div className="opp-list">
                   {opps.map((kd) => {
-                    const isTracked = selected.keywords.includes(kd.keyword);
+                    const isTracked = selectedKeywords.includes(kd.keyword);
                     return (
                       <div key={kd.keyword} className="opp-row">
                         <span
