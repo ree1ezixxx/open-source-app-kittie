@@ -13,7 +13,9 @@ import {
   getAppByIdFromDb,
   getAppHistoricalsFromDb,
   getAppReviewsFromDb,
+  listCategoryFacetsFromDb,
   searchAppsFromDb,
+  type CategoryFacet,
 } from "./db-app-service.js";
 import { matchesSearch, paginateApps, sortApps, type ScoredAppRow } from "./filter-sort.js";
 
@@ -110,4 +112,18 @@ export async function getAppReviews(id: string): Promise<Review[]> {
   if (await dbHasApps()) return getAppReviewsFromDb(id);
   const fixture = MOCK_APPS.find((a) => a.id === id);
   return fixture?.reviews ?? [];
+}
+
+export async function listCategories(): Promise<CategoryFacet[]> {
+  if (await dbHasApps()) return listCategoryFacetsFromDb();
+  const map = new Map<string, Set<string>>();
+  for (const f of MOCK_APPS) {
+    if (!f.category) continue;
+    const set = map.get(f.category) ?? new Set<string>();
+    set.add(f.store);
+    map.set(f.category, set);
+  }
+  return [...map.entries()]
+    .map(([name, stores]) => ({ name, stores: [...stores] as CategoryFacet["stores"] }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }

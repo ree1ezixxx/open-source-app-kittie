@@ -1,4 +1,5 @@
 import {
+  apps,
   appSnapshots,
   appsWithAppleAds,
   appsWithCreators,
@@ -33,6 +34,7 @@ import type {
   MetaAdCreative,
   PaginatedResponse,
   Review,
+  Store,
 } from "@kittie/types";
 import { getDb } from "../lib/db.js";
 import { matchesSearch, paginateApps, sortApps, type ScoredAppRow } from "./filter-sort.js";
@@ -139,6 +141,27 @@ async function getScoredRows(period: GrowthPeriod): Promise<ScoredAppRow[]> {
 
 export async function dbHasApps(): Promise<boolean> {
   return (await countApps(getDb())) > 0;
+}
+
+export interface CategoryFacet {
+  name: string;
+  /** Stores that have at least one app in this category. */
+  stores: Store[];
+}
+
+/** Distinct categories with the set of stores each appears in (Explore category filter). */
+export async function listCategoryFacetsFromDb(): Promise<CategoryFacet[]> {
+  const rows = await getDb().select({ category: apps.category, store: apps.store }).from(apps);
+  const map = new Map<string, Set<Store>>();
+  for (const r of rows) {
+    if (!r.category) continue;
+    const set = map.get(r.category) ?? new Set<Store>();
+    set.add(r.store as Store);
+    map.set(r.category, set);
+  }
+  return [...map.entries()]
+    .map(([name, stores]) => ({ name, stores: [...stores] }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 // Rank-delta cache — appId → signed chart-rank movement between an app's two

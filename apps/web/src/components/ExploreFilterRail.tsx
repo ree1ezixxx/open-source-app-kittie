@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Store } from "@kittie/types";
-import { IconApple, IconGooglePlay, IconFilter } from "../icons";
+import type { CategoryFacet } from "../lib/api";
+import { IconApple, IconGooglePlay, IconFilter, IconChevron } from "../icons";
 import { FilterGroup, SubLabel } from "./FilterGroup";
 import { FilterSelectPopover } from "./FilterSelectPopover";
 import { Pills, TogglePill } from "./Pills";
@@ -159,7 +160,7 @@ export function ExploreFilterRail({
   onClear,
 }: {
   filters: ExploreFilters;
-  categories: string[];
+  categories: CategoryFacet[];
   catMode: CategoryMode;
   onCatMode: (mode: CategoryMode) => void;
   langs: string[];
@@ -183,6 +184,8 @@ export function ExploreFilterRail({
     onPatch({ source: f.source == null ? (store === "apple" ? "google" : "apple") : undefined });
 
   const signalsActive = f.meta || f.aads || f.creators || f.web || f.email;
+  // Contacts sub-section collapses by default (truth parity); open it if a contact filter is on.
+  const [contactsOpen, setContactsOpen] = useState(f.web || f.email);
 
   return (
     <aside className="filter-rail">
@@ -244,7 +247,13 @@ export function ExploreFilterRail({
         >
           <FilterSelectPopover
             label="Select categories"
-            items={categories.map((cat) => ({ id: cat, label: `${catEmoji(cat)} ${cat}` }))}
+            searchable
+            searchPlaceholder="Search categories…"
+            items={categories.map((c) => ({
+              id: c.name,
+              label: `${catEmoji(c.name)} ${c.name}`,
+              stores: c.stores,
+            }))}
             selected={f.cats}
             onToggle={toggleCat}
             emptyHint="Loading categories…"
@@ -304,11 +313,21 @@ export function ExploreFilterRail({
             <TogglePill on={f.aads} onToggle={() => onPatch({ aads: !f.aads })}>Apple Ads</TogglePill>
             <TogglePill on={f.creators} onToggle={() => onPatch({ creators: !f.creators })}>Creators</TogglePill>
           </div>
-          <SubLabel>Contacts</SubLabel>
-          <div className="pill-wrap">
-            <TogglePill on={f.web} onToggle={() => onPatch({ web: !f.web })}>Has website</TogglePill>
-            <TogglePill on={f.email} onToggle={() => onPatch({ email: !f.email })}>Has email</TogglePill>
-          </div>
+          <button
+            type="button"
+            className={`fsub-toggle ${contactsOpen ? "open" : ""}`}
+            onClick={() => setContactsOpen((o) => !o)}
+            aria-expanded={contactsOpen}
+          >
+            Contacts
+            <IconChevron className="fsub-toggle-chev" />
+          </button>
+          {contactsOpen && (
+            <div className="pill-wrap">
+              <TogglePill on={f.web} onToggle={() => onPatch({ web: !f.web })}>Has website</TogglePill>
+              <TogglePill on={f.email} onToggle={() => onPatch({ email: !f.email })}>Has email</TogglePill>
+            </div>
+          )}
         </FilterGroup>
 
         {/* 6 — Growth Sort */}
