@@ -98,6 +98,36 @@ Schema changes go through `packages/db` only. If ingest or API work needs a new 
 - `main` is **branch-protected** (required status check `check`). Land a lane via **PR → main** once it's
   verified and CI is green — never push to `main` directly.
 
+## Parallel Clone Lanes — Chrome Isolation (evergreen)
+
+When >1 lane clones in parallel, each agent drives the Chrome DevTools MCP. **The MCP drives ONE browser
+instance; two agents on the same Chrome collide over tabs/navigation and burn tokens fighting each other.**
+So each lane gets its **own Chrome on its own debug port + its own profile**. (All lanes may open the same
+truth URL at once — reading a public page never conflicts; the collision is the browser *instance*, not the URL.)
+
+**Slot → port scheme (independent of branch / section / worktree name):**
+- **Primary worktree = slot 0 → port 9222** (the default global chrome-devtools MCP + `~/.kittie-truth-chrome`).
+- **Each additional lane = slot N → port 9222+N** (slot 1 → 9223, slot 2 → 9224, …), profile `~/.kittie-chrome-laneN`.
+
+**Per-lane setup (do once per lane, then never again):**
+1. Launch the lane's isolated Chrome: `bash coordinator/lane-chrome.sh <slot>` (idempotent; slot 0 also
+   works via the existing `coordinator/truth-chrome.sh`). Extra-lane profiles are seeded from the truth
+   profile so they inherit the appkittie.com login. If a lane still lands on a login screen, STOP and ask
+   Rhodri to sign in once in that window — never guess from memory.
+2. Bind the lane's MCP to its port with an **untracked `.mcp.json`** at the worktree root:
+   ```json
+   { "mcpServers": { "chrome-devtools": { "type": "stdio", "command": "npx",
+     "args": ["-y", "chrome-devtools-mcp@latest", "--browserUrl=http://127.0.0.1:<port>"] } } }
+   ```
+   (Slot 0 needs none — it uses the global 9222 default.)
+3. On first boot, confirm via `list_pages` that the attached Chrome shows *this lane's* port/tabs, not 9222.
+
+**Stable-slot principle (this is what makes the above evergreen):** keep the worktree *directories* as
+permanent lane-slots and **rotate the branch inside them** — when a section is done, the slot checks out the
+next section's branch. Same dir, same port, same `.mcp.json`. The section name lives in the *branch*, not the
+dir. The wiring (script + port map + `.mcp.json`) is set once and survives every section rotation; only the
+branch + the section handoff change.
+
 ## Subagents & Token Efficiency
 
 - **No agent fan-outs by default** — build sequentially; token cost beats wall-clock. Fan out only when
