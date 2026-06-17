@@ -515,7 +515,19 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
               ))}
             </div>
           )}
-          {selected ? (
+          {tab === "pending" ? (
+            pending.length > 0 ? (
+              <div className="aso-pending-list">
+                {pending.map((kw) => <PendingCard key={`p-${kw}`} keyword={kw} />)}
+              </div>
+            ) : (
+              <div className="aso-placeholder">
+                <IconKey />
+                <div className="t">No lookups in progress</div>
+                <div className="s">Pending lookups appear here while they resolve.</div>
+              </div>
+            )
+          ) : selected ? (
             <KeywordDetail
               kd={selected}
               onRefresh={() => void refreshKeyword(selected)}
@@ -544,13 +556,17 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
                 />
               )}
             </KeywordDetail>
-          ) : showPending ? (
+          ) : pending.length > 0 ? (
             <PendingCard keyword={pending[0]!} />
           ) : (
             <div className="aso-placeholder">
               <IconKey />
-              <div className="t">Select a keyword</div>
-              <div className="s">Pick a keyword above to see its insights and the apps that rank for it.</div>
+              <div className="t">{results.length > 0 ? "Nothing in this view" : "Select a keyword"}</div>
+              <div className="s">
+                {results.length > 0
+                  ? "No keywords match this filter yet."
+                  : "Pick a keyword above to see its insights and the apps that rank for it."}
+              </div>
             </div>
           )}
         </div>

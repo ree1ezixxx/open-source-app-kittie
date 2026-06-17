@@ -1,4 +1,4 @@
-import { listStaleCatalogKeywords, listStaleTrackedKeywords } from "@kittie/db";
+import { listStaleCatalogKeywords, listStaleTrackedKeywords, touchKeywordChecked } from "@kittie/db";
 
 import { getDb } from "../lib/db.js";
 import { getKeywordDifficulty } from "./keyword-service.js";
@@ -46,6 +46,11 @@ export async function sweepStaleCatalogKeywords(): Promise<{ stale: number; resc
     } catch {
       /* one keyword failing must not abort the sweep */
     }
+    // Always advance the staleness clock — even on failure, or when the lookup
+    // returned a stale row from cache without a live refetch (sync error with a
+    // cached fallback). Otherwise a keyword that can't refresh stays at the head
+    // of the oldest-first queue and is re-picked every run, starving the rest.
+    await touchKeywordChecked(getDb(), keyword, country, store).catch(() => {});
     await sleep(400);
   }
   return { stale: stale.length, rescored };

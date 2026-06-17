@@ -23,6 +23,7 @@ export {
   keywordRowToDifficulty,
   listStaleCatalogKeywords,
   makeKeywordLookupId,
+  touchKeywordChecked,
   upsertKeywordRow,
   type KeywordRow,
 } from "./keywords.js";

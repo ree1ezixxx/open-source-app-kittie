@@ -163,6 +163,7 @@
 }
 .kw-strip-chip .kw-strip-opp { font-weight: 600; color: var(--accent); }
 .kw-strip-chip.pending { opacity: .65; cursor: default; }
+.aso-pending-list { display: flex; flex-direction: column; gap: 10px; max-width: 1180px; margin: 0 auto; }
 
 /* ---- Keyword list card ---- */
 .kw-card {

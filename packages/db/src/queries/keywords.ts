@@ -44,6 +44,26 @@ export async function listStaleCatalogKeywords(
   return rows.map((r) => ({ ...r, store: r.store as Store }));
 }
 
+/**
+ * Advance a keyword's `computedAt` to now without touching its metrics. The
+ * catalog-refresh sweep calls this after every attempt so a keyword that can't
+ * re-sync (store error, or a stale row returned from cache without a refetch)
+ * rotates to the BACK of the oldest-first staleness queue — otherwise it sits at
+ * the head and is re-selected every run, starving the rest of the catalog.
+ * Matches on the natural key (the exact stored keyword/country/store values).
+ */
+export async function touchKeywordChecked(
+  db: Db,
+  keyword: string,
+  country: string,
+  store: Store,
+): Promise<void> {
+  await db
+    .update(keywords)
+    .set({ computedAt: new Date() })
+    .where(and(eq(keywords.keyword, keyword), eq(keywords.country, country), eq(keywords.store, store)));
+}
+
 export async function findKeyword(
   db: Db,
   keyword: string,
