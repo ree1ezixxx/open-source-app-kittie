@@ -27,7 +27,7 @@ import { SyncProgress } from "../../components/reviews/SyncProgress";
 import { OverviewTab, ReviewsTab, SemanticsTab, ImprovementsTab } from "./reviewTabs";
 import {
   IconStar, IconSun, IconMoon, IconInfo, IconSearch, IconRefresh, IconClose,
-  IconChart, IconSpark, IconUsers,
+  IconChart, IconSpark, IconUsers, IconMessage,
 } from "../../icons";
 
 /** Sentinel id for the cross-app rollup entry in the rail. */
@@ -173,20 +173,24 @@ export function ReviewsPage({ theme, onToggleTheme }: { theme: Theme; onToggleTh
   return (
     <main className="main rv-page">
       <PageHeader
-        icon={<IconStar style={{ width: 18, height: 18 }} />}
+        icon={<IconMessage style={{ width: 18, height: 18 }} />}
         title="Reviews"
         subtitle="Monitor reviews, sentiment & AI insights across your apps"
         actions={
-          <>
-            <button className="btn" onClick={() => setHowto((v) => !v)}>
-              <IconInfo /> How it works
-            </button>
-            <button className="icon-btn" onClick={onToggleTheme} aria-label="Toggle theme">
-              {theme === "dark" ? <IconSun /> : <IconMoon />}
-            </button>
-          </>
+          <button className="icon-btn" onClick={onToggleTheme} aria-label="Toggle theme">
+            {theme === "dark" ? <IconSun /> : <IconMoon />}
+          </button>
         }
       />
+
+      {/* truth: lime info pill below the header (not a header action) */}
+      <button
+        className={`rv-howto-pill ${howto ? "on" : ""}`}
+        onClick={() => setHowto((v) => !v)}
+        aria-expanded={howto}
+      >
+        <IconInfo style={{ width: 14, height: 14 }} /> How review monitoring works
+      </button>
 
       {howto && <HowItWorks onClose={() => setHowto(false)} />}
 

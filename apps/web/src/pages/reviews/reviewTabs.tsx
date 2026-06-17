@@ -86,11 +86,11 @@ const topicColor = (i: number) => SERIES_PALETTE[i % SERIES_PALETTE.length] ?? "
 
 const PERIODS: { label: string; days: number | null }[] = [
   { label: "All", days: null },
-  { label: "7d", days: 7 },
-  { label: "14d", days: 14 },
-  { label: "30d", days: 30 },
-  { label: "90d", days: 90 },
-  { label: "180d", days: 180 },
+  { label: "7 days", days: 7 },
+  { label: "14 days", days: 14 },
+  { label: "30 days", days: 30 },
+  { label: "90 days", days: 90 },
+  { label: "180 days", days: 180 },
 ];
 
 const INTERIM_NOTE =
@@ -221,7 +221,9 @@ export function ReviewsTab({ tagged }: { tagged: TaggedReview[] }) {
   // Feed filters all live in the URL — reload-safe + shareable, like truth (?sentiment=…).
   const rating = (sp.get("rating") ?? "all") as RatingFilter;
   const sentiment = (sp.get("sentiment") ?? "all") as SentFilter;
-  const days = sp.get("period") ? Number(sp.get("period")) : null;
+  // truth defaults the feed to a 30-day window; "all" is an explicit sentinel
+  const periodParam = sp.get("period");
+  const days = periodParam === "all" ? null : periodParam ? Number(periodParam) : 30;
   const q = sp.get("q") ?? "";
   const topic = sp.get("topic");
   const area = sp.get("improvementArea");
@@ -288,7 +290,7 @@ export function ReviewsTab({ tagged }: { tagged: TaggedReview[] }) {
         <div className="rv-growth-periods">
           <span className="rv-period-label">Period:</span>
           {PERIODS.map((p) => (
-            <button key={p.label} className={`rv-chip ${days === p.days ? "on" : ""}`} onClick={() => update({ period: p.days ? String(p.days) : null })}>{p.label}</button>
+            <button key={p.label} className={`rv-chip ${days === p.days ? "on" : ""}`} onClick={() => update({ period: p.days == null ? "all" : String(p.days) })}>{p.label}</button>
           ))}
         </div>
         <div className="rv-growth-empty">No historical review metrics yet</div>
