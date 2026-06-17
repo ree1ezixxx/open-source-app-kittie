@@ -14,6 +14,13 @@ import {
   generateJson,
   isGeminiConfigured,
 } from "../lib/gemini.js";
+import {
+  BLUEPRINT_SCHEMA_VERSION,
+  parseMarketing,
+  parseOpportunity,
+  type IdeaMarketing,
+  type IdeaOpportunity,
+} from "./idea-blueprint.js";
 import { selectIdeaSources } from "./idea-gate.js";
 
 /* ============================================================
@@ -58,6 +65,8 @@ interface GeneratedIdea {
     mvpScope: string;
     thirdPartyServices: string[];
   };
+  opportunity: IdeaOpportunity;
+  marketing: IdeaMarketing;
 }
 
 const IDEA_CATEGORIES = [
@@ -117,6 +126,54 @@ const IDEA_SCHEMA = {
         "thirdPartyServices",
       ],
     },
+    opportunity: {
+      type: "object",
+      properties: {
+        summary: { type: "string", description: "2-3 sentence opportunity thesis for the new idea" },
+        whyThisApp: { type: "string", description: "Why this specific source app is worth deriving from" },
+        marketSizeInsight: { type: "string", description: "Qualitative read on how big the demand is" },
+        painPoints: { type: "array", items: { type: "string" }, description: "Real user pain points (from the complaints)" },
+        featureGaps: { type: "array", items: { type: "string" }, description: "Gaps in the incumbent a new app can win on" },
+        targetAudience: { type: "string" },
+        monetizationStrategy: { type: "string" },
+        competitiveAdvantages: { type: "array", items: { type: "string" } },
+      },
+      required: [
+        "summary",
+        "whyThisApp",
+        "marketSizeInsight",
+        "painPoints",
+        "featureGaps",
+        "targetAudience",
+        "monetizationStrategy",
+        "competitiveAdvantages",
+      ],
+    },
+    marketing: {
+      type: "object",
+      properties: {
+        marketingStrategy: { type: "string", description: "Overall go-to-market / growth approach" },
+        marketingPlatforms: { type: "array", items: { type: "string" } },
+        contentHooks: { type: "array", items: { type: "string" }, description: "Concrete post/ad angles" },
+        ugcFormats: { type: "array", items: { type: "string" } },
+        campaignIdeas: { type: "array", items: { type: "string" } },
+        creatorTypes: { type: "array", items: { type: "string" } },
+        keySellingPoints: { type: "array", items: { type: "string" } },
+        asoKeywords: { type: "array", items: { type: "string" }, description: "Seed ASO keywords for the listing" },
+        goToMarket: { type: "string", description: "Sequenced launch plan" },
+      },
+      required: [
+        "marketingStrategy",
+        "marketingPlatforms",
+        "contentHooks",
+        "ugcFormats",
+        "campaignIdeas",
+        "creatorTypes",
+        "keySellingPoints",
+        "asoKeywords",
+        "goToMarket",
+      ],
+    },
   },
   required: [
     "sourceIndex",
@@ -127,6 +184,8 @@ const IDEA_SCHEMA = {
     "needsDatabase",
     "needsAi",
     "blueprint",
+    "opportunity",
+    "marketing",
   ],
 };
 
@@ -172,9 +231,13 @@ function buildBatchPrompt(sources: Array<{ c: IdeaCandidate; complaints: string[
     "",
     `Return JSON: { "ideas": [...] } with EXACTLY ${sources.length} entries, one per source app,`,
     "each with its sourceIndex (0-based, matching the numbering above), a concise title, a 2-3",
-    "sentence summary, an ideaCategory from the allowed list, the three blueprint need flags, and a",
-    "full blueprint (difficulty + reasoning, timelineWeeks, requirements, MVP/key/V2 features,",
-    "architecture, techStack, mvpScope, thirdPartyServices). Keep features concrete and buildable by a solo dev.",
+    "sentence summary, an ideaCategory from the allowed list, the three blueprint need flags, and:",
+    "1. blueprint — difficulty + reasoning, timelineWeeks, requirements, MVP/key/V2 features,",
+    "   architecture, techStack, mvpScope, thirdPartyServices. Concrete and buildable by a solo dev.",
+    "2. opportunity — summary, whyThisApp, marketSizeInsight, painPoints (ground these in the source",
+    "   app's complaints above), featureGaps, targetAudience, monetizationStrategy, competitiveAdvantages.",
+    "3. marketing — marketingStrategy, marketingPlatforms, contentHooks, ugcFormats, campaignIdeas,",
+    "   creatorTypes, keySellingPoints, asoKeywords, goToMarket. Specific and actionable, not generic.",
   );
   return lines.join("\n");
 }
@@ -229,7 +292,14 @@ export async function sweepHotIdeas(
           needsBackend: idea.needsBackend,
           needsDatabase: idea.needsDatabase,
           needsAi: idea.needsAi,
-          blueprint: JSON.stringify(idea.blueprint),
+          // v2 blueprint: building plan (flat) + validated opportunity + marketing,
+          // version-stamped so the catalog-upgrade sweep can spot legacy rows.
+          blueprint: JSON.stringify({
+            ...idea.blueprint,
+            schemaVersion: BLUEPRINT_SCHEMA_VERSION,
+            opportunity: parseOpportunity(idea.opportunity),
+            marketing: parseMarketing(idea.marketing),
+          }),
           reviewCount: source.reviewCount,
           rating: source.rating,
           downloadsEstimate: source.downloadsEstimate,
