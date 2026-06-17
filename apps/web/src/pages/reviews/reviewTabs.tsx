@@ -29,7 +29,7 @@ import {
 } from "../../lib/api/reviewIntel";
 import { TrendChart, type TrendSeries } from "../../components/reviews/TrendChart";
 import { EmptyState, MockNotice } from "../../components/reviews/primitives";
-import { formatCompact, relativeTime } from "../../lib/format";
+import { formatCompact } from "../../lib/format";
 import { IconStar, IconSearch, IconSpark, IconChart, IconUsers, IconRefresh } from "../../icons";
 
 /* ---- tiny star row ---- */
@@ -74,6 +74,14 @@ function sent3(s: Sentiment4): Sent3 {
 }
 const SENT3_COLOR: Record<Sent3, string> = { positive: "#5fd08a", negative: "#ff7a6b", mixed: "#f5a623" };
 const SENT3_LABEL: Record<Sent3, string> = { positive: "Positive", negative: "Negative", mixed: "Mixed" };
+// 4-way (truth parity for the Feed): Neutral is its own bucket, not folded into Mixed.
+const SENT_COLOR: Record<Sentiment4, string> = { positive: "#5fd08a", neutral: "#9a9aa3", negative: "#ff7a6b", mixed: "#f5a623" };
+const SENT_LABEL: Record<Sentiment4, string> = { positive: "Positive", neutral: "Neutral", negative: "Negative", mixed: "Mixed" };
+/** Absolute review date, e.g. "Jun 16, 2026" (truth shows absolute, not relative). */
+function fmtReviewDate(iso: string): string {
+  const d = new Date(iso);
+  return isNaN(+d) ? "" : d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
 const topicColor = (i: number) => SERIES_PALETTE[i % SERIES_PALETTE.length] ?? "#888";
 
 const PERIODS: { label: string; days: number | null }[] = [
@@ -206,24 +214,35 @@ export function OverviewTab({ tagged, appsMonitored }: { tagged: TaggedReview[];
 /* ============================================================ Reviews (feed) */
 type RatingFilter = "all" | "5" | "4" | "3" | "2" | "1";
 type SentFilter = "all" | Sentiment4;
-type ReviewSort = "newest" | "oldest" | "highest" | "lowest";
 
 export function ReviewsTab({ tagged }: { tagged: TaggedReview[] }) {
   const [sp, setSp] = useSearchParams();
-  const [rating, setRating] = useState<RatingFilter>("all");
-  const [sentiment, setSentiment] = useState<SentFilter>("all");
-  const [days, setDays] = useState<number | null>(null);
-  const [sort, setSort] = useState<ReviewSort>("newest");
-  const [q, setQ] = useState("");
 
-  // deep-link filters (?topic= / ?area=) — Improvements/Semantics drill into here
+  // Feed filters all live in the URL — reload-safe + shareable, like truth (?sentiment=…).
+  const rating = (sp.get("rating") ?? "all") as RatingFilter;
+  const sentiment = (sp.get("sentiment") ?? "all") as SentFilter;
+  const days = sp.get("period") ? Number(sp.get("period")) : null;
+  const q = sp.get("q") ?? "";
   const topic = sp.get("topic");
-  const area = sp.get("area");
-  const setParam = (key: "topic" | "area", val: string | null) => {
+  const area = sp.get("improvementArea");
+  const page = Math.max(1, Number(sp.get("page") || "1"));
+  const PAGE_SIZE = 20;
+  const FACET_CAP = 8; // truth shows ~8 facet chips then "+N more"
+
+  // single URL writer; any filter change resets pagination unless keepPage
+  const update = (patch: Record<string, string | null>, keepPage = false) => {
     const next = new URLSearchParams(sp);
-    if (val) next.set(key, val); else next.delete(key);
+    for (const [k, v] of Object.entries(patch)) {
+      if (v == null || v === "" || v === "all") next.delete(k);
+      else next.set(k, v);
+    }
+    if (!keepPage) next.delete("page");
     setSp(next, { replace: true });
   };
+
+  const [growthMetric, setGrowthMetric] = useState<"new" | "total">("total");
+  const [topicsOpen, setTopicsOpen] = useState(false);
+  const [impsOpen, setImpsOpen] = useState(false);
 
   const periodSet = useMemo(() => withinPeriod(tagged, days), [tagged, days]);
   const sFacet = useMemo(() => sentimentCounts(periodSet), [periodSet]);
@@ -233,130 +252,154 @@ export function ReviewsTab({ tagged }: { tagged: TaggedReview[] }) {
   const filtered = useMemo(() => {
     let list = periodSet;
     if (rating !== "all") list = list.filter((t) => Math.round(t.review.rating) === Number(rating));
-    if (sentiment !== "all") list = list.filter((t) => sent3(t.tags.sentiment) === sentiment);
+    if (sentiment !== "all") list = list.filter((t) => t.tags.sentiment === sentiment);
     if (topic) list = list.filter((t) => t.tags.topics.includes(topic));
     if (area) list = list.filter((t) => t.tags.improvementAreas.includes(area));
     if (q.trim()) {
       const n = q.trim().toLowerCase();
       list = list.filter((t) => (t.review.title ?? "").toLowerCase().includes(n) || t.review.body.toLowerCase().includes(n));
     }
-    const sorted = [...list];
-    sorted.sort((a, b) => {
-      switch (sort) {
-        case "oldest": return +new Date(a.review.reviewedAt) - +new Date(b.review.reviewedAt);
-        case "highest": return b.review.rating - a.review.rating;
-        case "lowest": return a.review.rating - b.review.rating;
-        default: return +new Date(b.review.reviewedAt) - +new Date(a.review.reviewedAt);
-      }
-    });
-    return sorted;
-  }, [periodSet, rating, sentiment, topic, area, q, sort]);
+    return [...list].sort((a, b) => +new Date(b.review.reviewedAt) - +new Date(a.review.reviewedAt));
+  }, [periodSet, rating, sentiment, topic, area, q]);
 
-  const SENTS: SentFilter[] = ["all", "positive", "negative", "mixed"];
-  // 3-way counts: neutral folds into mixed.
-  const sFacet3 = { positive: sFacet.positive, negative: sFacet.negative, mixed: sFacet.mixed + sFacet.neutral };
+  const total = filtered.length;
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount);
+  const start = total === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1;
+  const end = Math.min(safePage * PAGE_SIZE, total);
+  const pageItems = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+  // Truth order: All / Positive / Negative / Neutral / Mixed (5-way, Neutral distinct).
+  const SENTS: SentFilter[] = ["all", "positive", "negative", "neutral", "mixed"];
+  const tShown = topicsOpen ? tFacets : tFacets.slice(0, FACET_CAP);
+  const iShown = impsOpen ? iFacets : iFacets.slice(0, FACET_CAP);
 
   return (
     <div className="rv-reviews">
-      {/* period */}
-      <div className="rv-period">
-        <span className="rv-period-label">Period</span>
-        {PERIODS.map((p) => (
-          <button key={p.label} className={`rv-chip ${days === p.days ? "on" : ""}`} onClick={() => setDays(p.days)}>{p.label}</button>
-        ))}
+      {/* Review Growth — historical metrics accrue from daily snapshots; empty until then (matches truth) */}
+      <div className="rv-card rv-growth">
+        <div className="rv-growth-head">
+          <h3 className="rv-card-title">Review Growth</h3>
+          <div className="rv-rating-seg rv-growth-toggle">
+            <button className={`rv-seg-btn ${growthMetric === "new" ? "on" : ""}`} onClick={() => setGrowthMetric("new")}>New</button>
+            <button className={`rv-seg-btn ${growthMetric === "total" ? "on" : ""}`} onClick={() => setGrowthMetric("total")}>Total</button>
+          </div>
+        </div>
+        <div className="rv-growth-periods">
+          <span className="rv-period-label">Period:</span>
+          {PERIODS.map((p) => (
+            <button key={p.label} className={`rv-chip ${days === p.days ? "on" : ""}`} onClick={() => update({ period: p.days ? String(p.days) : null })}>{p.label}</button>
+          ))}
+        </div>
+        <div className="rv-growth-empty">No historical review metrics yet</div>
       </div>
 
-      {/* rating + sentiment + sort + search */}
+      {/* search + rating + sentiment */}
       <div className="rv-filters">
+        <div className="search rv-search">
+          <IconSearch />
+          <input placeholder="Search reviews…" value={q} onChange={(e) => update({ q: e.target.value || null })} />
+        </div>
         <div className="rv-rating-seg">
           {(["all", "5", "4", "3", "2", "1"] as RatingFilter[]).map((r) => (
-            <button key={r} className={`rv-seg-btn ${rating === r ? "on" : ""}`} onClick={() => setRating(r)}>
+            <button key={r} className={`rv-seg-btn ${rating === r ? "on" : ""}`} onClick={() => update({ rating: r })}>
               {r === "all" ? "All" : <>{r}<IconStar style={{ width: 11, height: 11, color: rating === r ? "#f5c451" : "currentColor" }} /></>}
             </button>
           ))}
         </div>
         <div className="rv-rating-seg">
           {SENTS.map((s) => (
-            <button key={s} className={`rv-seg-btn ${sentiment === s ? "on" : ""}`} onClick={() => setSentiment(s)}>
-              {s === "all" ? "All" : SENT3_LABEL[s as Sent3]}
-              {s !== "all" && <span className="rv-seg-n">{sFacet3[s as Sent3]}</span>}
+            <button key={s} className={`rv-seg-btn ${sentiment === s ? "on" : ""}`} onClick={() => update({ sentiment: s })}>
+              {s === "all" ? "All" : SENT_LABEL[s as Sentiment4]}
+              {s !== "all" && <span className="rv-seg-n">{sFacet[s as Sentiment4]}</span>}
             </button>
           ))}
         </div>
-        <div className="select">
-          <select value={sort} onChange={(e) => setSort(e.target.value as ReviewSort)}>
-            <option value="newest">Newest first</option>
-            <option value="oldest">Oldest first</option>
-            <option value="highest">Highest rated</option>
-            <option value="lowest">Lowest rated</option>
-          </select>
-        </div>
-        <div className="search rv-search">
-          <IconSearch />
-          <input placeholder="Search review text…" value={q} onChange={(e) => setQ(e.target.value)} />
-        </div>
-        <span className="rv-filter-count">{formatCompact(filtered.length)} shown</span>
       </div>
 
-      {/* topic facets — single scrollable lane, not a wrapping wall of chips */}
+      {/* topic facets */}
       {tFacets.length > 0 && (
-        <div className="rv-facets rv-facets-scroll">
+        <div className="rv-facets">
           <span className="rv-facet-label">Topics</span>
-          <button className={`rv-chip ${!topic ? "on" : ""}`} onClick={() => setParam("topic", null)}>All</button>
-          {tFacets.map((f) => (
-            <button key={f.label} className={`rv-chip ${topic === f.label ? "on" : ""}`} onClick={() => setParam("topic", topic === f.label ? null : f.label)}>
+          <button className={`rv-chip ${!topic ? "on" : ""}`} onClick={() => update({ topic: null })}>All</button>
+          {tShown.map((f) => (
+            <button key={f.label} className={`rv-chip ${topic === f.label ? "on" : ""}`} onClick={() => update({ topic: topic === f.label ? null : f.label })}>
               {f.label}<span className="rv-chip-n">{f.count}</span>
             </button>
           ))}
+          {tFacets.length > FACET_CAP && (
+            <button className="rv-facet-more" onClick={() => setTopicsOpen((v) => !v)}>
+              {topicsOpen ? "Show less" : `+${tFacets.length - FACET_CAP} more`}
+            </button>
+          )}
         </div>
       )}
 
-      {/* improvement facets — same scrollable lane */}
+      {/* improvement facets */}
       {iFacets.length > 0 && (
-        <div className="rv-facets rv-facets-scroll">
+        <div className="rv-facets">
           <span className="rv-facet-label">Improvements</span>
-          <button className={`rv-chip ${!area ? "on" : ""}`} onClick={() => setParam("area", null)}>All</button>
-          {iFacets.map((f) => (
-            <button key={f.label} className={`rv-chip ${area === f.label ? "on" : ""}`} onClick={() => setParam("area", area === f.label ? null : f.label)}>
+          <button className={`rv-chip ${!area ? "on" : ""}`} onClick={() => update({ improvementArea: null })}>All</button>
+          {iShown.map((f) => (
+            <button key={f.label} className={`rv-chip ${area === f.label ? "on" : ""}`} onClick={() => update({ improvementArea: area === f.label ? null : f.label })}>
               {f.label}<span className="rv-chip-n">{f.count}</span>
             </button>
           ))}
+          {iFacets.length > FACET_CAP && (
+            <button className="rv-facet-more" onClick={() => setImpsOpen((v) => !v)}>
+              {impsOpen ? "Show less" : `+${iFacets.length - FACET_CAP} more`}
+            </button>
+          )}
         </div>
       )}
 
-      {filtered.length === 0 ? (
+      {total === 0 ? (
         <EmptyState
           icon={<IconSearch />}
           title="No reviews match these filters"
           sub="Try clearing a filter or widening the period."
         />
       ) : (
-        <ul className="rv-review-list">
-          {filtered.map((t) => {
-            const r = t.review;
-            return (
-              <li className="rv-review" key={r.id}>
-                <div className="rv-review-top">
-                  <Stars value={Math.round(r.rating)} />
-                  {r.title && <span className="rv-review-title">{r.title}</span>}
-                  <span className="rv-review-date">{relativeTime(r.reviewedAt)}</span>
-                </div>
-                <p className="rv-review-body">{r.body}</p>
-                <div className="rv-review-foot">
-                  <span className="rv-rev-sent" style={{ color: SENT3_COLOR[sent3(t.tags.sentiment)] }}>
-                    <i style={{ background: SENT3_COLOR[sent3(t.tags.sentiment)] }} />{SENT3_LABEL[sent3(t.tags.sentiment)]}
-                  </span>
-                  {t.tags.topics.slice(0, 3).map((tp) => (
-                    <button key={tp} className="rv-rev-topic" onClick={() => setParam("topic", tp)}>{tp}</button>
-                  ))}
-                  <span className="rv-review-author">{r.author ?? "Anonymous"}</span>
-                  <span className="rv-dot">·</span>
-                  <span>{r.country}</span>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+        <>
+          <div className="rv-feed-grid">
+            {pageItems.map((t) => {
+              const r = t.review;
+              const tags = [...t.tags.topics, ...t.tags.improvementAreas].slice(0, 5);
+              const who = (r.author ?? "Anonymous").trim() || "Anonymous";
+              return (
+                <article className="rv-rcard" key={r.id}>
+                  <div className="rv-rcard-head">
+                    <Stars value={Math.round(r.rating)} />
+                    <span className="rv-rcard-sent" style={{ color: SENT_COLOR[t.tags.sentiment], borderColor: SENT_COLOR[t.tags.sentiment] }}>
+                      {SENT_LABEL[t.tags.sentiment]}
+                    </span>
+                  </div>
+                  {r.title && <h4 className="rv-rcard-title">{r.title}</h4>}
+                  <p className="rv-rcard-body">{r.body}</p>
+                  {tags.length > 0 && (
+                    <div className="rv-rcard-tags">
+                      {tags.map((tp) => (
+                        <button key={tp} className="rv-rev-topic" onClick={() => update({ topic: tp })}>{tp}</button>
+                      ))}
+                    </div>
+                  )}
+                  <div className="rv-rcard-author">
+                    <span className="rv-rcard-avatar" aria-hidden>{who.charAt(0).toUpperCase()}</span>
+                    <span className="rv-rcard-name">{who}</span>
+                    <span className="rv-rcard-date">{fmtReviewDate(r.reviewedAt)}</span>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+          <div className="rv-pager">
+            <span className="rv-pager-info">Showing <b>{start}</b>–<b>{end}</b> of <b>{formatCompact(total)}</b></span>
+            <div className="rv-pager-btns">
+              <button className="rv-pager-btn" disabled={safePage <= 1} onClick={() => update({ page: String(safePage - 1) }, true)} aria-label="Previous page">‹</button>
+              <button className="rv-pager-btn" disabled={safePage >= pageCount} onClick={() => update({ page: String(safePage + 1) }, true)} aria-label="Next page">›</button>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );
@@ -523,7 +566,7 @@ export function ImprovementsTab({ tagged, onRefresh, refreshing }: { tagged: Tag
                 <button
                   className="rv-area"
                   key={a.id}
-                  onClick={() => navigate(`/reviews/reviews?area=${encodeURIComponent(a.category)}`)}
+                  onClick={() => navigate(`/reviews/feed?improvementArea=${encodeURIComponent(a.category)}`)}
                   title={`See the ${a.mentionCount} review${a.mentionCount === 1 ? "" : "s"} about ${a.category}`}
                 >
                   <div className="rv-area-top">

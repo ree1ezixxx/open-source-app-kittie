@@ -1,5 +1,5 @@
 /* ============================================================
-   Lane D — Reviews page. /reviews/:tab  (overview|reviews|semantics|improvements)
+   Lane D — Reviews page. /reviews/:tab  (overview|feed|semantics|improvements)
    Monitor reviews, sentiment & AI insights.
 
    REAL: review text + rating distribution (POST /reviews).
@@ -35,7 +35,7 @@ const ALL_APPS = "__all__";
 
 const TABS: TabDef[] = [
   { id: "overview", label: "Overview", icon: <IconChart style={{ width: 14, height: 14 }} /> },
-  { id: "reviews", label: "Reviews", icon: <IconUsers style={{ width: 14, height: 14 }} /> },
+  { id: "feed", label: "Reviews", icon: <IconUsers style={{ width: 14, height: 14 }} /> },
   { id: "semantics", label: "Semantics", icon: <IconSearch style={{ width: 14, height: 14 }} /> },
   { id: "improvements", label: "Improvements", icon: <IconSpark style={{ width: 14, height: 14 }} /> },
 ];
@@ -163,7 +163,7 @@ export function ReviewsPage({ theme, onToggleTheme }: { theme: Theme; onToggleTh
   }
 
   return (
-    <main className="main">
+    <main className="main rv-page">
       <PageHeader
         icon={<IconStar style={{ width: 18, height: 18 }} />}
         title="Reviews"
@@ -285,7 +285,7 @@ export function ReviewsPage({ theme, onToggleTheme }: { theme: Theme; onToggleTh
                   <ReviewsSkeleton />
                 ) : activeTab === "overview" ? (
                   <OverviewTab tagged={tagged} appsMonitored={monitored.length} />
-                ) : activeTab === "reviews" ? (
+                ) : activeTab === "feed" ? (
                   <ReviewsTab tagged={tagged} />
                 ) : activeTab === "semantics" ? (
                   <SemanticsTab tagged={tagged} onRefresh={refresh} refreshing={syncing || loading} />
