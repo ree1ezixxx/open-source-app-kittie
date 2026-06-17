@@ -29,9 +29,9 @@ import {
   type DimensionTimeSeries,
 } from "../../lib/api/reviewIntel";
 import { TrendChart, type TrendSeries } from "../../components/reviews/TrendChart";
-import { EmptyState, MockNotice } from "../../components/reviews/primitives";
+import { EmptyState } from "../../components/reviews/primitives";
 import { formatCompact } from "../../lib/format";
-import { IconStar, IconSearch, IconSpark, IconChart, IconUsers, IconRefresh, IconMessage, IconExternal } from "../../icons";
+import { IconStar, IconSearch, IconSpark, IconChart, IconUsers, IconMessage, IconExternal } from "../../icons";
 
 /* ---- tiny star row ---- */
 function Stars({ value, size = 12 }: { value: number; size?: number }) {
@@ -47,35 +47,9 @@ function Stars({ value, size = 12 }: { value: number; size?: number }) {
   );
 }
 
-/* tiny inline trend line — replaces the awkward topic-timeline matrix */
-function Sparkline({ values, color }: { values: number[]; color: string }) {
-  const n = values.length;
-  if (n < 2) return <span className="rv-spark-empty">—</span>;
-  const max = Math.max(1, ...values);
-  const W = 84, H = 22, p = 2;
-  const x = (i: number) => p + (i / (n - 1)) * (W - 2 * p);
-  const y = (v: number) => p + (1 - v / max) * (H - 2 * p);
-  const d = values.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(" ");
-  return (
-    <svg className="rv-spark" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
-      <path d={d} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-/* Sentiment is a 3-way indicator: Positive (green), Negative (red), Mixed
-   (orange). The classifier's "neutral" folds into Mixed so there are exactly
-   three buckets, matching the reference. Topics get their OWN distinct colours
-   (SERIES_PALETTE) — sentiment colour and topic colour are separate systems. */
-type Sent3 = "positive" | "negative" | "mixed";
-function sent3(s: Sentiment4): Sent3 {
-  if (s === "positive") return "positive";
-  if (s === "negative") return "negative";
-  return "mixed"; // neutral + mixed
-}
-const SENT3_COLOR: Record<Sent3, string> = { positive: "#5fd08a", negative: "#ff7a6b", mixed: "#f5a623" };
-const SENT3_LABEL: Record<Sent3, string> = { positive: "Positive", negative: "Negative", mixed: "Mixed" };
-// 4-way (truth parity for the Feed): Neutral is its own bucket, not folded into Mixed.
+/* Sentiment is a 4-way indicator (truth parity): Positive (green), Neutral
+   (grey), Negative (red), Mixed (orange). Topics get their OWN distinct
+   colours (SERIES_PALETTE) — sentiment colour and topic colour are separate. */
 const SENT_COLOR: Record<Sentiment4, string> = { positive: "#5fd08a", neutral: "#9a9aa3", negative: "#ff7a6b", mixed: "#f5a623" };
 const SENT_LABEL: Record<Sentiment4, string> = { positive: "Positive", neutral: "Neutral", negative: "Negative", mixed: "Mixed" };
 /** Absolute review date, e.g. "Jun 16, 2026" (truth shows absolute, not relative). */
@@ -94,8 +68,6 @@ const PERIODS: { label: string; days: number | null }[] = [
   { label: "180 days", days: 180 },
 ];
 
-const INTERIM_NOTE =
-  "Topics are tagged by an interim keyword classifier, so the surface is live — counts, sentiment and ratings are real aggregates over the loaded reviews. Categorisation accuracy sharpens once the AI model is enabled.";
 
 /** Convert a dimension time-series into multi-series trend-chart input.
     Each topic gets its own distinct colour (like the reference) so lines are
@@ -562,27 +534,15 @@ function PeriodChips({
   refreshing?: boolean;
   children?: React.ReactNode;
 }) {
+  // Refresh lives beside the app selector (truth) — not in the period row.
+  void onRefresh; void refreshing;
   return (
     <div className="rv-period">
-      <span className="rv-period-label">Period</span>
+      <span className="rv-period-label">Period:</span>
       {PERIODS.map((p) => (
         <button key={p.label} className={`rv-chip ${days === p.days ? "on" : ""}`} onClick={() => onChange(p.days)}>{p.label}</button>
       ))}
       {children}
-      {onRefresh && (
-        <>
-          <span className="rv-period-spacer" />
-          <button
-            className="rv-refresh"
-            onClick={onRefresh}
-            disabled={refreshing}
-            title="Fetch latest reviews for this app"
-          >
-            <IconRefresh className={refreshing ? "rv-spin" : ""} style={{ width: 13, height: 13 }} />
-            {refreshing ? "Refreshing…" : "Refresh"}
-          </button>
-        </>
-      )}
     </div>
   );
 }
@@ -592,54 +552,57 @@ export function SemanticsTab({ tagged, onRefresh, refreshing }: { tagged: Tagged
   const [days, setDays] = useState<number | null>(null);
   const ts = useMemo(() => topicTimeSeries(tagged, days), [tagged, days]);
   const trend = useMemo(() => toTrend(ts), [ts]);
-  const maxMentions = Math.max(1, ...ts.rows.map((r) => r.totalMentions));
   const gran = GRANULARITY_LABEL[ts.granularity];
 
   return (
     <div className="rv-semantics">
       <PeriodChips days={days} onChange={setDays} onRefresh={onRefresh} refreshing={refreshing} />
-      <MockNotice>{INTERIM_NOTE}</MockNotice>
 
       {ts.rows.length === 0 ? (
         <EmptyState icon={<IconSearch />} title="No topics in this period" sub="Widen the period or load more reviews to surface themes." />
       ) : (
         <>
-          {/* Topic trends chart */}
+          {/* Topic Trends chart */}
           <section className="rv-card">
             <div className="rv-card-head">
-              <div className="rv-card-title">Topic trends</div>
+              <div className="rv-card-title">Topic Trends <span className="rv-mock-badge">interim model</span></div>
               <span className="rv-card-meta">mentions / {gran} · top {Math.min(4, ts.rows.length)} shown · hover a topic to isolate</span>
             </div>
             <TrendChart periods={trend.periods} series={trend.series} />
           </section>
 
-          {/* Topics table — each row carries a compact trend sparkline, so the
-              per-topic history lives here instead of in a wide numeric matrix */}
+          {/* Topic Timeline — per-date mention matrix (truth parity) */}
           <section className="rv-card">
             <div className="rv-card-head">
-              <div className="rv-card-title">Topics ({ts.rows.length})</div>
-              <span className="rv-card-meta">{formatCompact(tagged.length)} reviews tagged · trend / {gran}</span>
+              <div className="rv-card-title">Topic Timeline</div>
+              <span className="rv-card-meta">{ts.rows.length} topics across {ts.periods.length} {gran}{ts.periods.length === 1 ? "" : "s"}</span>
             </div>
-            <div className="rv-topic-table">
-              <div className="rv-topic-h">
-                <span>Topic</span><span>Trend</span><span>Sentiment</span><span>Rating</span><span>Mentions</span>
-              </div>
-              {ts.rows.map((r, i) => (
-                <div className="rv-topic-row" key={r.label}>
-                  <span className="rv-topic-name"><i className="rv-topic-swatch" style={{ background: topicColor(i) }} />{r.label}</span>
-                  <span className="rv-topic-spark">
-                    <Sparkline values={ts.periods.map((p) => r.periodValues[p.key] ?? 0)} color={topicColor(i)} />
-                  </span>
-                  <span className="rv-topic-sent" style={{ color: SENT3_COLOR[sent3(r.sentiment)] }}>
-                    <i style={{ background: SENT3_COLOR[sent3(r.sentiment)] }} />{SENT3_LABEL[sent3(r.sentiment)]}
-                  </span>
-                  <span className="rv-topic-rating">{r.avgRating.toFixed(1)}</span>
-                  <span className="rv-topic-bar">
-                    <span className="rv-topic-fill" style={{ width: `${(r.totalMentions / maxMentions) * 100}%`, background: topicColor(i) }} />
-                    <span className="rv-topic-n">{r.totalMentions}</span>
-                  </span>
-                </div>
-              ))}
+            <div className="rv-timeline-wrap">
+              <table className="rv-timeline">
+                <thead>
+                  <tr>
+                    <th className="rv-tl-topic">Topic</th>
+                    <th>Sentiment</th>
+                    <th className="rv-tl-rt">Rating</th>
+                    <th className="rv-tl-rt">Total</th>
+                    {ts.periods.map((p) => <th key={p.key} className="rv-tl-date">{p.label}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {ts.rows.map((r, i) => (
+                    <tr key={r.label}>
+                      <td className="rv-tl-topic"><i className="rv-topic-swatch" style={{ background: topicColor(i) }} />{r.label}</td>
+                      <td><span className="rv-tl-sent" style={{ color: SENT_COLOR[r.sentiment] }}><i style={{ background: SENT_COLOR[r.sentiment] }} />{SENT_LABEL[r.sentiment]}</span></td>
+                      <td className="rv-tl-rt rv-num">{r.avgRating.toFixed(1)}</td>
+                      <td className="rv-tl-rt rv-num">{r.totalMentions}</td>
+                      {ts.periods.map((p) => {
+                        const v = r.periodValues[p.key];
+                        return <td key={p.key} className={`rv-tl-cell rv-num ${v ? "" : "rv-tl-zero"}`}>{v || "—"}</td>;
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </section>
         </>
@@ -686,22 +649,21 @@ export function ImprovementsTab({ tagged, onRefresh, refreshing }: { tagged: Tag
           </button>
         ))}
       </PeriodChips>
-      <MockNotice>{INTERIM_NOTE}</MockNotice>
 
       {shown.length === 0 ? (
         <EmptyState icon={<IconSpark />} title="No improvement areas here" sub="Try a different filter or a wider period." />
       ) : (
         <>
-          {/* Improvement trends chart */}
+          {/* Improvement Trends chart */}
           <section className="rv-card">
             <div className="rv-card-head">
-              <div className="rv-card-title">Improvement trends</div>
+              <div className="rv-card-title">Improvement Trends <span className="rv-mock-badge">interim model</span></div>
               <span className="rv-card-meta">mentions / {impGran} · top {Math.min(4, impTs.rows.length)} shown · hover an area to isolate</span>
             </div>
             <TrendChart periods={impTrend.periods} series={impTrend.series} />
           </section>
 
-          <div className="rv-imp-head">{formatCompact(totalMentions)} total mentions · {shown.length} areas</div>
+          <h2 className="rv-section-title rv-imp-head">Improvement Areas <span className="rv-card-meta">{formatCompact(totalMentions)} total mentions</span></h2>
           <div className="rv-area-grid">
             {shown.map((a) => {
               const tone = impTone(a);

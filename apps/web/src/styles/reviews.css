@@ -344,7 +344,8 @@
 .rv-trend-empty-s { font-size: 12px; color: var(--text-tertiary); max-width: 420px; line-height: 1.5; }
 
 /* ---- improvements: area grid ---- */
-.rv-imp-head { font-size: 12px; color: var(--text-tertiary); margin-bottom: 13px; }
+.rv-imp-head { display: flex; align-items: baseline; gap: 10px; margin: 22px 0 13px; }
+.rv-imp-head .rv-card-meta { font-weight: 400; }
 .rv-area-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
 .rv-area { display: block; width: 100%; text-align: left; font: inherit; color: inherit; background: var(--surface); border: 1px solid var(--border-soft); border-radius: 12px; padding: 14px 15px; transition: border-color 0.14s, transform 0.14s; cursor: pointer; }
 .rv-area:hover { border-color: var(--border-strong); transform: translateY(-1px); }
@@ -831,3 +832,29 @@
   font-size: 13px; font-weight: 600; padding: 4px 0;
 }
 .rv-viewall:hover { text-decoration: underline; }
+
+/* ============================================================
+   P5a · Semantics — per-date Topic Timeline matrix (truth parity)
+   ============================================================ */
+.rv-timeline-wrap { overflow-x: auto; margin: 0 -4px; }
+.rv-timeline { border-collapse: collapse; width: 100%; font-size: 12px; }
+.rv-timeline th {
+  text-align: right; padding: 8px 10px; white-space: nowrap;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+  color: var(--text-tertiary); border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; background: var(--panel);
+}
+.rv-timeline th.rv-tl-topic { text-align: left; }
+.rv-timeline td { padding: 8px 10px; white-space: nowrap; border-bottom: 1px solid var(--border-soft); }
+.rv-timeline tbody tr:hover { background: var(--surface-hover); }
+.rv-tl-topic {
+  text-align: left; font-weight: 600; color: var(--text);
+  position: sticky; left: 0; background: var(--panel); min-width: 170px;
+}
+.rv-timeline tbody tr:hover .rv-tl-topic { background: var(--surface); }
+.rv-tl-topic .rv-topic-swatch { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 8px; vertical-align: middle; }
+.rv-tl-rt, .rv-tl-cell, .rv-tl-date { text-align: right; }
+.rv-tl-cell { color: var(--text-secondary); }
+.rv-tl-zero { color: var(--text-faint); }
+.rv-tl-sent { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; text-transform: capitalize; }
+.rv-tl-sent i { width: 7px; height: 7px; border-radius: 50%; }
