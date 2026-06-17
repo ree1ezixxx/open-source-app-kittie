@@ -61,9 +61,12 @@ export {
   listIdeaFacets,
   listIdeas,
   listSimilarIdeas,
+  listStaleIdeaCandidates,
+  updateIdeaBlueprint,
   type IdeaCandidate,
   type IdeaListQuery,
   type IdeaSort,
+  type StaleIdeaCandidate,
 } from "./ideas.js";
 export {
   addBuilderMessage,

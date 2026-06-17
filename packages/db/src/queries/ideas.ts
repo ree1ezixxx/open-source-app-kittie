@@ -250,3 +250,73 @@ export async function insertIdea(
   await db.insert(appIdeas).values(row).onConflictDoNothing();
   return row;
 }
+
+/** A source-app candidate that ALREADY has an idea, with that idea's id +
+ *  stored blueprint — fuel for the catalog-upgrade sweep (PRD #35). The caller
+ *  filters by blueprint freshness in app code (the version lives in the JSON). */
+export interface StaleIdeaCandidate extends IdeaCandidate {
+  ideaId: string;
+  blueprint: string;
+}
+
+export async function listStaleIdeaCandidates(
+  db: Db,
+  minReviews = 50,
+): Promise<StaleIdeaCandidate[]> {
+  const rows = await db.all<{
+    appId: string;
+    storeAppId: string;
+    store: string;
+    title: string;
+    category: string | null;
+    description: string | null;
+    price: number | null;
+    releasedAt: number | null;
+    reviewCount: number | null;
+    rating: number | null;
+    downloadsEstimate: number | null;
+    revenueEstimate: number | null;
+    growthScore: number | null;
+    chartRank: number | null;
+    ideaId: string;
+    blueprint: string;
+  }>(sql`
+    SELECT
+      a.id AS appId, a.store_app_id AS storeAppId, a.store AS store, a.title AS title,
+      a.category AS category, a.description AS description, a.price AS price,
+      a.released_at AS releasedAt,
+      s.review_count AS reviewCount, s.rating AS rating,
+      s.downloads_estimate AS downloadsEstimate, s.revenue_estimate AS revenueEstimate,
+      s.growth_score AS growthScore, s.chart_rank AS chartRank,
+      i.id AS ideaId, i.blueprint AS blueprint
+    FROM app_ideas i
+    JOIN apps a ON a.id = i.source_app_id
+    JOIN app_snapshots s ON s.app_id = a.id
+      AND s.snapshot_date = (SELECT MAX(s2.snapshot_date) FROM app_snapshots s2 WHERE s2.app_id = a.id)
+    WHERE s.review_count >= ${minReviews} AND a.title IS NOT NULL
+  `);
+  return rows.map((r) => ({
+    ...r,
+    reviewCount: r.reviewCount ?? 0,
+    releasedAt: r.releasedAt ? new Date(r.releasedAt * 1000) : null,
+  }));
+}
+
+/** Rewrite an existing idea's generated content in place (catalog upgrade).
+ *  Keeps the row id, slug, sourceAppId and denormalized metrics — so the
+ *  storeAppId-keyed detail URL still resolves — and refreshes the rest. */
+export async function updateIdeaBlueprint(
+  db: Db,
+  ideaId: string,
+  fields: {
+    title: string;
+    summary: string;
+    ideaCategory: string;
+    needsBackend: boolean;
+    needsDatabase: boolean;
+    needsAi: boolean;
+    blueprint: string;
+  },
+): Promise<void> {
+  await db.update(appIdeas).set(fields).where(eq(appIdeas.id, ideaId));
+}
