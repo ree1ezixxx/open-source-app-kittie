@@ -14,6 +14,14 @@ export async function getAppById(db: Db, id: string) {
   return app ?? null;
 }
 
+/** Source-app in-app purchases (name + price tier) for the Hot Ideas detail. */
+export async function listAppIaps(db: Db, appId: string) {
+  return db
+    .select({ name: iaps.name, price: iaps.price, currency: iaps.currency })
+    .from(iaps)
+    .where(eq(iaps.appId, appId));
+}
+
 /** Persist lazily-fetched listing facts (size, min OS, seller). */
 export async function updateAppListingFacts(
   db: Db,

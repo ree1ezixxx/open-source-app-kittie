@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import {
   getIdeaByStoreAppId,
+  listAppIaps,
   listIdeaFacets,
   listIdeas,
   listSimilarIdeas,
@@ -84,7 +85,10 @@ ideasRouter.get("/:storeAppId", async (c) => {
   if (!found) return c.json({ error: "idea not found" }, 404);
 
   const { idea, sourceApp } = found;
-  const similar = await listSimilarIdeas(db, idea.sourceCategory, idea.id);
+  const [similar, inAppPurchases] = await Promise.all([
+    listSimilarIdeas(db, idea.sourceCategory, idea.id),
+    listAppIaps(db, sourceApp.id),
+  ]);
   return c.json({
     data: {
       idea: { ...toWire(idea), storeAppId: sourceApp.storeAppId },
@@ -102,6 +106,7 @@ ideasRouter.get("/:storeAppId", async (c) => {
         downloads: idea.downloadsEstimate,
         revenue: idea.revenueEstimate,
       },
+      inAppPurchases,
       similar: similar.map(toWire),
     },
   });
