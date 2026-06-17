@@ -686,3 +686,74 @@
 }
 .rv-pager-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
 .rv-pager-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* ============================================================
+   P2 · App selector — truth "All Apps {N}" dropdown + Refresh.
+   ============================================================ */
+.rv-selector-row { display: flex; align-items: center; gap: 10px; margin: 4px 0 18px; }
+
+.rv-appsel { position: relative; }
+.rv-appsel-btn {
+  display: inline-flex; align-items: center; gap: 9px;
+  height: 40px; padding: 0 12px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 11px; color: var(--text);
+  font-size: 13.5px; font-weight: 600; transition: border-color 0.12s;
+}
+.rv-appsel-btn:hover { border-color: var(--border-strong); }
+.rv-appsel-ic {
+  width: 24px; height: 24px; border-radius: 7px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface-2); color: var(--text-secondary); overflow: hidden;
+}
+.rv-appsel-img { width: 100%; height: 100%; object-fit: cover; }
+.rv-appsel-ph { font-size: 12px; font-weight: 700; color: var(--text-secondary); }
+.rv-appsel-label { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rv-appsel-count {
+  min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--accent-soft); color: var(--accent);
+  font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.rv-appsel-chev { color: var(--text-tertiary); transition: transform 0.15s; }
+.rv-appsel-chev.up { transform: rotate(180deg); }
+
+.rv-appsel-menu {
+  position: absolute; top: calc(100% + 8px); left: 0; z-index: 50;
+  width: 420px; max-width: calc(100vw - 48px);
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 16px; padding: 6px; box-shadow: var(--shadow-pop);
+  max-height: 70vh; overflow-y: auto;
+}
+.rv-appsel-row { display: flex; align-items: center; border-radius: 11px; }
+.rv-appsel-row:hover { background: var(--surface-hover); }
+.rv-appsel-row.on { background: var(--accent-soft); }
+.rv-appsel-all { width: 100%; }
+.rv-appsel-pick, .rv-appsel-all {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px;
+  padding: 11px 12px; text-align: left; background: none; border: none; color: var(--text);
+}
+.rv-appsel-rowmeta { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.rv-appsel-rowname { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rv-appsel-rowsub { font-size: 11.5px; color: var(--text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rv-appsel-check { color: var(--accent); flex-shrink: 0; }
+.rv-appsel-act {
+  width: 30px; height: 30px; margin-right: 4px; border-radius: 8px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: none; border: none; color: var(--text-tertiary); transition: all 0.12s;
+}
+.rv-appsel-refresh:hover:not(:disabled) { color: var(--accent); background: var(--accent-soft); }
+.rv-appsel-refresh:disabled { opacity: 0.5; cursor: progress; }
+.rv-appsel-remove:hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); }
+.rv-appsel-add {
+  width: 100%; display: flex; align-items: center; gap: 8px;
+  padding: 11px 12px; margin-top: 4px; border-radius: 11px;
+  background: none; border: none; color: var(--accent);
+  font-size: 13px; font-weight: 650;
+}
+.rv-appsel-add:hover { background: var(--accent-soft); }
+
+.rv-refresh-btn { display: inline-flex; align-items: center; gap: 7px; height: 40px; }
+
+@keyframes rv-spin { to { transform: rotate(360deg); } }
+.rv-spin { animation: rv-spin 0.9s linear infinite; transform-origin: center; }
