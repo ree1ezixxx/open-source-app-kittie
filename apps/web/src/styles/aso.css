@@ -124,6 +124,46 @@
 }
 .aso-detail-inner { max-width: 1200px; }
 
+/* Workspace layout — table-primary (parity with the live Keyword Explorer):
+   the selected keyword's full workspace + ideas table is the main view, with a
+   compact chip strip on top for switching between compared keywords. */
+.aso-workspace {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 18px 26px 56px;
+}
+.aso-workspace .aso-detail-inner { max-width: 1180px; margin: 0 auto; }
+.kw-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: 1180px;
+  margin: 0 auto 18px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.kw-strip-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 13px;
+  border-radius: 999px;
+  border: 1px solid var(--border-soft);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color .12s ease, background .12s ease;
+}
+.kw-strip-chip:hover { border-color: var(--border); }
+.kw-strip-chip.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.kw-strip-chip .kw-strip-opp { font-weight: 600; color: var(--accent); }
+.kw-strip-chip.pending { opacity: .65; cursor: default; }
+
 /* ---- Keyword list card ---- */
 .kw-card {
   display: block;
