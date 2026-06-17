@@ -294,6 +294,7 @@ export async function listStaleIdeaCandidates(
     JOIN app_snapshots s ON s.app_id = a.id
       AND s.snapshot_date = (SELECT MAX(s2.snapshot_date) FROM app_snapshots s2 WHERE s2.app_id = a.id)
     WHERE s.review_count >= ${minReviews} AND a.title IS NOT NULL
+    ORDER BY i.created_at ASC
   `);
   return rows.map((r) => ({
     ...r,

@@ -283,9 +283,10 @@ async function runIdeaBatches<T extends IdeaCandidate>(
   sources: T[],
   model: string,
   persist: (idea: GeneratedIdea, source: T) => Promise<void>,
-): Promise<{ done: number; failed: number }> {
+): Promise<{ done: number; failed: number; quotaExhausted: boolean }> {
   let done = 0;
   let failed = 0;
+  let quotaExhausted = false;
   for (let at = 0; at < sources.length; at += SOURCES_PER_CALL) {
     const chunk = sources.slice(at, at + SOURCES_PER_CALL);
     try {
@@ -297,18 +298,23 @@ async function runIdeaBatches<T extends IdeaCandidate>(
         priority: "batch", // never make a person wait behind this sweep
         model, // default: separate daily quota bucket
       });
+      const usedSources = new Set<number>();
       for (const idea of result.ideas ?? []) {
         const source = chunk[idea.sourceIndex];
-        if (!source || !idea.title) {
+        // Skip a bad/duplicate sourceIndex: persisting two ideas to one source would
+        // double-write (clobber) in update mode and leave the other source untouched.
+        if (!source || !idea.title || usedSources.has(idea.sourceIndex)) {
           failed++;
           continue;
         }
+        usedSources.add(idea.sourceIndex);
         await persist(idea, source);
         done++;
       }
     } catch (e) {
       if (e instanceof GeminiDailyQuotaError) {
         console.warn(`[hot-ideas] ${e.message}; pausing at ${done}`);
+        quotaExhausted = true;
         break;
       }
       failed += chunk.length;
@@ -319,7 +325,7 @@ async function runIdeaBatches<T extends IdeaCandidate>(
       if (failed >= SOURCES_PER_CALL * 3 && done === 0) break;
     }
   }
-  return { done, failed };
+  return { done, failed, quotaExhausted };
 }
 
 /**
@@ -367,6 +373,7 @@ export async function sweepHotIdeas(
   let newCount = 0;
   let upgraded = 0;
   let failed = 0;
+  let quotaHit = false;
 
   // Phase A — generate for new sources until the catalog target is met.
   const remaining = IDEAS_TARGET - existing;
@@ -393,11 +400,14 @@ export async function sweepHotIdeas(
     });
     newCount = r.done;
     failed += r.failed;
+    quotaHit = r.quotaExhausted;
   }
 
   // Phase B — upgrade legacy (pre-v2) ideas in place with any leftover budget.
+  // Skip if Phase A already hit the daily quota: the bucket is shared, so a Phase B
+  // call would just waste another scarce request hitting the same wall.
   const budgetLeft = maxIdeas - newCount;
-  if (budgetLeft > 0) {
+  if (budgetLeft > 0 && !quotaHit) {
     const up = await upgradeStaleIdeas(db, budgetLeft, model);
     upgraded = up.upgraded;
     failed += up.failed;

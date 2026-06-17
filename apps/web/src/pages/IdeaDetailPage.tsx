@@ -317,7 +317,7 @@ export function IdeaDetailPage() {
                   {inAppPurchases.map((p, i) => (
                     <li key={i}>
                       {p.name}
-                      {p.price != null ? ` — ${p.currency ?? "$"}${p.price}` : ""}
+                      {p.price != null ? (p.currency ? ` — ${p.price} ${p.currency}` : ` — $${p.price}`) : ""}
                     </li>
                   ))}
                 </ul>

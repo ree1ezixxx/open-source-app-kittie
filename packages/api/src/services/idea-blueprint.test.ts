@@ -65,6 +65,12 @@ describe("parseOpportunity", () => {
     expect(parseOpportunity("nope")).toBeNull();
   });
 
+  it("returns null on an array with no usable strings (write/read parity)", () => {
+    // Must reject here too — else write accepts it but the read-side re-parse rejects,
+    // looping the idea as 'stale' forever.
+    expect(parseOpportunity({ ...fullOpportunity, painPoints: [1, null, {}] })).toBeNull();
+  });
+
   it("drops non-string array entries", () => {
     const r = parseOpportunity({ ...fullOpportunity, painPoints: ["ok", 5, null, "fine"] });
     expect(r?.painPoints).toEqual(["ok", "fine"]);

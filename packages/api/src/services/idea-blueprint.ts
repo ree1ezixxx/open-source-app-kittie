@@ -72,7 +72,11 @@ const strArr = (v: unknown): string[] =>
 function hasAll(o: Record<string, unknown>, keys: string[]): boolean {
   return keys.every((k) => {
     const v = o[k];
-    if (Array.isArray(v)) return v.length > 0;
+    // Arrays must hold ≥1 usable string — matches what strArr() keeps, so write-time
+    // (pre-coercion) and read-time (post-coercion) validation agree. Otherwise an
+    // all-non-string array passes here on write but fails on the next read, and the
+    // idea is re-detected as stale and regenerated on every sweep forever.
+    if (Array.isArray(v)) return v.some((x) => typeof x === "string" && x.trim().length > 0);
     return typeof v === "string" && v.trim().length > 0;
   });
 }

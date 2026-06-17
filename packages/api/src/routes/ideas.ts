@@ -10,6 +10,7 @@ import {
 } from "@kittie/db";
 
 import { getDb } from "../lib/db.js";
+import { normalizeBlueprint } from "../services/idea-blueprint.js";
 
 const SORTS: ReadonlySet<string> = new Set([
   "created",
@@ -35,7 +36,9 @@ function toWire(idea: AppIdea) {
     needsBackend: idea.needsBackend,
     needsDatabase: idea.needsDatabase,
     needsAi: idea.needsAi,
-    blueprint: JSON.parse(idea.blueprint) as unknown,
+    // Normalize on read so clients always get a valid doc: building fields present,
+    // opportunity/marketing either fully-valid or null (never a half-formed section).
+    blueprint: normalizeBlueprint(idea.blueprint),
     reviews: idea.reviewCount,
     rating: idea.rating,
     downloads: idea.downloadsEstimate,
