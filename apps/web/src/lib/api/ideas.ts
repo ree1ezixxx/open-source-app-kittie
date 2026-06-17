@@ -8,6 +8,29 @@
 
 export type BlueprintTag = "backend" | "database" | "ai";
 
+export interface IdeaOpportunity {
+  summary: string;
+  whyThisApp: string;
+  marketSizeInsight: string;
+  painPoints: string[];
+  featureGaps: string[];
+  targetAudience: string;
+  monetizationStrategy: string;
+  competitiveAdvantages: string[];
+}
+
+export interface IdeaMarketing {
+  marketingStrategy: string;
+  marketingPlatforms: string[];
+  contentHooks: string[];
+  ugcFormats: string[];
+  campaignIdeas: string[];
+  creatorTypes: string[];
+  keySellingPoints: string[];
+  asoKeywords: string[];
+  goToMarket: string;
+}
+
 export interface IdeaBlueprint {
   difficulty: "easy" | "medium" | "hard";
   difficultyReasoning: string;
@@ -20,6 +43,16 @@ export interface IdeaBlueprint {
   techStack: string[];
   mvpScope: string;
   thirdPartyServices: string[];
+  /** v2 (PRD #35): null on legacy ideas not yet upgraded by the backfill. */
+  schemaVersion?: number;
+  opportunity?: IdeaOpportunity | null;
+  marketing?: IdeaMarketing | null;
+}
+
+export interface IdeaIap {
+  name: string;
+  price: number | null;
+  currency: string | null;
 }
 
 export interface AppIdea {
@@ -86,6 +119,7 @@ export interface IdeaDetail {
     downloads: number | null;
     revenue: number | null;
   };
+  inAppPurchases: IdeaIap[];
   similar: AppIdea[];
 }
 
@@ -185,11 +219,17 @@ export async function fetchIdeaDetail(
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`idea detail failed: ${res.status}`);
   const body = (await res.json()) as {
-    data: { idea: WireIdea; sourceApp: IdeaDetail["sourceApp"]; similar: WireIdea[] };
+    data: {
+      idea: WireIdea;
+      sourceApp: IdeaDetail["sourceApp"];
+      inAppPurchases?: IdeaIap[];
+      similar: WireIdea[];
+    };
   };
   return {
     idea: fromWire(body.data.idea),
     sourceApp: body.data.sourceApp,
+    inAppPurchases: body.data.inAppPurchases ?? [],
     similar: body.data.similar.map(fromWire),
   };
 }
