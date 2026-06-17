@@ -1,9 +1,13 @@
-import { listStaleTrackedKeywords } from "@kittie/db";
+import { listStaleCatalogKeywords, listStaleTrackedKeywords, touchKeywordChecked } from "@kittie/db";
 
 import { getDb } from "../lib/db.js";
 import { getKeywordDifficulty } from "./keyword-service.js";
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/** Per-run cap on catalog re-syncs — paced so the whole catalog cycles over a
+ *  few days without hammering the stores. Env-tunable as the catalog grows. */
+const CATALOG_REFRESH_LIMIT = Number(process.env.KEYWORD_REFRESH_LIMIT ?? 300);
 
 /**
  * Re-score sweep for Tracked keywords (>7d stale). Feeding each through the
@@ -21,6 +25,32 @@ export async function sweepStaleTrackedKeywords(): Promise<{ stale: number; resc
     } catch {
       /* one keyword failing must not abort the sweep */
     }
+    await sleep(400);
+  }
+  return { stale: stale.length, rescored };
+}
+
+/**
+ * Catalog-wide freshness sweep: re-sync the oldest stale keywords (>7d),
+ * tracked or not, so even keywords nobody has viewed stay current. Feeds each
+ * through the lookup path (stale TTL → live refetch + upsert), capped + paced
+ * per run so it cycles the catalog over a few days, store-friendly.
+ */
+export async function sweepStaleCatalogKeywords(): Promise<{ stale: number; rescored: number }> {
+  const stale = await listStaleCatalogKeywords(getDb(), 7, CATALOG_REFRESH_LIMIT);
+  let rescored = 0;
+  for (const { keyword, country, store } of stale) {
+    try {
+      await getKeywordDifficulty(keyword, country, store);
+      rescored++;
+    } catch {
+      /* one keyword failing must not abort the sweep */
+    }
+    // Always advance the staleness clock — even on failure, or when the lookup
+    // returned a stale row from cache without a live refetch (sync error with a
+    // cached fallback). Otherwise a keyword that can't refresh stays at the head
+    // of the oldest-first queue and is re-picked every run, starving the rest.
+    await touchKeywordChecked(getDb(), keyword, country, store).catch(() => {});
     await sleep(400);
   }
   return { stale: stale.length, rescored };

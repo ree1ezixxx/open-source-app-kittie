@@ -70,30 +70,6 @@ export function AppAvatar({ title, iconUrl }: { title: string; iconUrl: string |
   return <img className="app-icon" src={iconUrl} alt="" loading="lazy" />;
 }
 
-/** List card for a single looked-up keyword (Keyword Explorer left rail). */
-export function KeywordCard({
-  kd,
-  active,
-  onSelect,
-}: {
-  kd: KeywordDifficulty;
-  active: boolean;
-  onSelect: () => void;
-}) {
-  return (
-    <button className={`kw-card ${active ? "active" : ""}`} onClick={onSelect}>
-      <div className="kw-card-top">
-        <span className="kw-name">{kd.keyword}</span>
-        <OpportunityBadge score={kd.opportunityScore} />
-      </div>
-      <div className="kw-card-meters">
-        <Meter kind="popularity" label="Popularity" value={kd.popularity} />
-        <Meter kind="difficulty" label="Difficulty" value={kd.difficulty} />
-      </div>
-    </button>
-  );
-}
-
 /** Pending placeholder card while a lookup is in flight. */
 export function PendingCard({ keyword }: { keyword: string }) {
   return (
