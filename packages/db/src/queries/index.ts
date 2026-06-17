@@ -21,6 +21,7 @@ export { enrichSnapshotScores } from "./scoring.js";
 export {
   findKeyword,
   keywordRowToDifficulty,
+  listStaleCatalogKeywords,
   makeKeywordLookupId,
   upsertKeywordRow,
   type KeywordRow,

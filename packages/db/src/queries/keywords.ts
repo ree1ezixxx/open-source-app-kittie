@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, asc, lt } from "drizzle-orm";
 import { computeOpportunityScore } from "@kittie/intelligence";
 import type { KeywordDifficulty, Store } from "@kittie/types";
 
@@ -20,6 +20,28 @@ export interface KeywordRow {
 
 export function makeKeywordLookupId(store: Store, country: string, keyword: string): string {
   return `${store}:${country.toUpperCase()}:${keyword.trim().toLowerCase()}`;
+}
+
+/**
+ * Catalog keywords whose lookup row is older than `maxAgeDays`, oldest first,
+ * capped at `limit`. The catalog-refresh sweep feeds these back through the
+ * lookup path (which refetches live on the stale TTL), so even keywords nobody
+ * has viewed stay fresh — not just tracked ones. Paced + capped per run so it
+ * cycles the whole catalog over a few days without hammering the stores.
+ */
+export async function listStaleCatalogKeywords(
+  db: Db,
+  maxAgeDays = 7,
+  limit = 300,
+): Promise<Array<{ keyword: string; country: string; store: Store }>> {
+  const cutoff = new Date(Date.now() - maxAgeDays * 86_400_000);
+  const rows = await db
+    .select({ keyword: keywords.keyword, country: keywords.country, store: keywords.store })
+    .from(keywords)
+    .where(lt(keywords.computedAt, cutoff))
+    .orderBy(asc(keywords.computedAt))
+    .limit(limit);
+  return rows.map((r) => ({ ...r, store: r.store as Store }));
 }
 
 export async function findKeyword(
