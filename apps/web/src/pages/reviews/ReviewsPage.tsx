@@ -247,7 +247,16 @@ export function ReviewsPage({ theme, onToggleTheme }: { theme: Theme; onToggleTh
         ) : loading ? (
           <ReviewsSkeleton />
         ) : activeTab === "overview" ? (
-          <OverviewTab tagged={tagged} appsMonitored={monitored.length} />
+          <OverviewTab
+            tagged={tagged}
+            appsMonitored={monitored.length}
+            isAll={isAll}
+            monitored={monitored}
+            indexed={indexed}
+            appName={selected?.title ?? null}
+            onSelectApp={selectApp}
+            onViewReviews={() => setTab("feed")}
+          />
         ) : activeTab === "feed" ? (
           <ReviewsTab tagged={tagged} />
         ) : activeTab === "semantics" ? (

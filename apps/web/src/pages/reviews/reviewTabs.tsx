@@ -12,6 +12,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   averageRating,
   ratingDistribution,
+  type MonitoredApp,
 } from "../../lib/api/reviews";
 import {
   topicTimeSeries,
@@ -30,7 +31,7 @@ import {
 import { TrendChart, type TrendSeries } from "../../components/reviews/TrendChart";
 import { EmptyState, MockNotice } from "../../components/reviews/primitives";
 import { formatCompact } from "../../lib/format";
-import { IconStar, IconSearch, IconSpark, IconChart, IconUsers, IconRefresh } from "../../icons";
+import { IconStar, IconSearch, IconSpark, IconChart, IconUsers, IconRefresh, IconMessage, IconExternal } from "../../icons";
 
 /* ---- tiny star row ---- */
 function Stars({ value, size = 12 }: { value: number; size?: number }) {
@@ -112,7 +113,103 @@ function toTrend(ts: DimensionTimeSeries): { periods: string[]; series: TrendSer
 }
 
 /* ============================================================ Overview */
-export function OverviewTab({ tagged, appsMonitored }: { tagged: TaggedReview[]; appsMonitored: number }) {
+/** Top topic/area labels among reviews of the given sentiments (frequency-ranked). */
+function topLabelsBySentiment(
+  tagged: TaggedReview[],
+  sentiments: Sentiment4[],
+  pick: "topics" | "improvementAreas",
+  n: number,
+): string[] {
+  const counts = new Map<string, number>();
+  for (const t of tagged) {
+    if (!sentiments.includes(t.tags.sentiment)) continue;
+    for (const x of t.tags[pick]) counts.set(x, (counts.get(x) ?? 0) + 1);
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, n).map(([k]) => k);
+}
+
+export function OverviewTab({
+  tagged, appsMonitored, isAll, monitored, indexed, appName, onSelectApp, onViewReviews,
+}: {
+  tagged: TaggedReview[];
+  appsMonitored: number;
+  isAll: boolean;
+  monitored: MonitoredApp[];
+  indexed: Record<string, number>;
+  appName: string | null;
+  onSelectApp: (id: string) => void;
+  onViewReviews: () => void;
+}) {
+  if (isAll) {
+    return <AggregateOverview tagged={tagged} appsMonitored={appsMonitored} monitored={monitored} indexed={indexed} onSelectApp={onSelectApp} />;
+  }
+  return <SingleAppOverview tagged={tagged} appName={appName} onViewReviews={onViewReviews} />;
+}
+
+/* ---- aggregate (All Apps): KPIs + Your Apps grid ---- */
+function AggregateOverview({
+  tagged, appsMonitored, monitored, indexed, onSelectApp,
+}: {
+  tagged: TaggedReview[];
+  appsMonitored: number;
+  monitored: MonitoredApp[];
+  indexed: Record<string, number>;
+  onSelectApp: (id: string) => void;
+}) {
+  const reviews = tagged.map((t) => t.review);
+  const avg = averageRating(reviews);
+  const total = reviews.length;
+  return (
+    <div className="rv-overview">
+      <div className="rv-kpis">
+        <div className="rv-kpi">
+          <div className="rv-kpi-ic"><IconMessage style={{ width: 17, height: 17 }} /></div>
+          <div><div className="rv-kpi-num">{formatCompact(total)}</div><div className="rv-kpi-label">Total Reviews</div></div>
+        </div>
+        <div className="rv-kpi">
+          <div className="rv-kpi-ic"><IconStar style={{ width: 17, height: 17 }} /></div>
+          <div><div className="rv-kpi-num">{avg != null ? avg.toFixed(1) : "—"}</div><div className="rv-kpi-label">Average Rating</div></div>
+        </div>
+        <div className="rv-kpi">
+          <div className="rv-kpi-ic"><IconChart style={{ width: 17, height: 17 }} /></div>
+          <div><div className="rv-kpi-num">{appsMonitored}</div><div className="rv-kpi-label">Apps Monitored</div></div>
+        </div>
+      </div>
+
+      <div className="rv-yourapps-head">
+        <h2 className="rv-section-title">Your Apps</h2>
+        <span className="rv-card-meta">{appsMonitored} app{appsMonitored === 1 ? "" : "s"} monitored</span>
+      </div>
+      <div className="rv-yourapps-grid">
+        {monitored.map((a) => (
+          <button className="rv-card rv-appcard" key={a.id} onClick={() => onSelectApp(a.id)}>
+            <div className="rv-appcard-head">
+              {a.iconUrl
+                ? <img className="rv-appcard-ic" src={a.iconUrl} alt="" referrerPolicy="no-referrer" />
+                : <span className="rv-appcard-ic rv-appcard-ph">{a.title.charAt(0)}</span>}
+              <div className="rv-appcard-meta">
+                <div className="rv-appcard-name">{a.title}</div>
+                <div className="rv-appcard-dev">{a.developer}</div>
+              </div>
+            </div>
+            <div className="rv-appcard-foot">
+              <span className="rv-num">{indexed[a.id] != null ? formatCompact(indexed[a.id]!) : "…"}</span> reviews
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ---- single app: the rich dashboard (alerts · rating · reviews · AI summary · feedback) ---- */
+function SingleAppOverview({
+  tagged, appName, onViewReviews,
+}: {
+  tagged: TaggedReview[];
+  appName: string | null;
+  onViewReviews: () => void;
+}) {
   const reviews = tagged.map((t) => t.review);
   const dist = ratingDistribution(reviews);
   const avg = averageRating(reviews);
@@ -121,50 +218,54 @@ export function OverviewTab({ tagged, appsMonitored }: { tagged: TaggedReview[];
 
   const sent = sentimentCounts(tagged);
   const sTotal = total || 1;
-  const pos = sent.positive / sTotal;
-  const neg = sent.negative / sTotal;
-  const neu = Math.max(0, 1 - pos - neg);
-  const net = Math.round((pos - neg) * 100);
+  const posPct = Math.round((sent.positive / sTotal) * 100);
+  const negPct = Math.round((sent.negative / sTotal) * 100);
+  const net = posPct - negPct;
+
+  const topTopics = useMemo(() => topicFacets(tagged).slice(0, 10), [tagged]);
+  const love = useMemo(() => topLabelsBySentiment(tagged, ["positive", "mixed"], "topics", 5), [tagged]);
+  const needs = useMemo(() => {
+    const a = topLabelsBySentiment(tagged, ["negative", "mixed"], "improvementAreas", 5);
+    return a.length ? a : topLabelsBySentiment(tagged, ["negative", "mixed"], "topics", 5);
+  }, [tagged]);
+  const insights = useMemo(() => improvementFacets(tagged).slice(0, 6), [tagged]);
+  const insightMax = Math.max(1, ...insights.map((i) => i.count));
+  const minutesSaved = Math.round(total * 0.5);
+  const skew = net > 8 ? "skews positive" : net < -8 ? "skews negative" : "is mixed";
+  const summary =
+    `Across ${formatCompact(total)} analysed reviews, sentiment ${skew} (${posPct}% positive, ${negPct}% negative).` +
+    (topTopics.length ? ` Users most often discuss ${topTopics.slice(0, 3).map((t) => t.label).join(", ")}.` : "");
 
   return (
     <div className="rv-overview">
-      {/* KPI cards */}
-      <div className="rv-kpis">
-        <div className="rv-kpi">
-          <div className="rv-kpi-ic"><IconUsers style={{ width: 17, height: 17 }} /></div>
-          <div>
-            <div className="rv-kpi-num">{formatCompact(total)}</div>
-            <div className="rv-kpi-label">Total Reviews</div>
+      {/* Review alerts (UI; delivery deferred) */}
+      <section className="rv-card rv-alerts">
+        <div className="rv-card-head">
+          <div className="rv-card-title">Review alerts</div>
+          <span className="rv-alerts-stats">0 alert rules · Email available · Slack optional</span>
+        </div>
+        <p className="rv-alerts-intro">
+          We'll alert you as soon as a new review is detected{appName ? ` for ${appName}` : ""}, so you can jump in and respond quickly.
+        </p>
+        <div className="rv-alerts-empty">
+          <div className="rv-alerts-empty-title">No alerts configured yet</div>
+          <div className="rv-alerts-empty-sub">Add an email alert or connect Slack so fresh reviews reach your team right away.</div>
+          <div className="rv-alerts-actions">
+            <button className="btn btn-accent" title="Alerts delivery is coming soon">Add email alert</button>
+            <button className="btn" title="Slack integration is coming soon">Connect Slack</button>
           </div>
         </div>
-        <div className="rv-kpi">
-          <div className="rv-kpi-ic"><IconStar style={{ width: 17, height: 17 }} /></div>
-          <div>
-            <div className="rv-kpi-num">{avg != null ? avg.toFixed(2) : "—"}</div>
-            <div className="rv-kpi-label">Average Rating</div>
-          </div>
-        </div>
-        <div className="rv-kpi">
-          <div className="rv-kpi-ic"><IconChart style={{ width: 17, height: 17 }} /></div>
-          <div>
-            <div className="rv-kpi-num">{appsMonitored}</div>
-            <div className="rv-kpi-label">Apps Monitored</div>
-          </div>
-        </div>
-      </div>
+      </section>
 
       <div className="rv-grid-2">
-        {/* rating distribution — REAL */}
+        {/* Rating */}
         <section className="rv-card">
-          <div className="rv-card-head">
-            <div className="rv-card-title">Rating distribution</div>
-            <span className="rv-card-meta">{formatCompact(total)} loaded</span>
-          </div>
+          <div className="rv-card-head"><div className="rv-card-title">Rating</div></div>
           <div className="rv-avg">
             <div className="rv-avg-num">{avg != null ? avg.toFixed(2) : "—"}</div>
             <div>
               <Stars value={Math.round(avg ?? 0)} size={15} />
-              <div className="rv-avg-sub">across the latest {formatCompact(total)} reviews</div>
+              <div className="rv-avg-sub">{formatCompact(total)} reviews · based on reviews with comments only</div>
             </div>
           </div>
           <div className="rv-dist">
@@ -172,10 +273,7 @@ export function OverviewTab({ tagged, appsMonitored }: { tagged: TaggedReview[];
               <div className="rv-dist-row" key={k}>
                 <span className="rv-dist-k">{k}<IconStar style={{ width: 11, height: 11, color: "#f5c451" }} /></span>
                 <span className="rv-dist-track">
-                  <span
-                    className="rv-dist-fill"
-                    style={{ width: `${(dist[k] / maxBar) * 100}%`, background: k >= 4 ? "var(--positive)" : k === 3 ? "#f5b545" : "var(--negative)" }}
-                  />
+                  <span className="rv-dist-fill" style={{ width: `${(dist[k] / maxBar) * 100}%`, background: k >= 4 ? "var(--positive)" : k === 3 ? "#f5b545" : "var(--negative)" }} />
                 </span>
                 <span className="rv-dist-n">{formatCompact(dist[k])}</span>
               </div>
@@ -183,30 +281,73 @@ export function OverviewTab({ tagged, appsMonitored }: { tagged: TaggedReview[];
           </div>
         </section>
 
-        {/* sentiment — REAL (interim tags) */}
+        {/* Reviews */}
         <section className="rv-card">
-          <div className="rv-card-head">
-            <div className="rv-card-title">Sentiment summary</div>
-            <span className="rv-card-meta">tagged</span>
-          </div>
-          <div className="rv-net">
-            <div className="rv-net-num" style={{ color: net >= 0 ? "var(--positive)" : "var(--negative)" }}>
-              {net > 0 ? "+" : ""}{net}
-            </div>
-            <div className="rv-net-label">Net sentiment score</div>
+          <div className="rv-card-head"><div className="rv-card-title">Reviews</div></div>
+          <div className="rv-revstats">
+            <div className="rv-revstat"><div className="rv-revstat-num rv-num">{formatCompact(total)}</div><div className="rv-revstat-label">total reviews</div></div>
+            <div className="rv-revstat"><div className="rv-revstat-num rv-num">{avg != null ? avg.toFixed(2) : "—"}</div><div className="rv-revstat-label">avg. review rating</div></div>
+            <div className="rv-revstat"><div className="rv-revstat-num rv-num" style={{ color: "var(--positive)" }}>{posPct}%</div><div className="rv-revstat-label">positive</div></div>
+            <div className="rv-revstat"><div className="rv-revstat-num rv-num" style={{ color: "var(--negative)" }}>{negPct}%</div><div className="rv-revstat-label">negative</div></div>
           </div>
           <div className="rv-sent-bar">
-            <span style={{ width: `${pos * 100}%`, background: "#5fd08a" }} />
-            <span style={{ width: `${neu * 100}%`, background: "#f5a623" }} />
-            <span style={{ width: `${neg * 100}%`, background: "#ff7a6b" }} />
-          </div>
-          <div className="rv-sent-legend">
-            <span><i style={{ background: "#5fd08a" }} />Positive {Math.round(pos * 100)}%</span>
-            <span><i style={{ background: "#f5a623" }} />Mixed {Math.round(neu * 100)}%</span>
-            <span><i style={{ background: "#ff7a6b" }} />Negative {Math.round(neg * 100)}%</span>
+            <span style={{ width: `${posPct}%`, background: "#5fd08a" }} />
+            <span style={{ width: `${Math.max(0, 100 - posPct - negPct)}%`, background: "#f5a623" }} />
+            <span style={{ width: `${negPct}%`, background: "#ff7a6b" }} />
           </div>
         </section>
       </div>
+
+      {/* AI Summary (interim heuristic model — not LLM yet) */}
+      <section className="rv-card rv-aisum">
+        <div className="rv-card-head">
+          <div className="rv-card-title"><IconSpark style={{ width: 15, height: 15 }} /> AI Summary</div>
+          <span className="rv-mock-badge">interim model</span>
+        </div>
+        <div className="rv-aisum-stats">
+          <span><b className="rv-num">{formatCompact(total)}</b> reviews</span>
+          <span><b className="rv-num">{avg != null ? avg.toFixed(1) : "—"}</b> avg</span>
+          <span>~<b className="rv-num">{formatCompact(minutesSaved)}</b> min saved</span>
+        </div>
+        <p className="rv-aisum-text">{summary}</p>
+        {topTopics.length > 0 && (
+          <>
+            <div className="rv-aisum-label">Top topics</div>
+            <div className="rv-aisum-chips">
+              {topTopics.map((t) => <span className="rv-chip" key={t.label}>{t.label}<span className="rv-chip-n">{t.count}</span></span>)}
+            </div>
+          </>
+        )}
+        <div className="rv-aisum-cols">
+          <div>
+            <div className="rv-aisum-label rv-aisum-love">What users love</div>
+            <ul className="rv-aisum-list">{love.length ? love.map((x) => <li key={x}>{x}</li>) : <li className="rv-muted">Not enough positive reviews yet</li>}</ul>
+          </div>
+          <div>
+            <div className="rv-aisum-label rv-aisum-needs">What needs work</div>
+            <ul className="rv-aisum-list">{needs.length ? needs.map((x) => <li key={x}>{x}</li>) : <li className="rv-muted">Not enough critical reviews yet</li>}</ul>
+          </div>
+        </div>
+      </section>
+
+      {/* Feedback Insights */}
+      <section className="rv-card rv-feedback">
+        <div className="rv-card-head">
+          <div className="rv-card-title">Feedback Insights</div>
+          <span className="rv-card-meta"><b className="rv-num">{posPct}%</b> total satisfaction</span>
+        </div>
+        <div className="rv-feedback-bars">
+          {insights.map((i) => (
+            <div className="rv-feedback-row" key={i.label}>
+              <span className="rv-feedback-label">{i.label}</span>
+              <span className="rv-feedback-track"><span className="rv-feedback-fill" style={{ width: `${(i.count / insightMax) * 100}%` }} /></span>
+              <span className="rv-feedback-n rv-num">{formatCompact(i.count)}</span>
+            </div>
+          ))}
+          {insights.length === 0 && <div className="rv-muted">No improvement areas surfaced yet</div>}
+        </div>
+        <button className="rv-viewall" onClick={onViewReviews}>View all reviews <IconExternal style={{ width: 13, height: 13 }} /></button>
+      </section>
     </div>
   );
 }
