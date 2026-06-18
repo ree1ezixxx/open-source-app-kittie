@@ -242,7 +242,16 @@ function sqlSortColumn(sortBy: AppSearchParams["sortBy"]): AnyColumn | null {
   }
 }
 
-async function countMatches(conds: SQL[]): Promise<number> {
+async function countMatches(conds: SQL[], maxDate: string): Promise<number> {
+  // Unfiltered (only the latest-day pin) → count off the snapshot_date index and
+  // skip the 1.1M-row join to apps. This is the common Explore/Highlights/Rising load.
+  if (conds.length === 1) {
+    const [row] = await getDb()
+      .select({ c: count() })
+      .from(appSnapshots)
+      .where(eq(appSnapshots.snapshotDate, maxDate));
+    return row?.c ?? 0;
+  }
   const [row] = await getDb()
     .select({ c: count() })
     .from(apps)
@@ -444,7 +453,7 @@ export async function searchAppsFromDb(params: AppSearchParams): Promise<Paginat
   if (!maxDate) return { data: [], pagination: { nextCursor: null, totalCount: 0 } };
 
   const conds = buildConditions(params, maxDate);
-  const [totalCount, ids] = await Promise.all([countMatches(conds), selectCandidateIds(conds, params)]);
+  const [totalCount, ids] = await Promise.all([countMatches(conds, maxDate), selectCandidateIds(conds, params)]);
 
   // Score only the bounded candidate pool, then filter/sort/paginate it exactly as
   // before — matchesSearch finalises the live-growth filters the SQL pool omits.
