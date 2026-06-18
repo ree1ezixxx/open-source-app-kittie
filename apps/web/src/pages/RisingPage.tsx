@@ -8,7 +8,7 @@ import { useApps } from "../hooks/useApps";
 import { EMPTY_FILTERS, writeFilters } from "../lib/exploreFilters";
 import { AppIcon } from "../components/AppIcon";
 import { formatCompact, formatMoney } from "../lib/format";
-import { IconRising, IconChart, IconCheck, IconClose, IconFilter } from "../icons";
+import { IconRising, IconChart, IconCheck, IconClose, IconFilter, IconRefresh } from "../icons";
 import type { Theme } from "../lib/theme";
 
 type Launched = "3M" | "6M" | "1Y";
@@ -163,7 +163,7 @@ export function RisingPage({ theme, onToggleTheme }: { theme: Theme; onToggleThe
 
   // Country selection is UI/persistence parity with live; the REST API has no
   // country dimension yet, so it doesn't narrow the query.
-  const { apps, total, loading } = useApps({
+  const { apps, total, loading, refresh } = useApps({
     sortBy: "growth",
     growthType: "positive",
     sortOrder: "desc",
@@ -298,6 +298,11 @@ export function RisingPage({ theme, onToggleTheme }: { theme: Theme; onToggleThe
       title="Rising Apps"
       sub="Discover apps with accelerating monthly recurring revenue"
       count={<span className="count-chip">Top {Math.min(total || apps.length, 100)} apps</span>}
+      actions={
+        <button className="icon-btn" onClick={refresh} aria-label="Refresh" title="Refresh">
+          <IconRefresh style={loading ? { animation: "spin 0.8s linear infinite" } : undefined} />
+        </button>
+      }
       theme={theme}
       onToggleTheme={onToggleTheme}
       toolbar={toolbar}
@@ -319,7 +324,7 @@ export function RisingPage({ theme, onToggleTheme }: { theme: Theme; onToggleThe
                 <th className="num" style={{ width: 56 }}>Rank</th>
                 <th className="col-app">App</th>
                 <th className="num">MRR</th>
-                <th className="num">Growth%</th>
+                <th className="num">Growth</th>
                 <th className="num">Downloads</th>
               </tr>
             </thead>
