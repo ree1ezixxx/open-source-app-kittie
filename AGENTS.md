@@ -1,6 +1,8 @@
-# AGENTS.md — Open Source App Kittie
+# AGENTS.md — Open Source App Kittie (Codex)
 
 Independent, open-source mobile app intelligence platform. AppKittie-inspired feature set; **no dependency on AppKittie's paid API**.
+
+> **Cursor** reads [`.cursor/rules/app-kittie.mdc`](./.cursor/rules/app-kittie.mdc). **Claude Code** reads [`CLAUDE.md`](./CLAUDE.md).
 
 ## Mission
 
@@ -10,12 +12,12 @@ Not a commercial product (for now). Ship fast: **days, not months**.
 
 ## Communication
 
-- **Concise and direct.** Lead with the answer or decision. No preamble, no recap of what the user just said.
-- **Short by default.** A few sentences or bullets beat a essay. Expand only when the user asks or the task genuinely needs it.
-- **No filler.** Cut throat-clearing ("Great question", "Let me break this down"), hedge stacks, and repeated explanations of the same point.
-- **Don't overcomplicate.** Prefer the simplest correct approach. Skip theory, analogies, and option menus unless a real fork needs a decision.
-- **Punctual.** State what changed or what to do next. Skip "What changed" diff narration — the user can see the diff.
-- **Clear over clever.** Plain language. One idea per sentence.
+Ultra compression — say the minimum that conveys the answer.
+
+- **Clear over clever.** Plain language beats jargon, metaphors, and throat-clearing.
+- **No verbosity or filler.** Don't pad to sound smart. No recaps, hedge stacks, or diff narration.
+- **Brevity by default.** Lead with the answer. A few bullets beat an essay. Expand only when asked or the task requires it.
+- **Simplify always.** Refuse unnecessary complexity. Prefer the simplest correct approach; skip theory, option menus, and layers nobody needs.
 
 ## UI Conventions
 
@@ -54,7 +56,7 @@ Schema changes go through `packages/db` only. If ingestion or API work needs a n
 
 ### Branching
 
-Each Cursor instance works on its own branch off `main`:
+Each agent session works on its own branch off `main`:
 
 | Branch | Focus |
 |--------|-------|
@@ -64,17 +66,18 @@ Each Cursor instance works on its own branch off `main`:
 
 Merge to `main` when a slice is verified. Do not cross-edit another branch's owned paths.
 
-## Models (Cursor)
+## Codex Agent Practices
 
-- **Default: Composer 2.5 only.** Run reviews, grills, and implementation in the parent agent.
-- **Do not spawn subagents on Sonnet, Opus, or other models** unless the user explicitly names a model.
-- **3+ file reads:** read sequentially or grep — not parallel subagents on alternate models.
+- **Parallel tool calls** when reads or checks are independent — don't serialize unnecessarily.
+- **Minimal diffs.** Match surrounding code style. Don't refactor unrelated code. Don't add docs or tests unless asked.
+- **Git hygiene.** Don't commit, push, or amend unless the user asks. Never force-push `main`.
+- **Run commands yourself** to validate — don't ask the user to run steps you can execute in the sandbox.
 
 ## Context Management (Token Efficiency)
 
 - **One objective per thread.** If scope creeps, stop and narrow before continuing.
 - **Read `CONTEXT.md` once** at session start — do not re-paste domain definitions into chat.
-- **Subagents for 3+ file reads.** Return summaries only, never raw dumps.
+- **Return summaries**, not raw file dumps, when reporting exploration results.
 - **Targeted edits** during iteration — no full-file rewrites unless >60% changes.
 - **No narrating diffs.** State what to verify, then stop.
 - Durable decisions → `CONTEXT.md` or `docs/adr/`. Chat is ephemeral.
@@ -137,7 +140,7 @@ Expected local baseline as of 2026-06-12: ~100K Apps, ~300K Snapshots, ~114K Rev
 2. **An app only appears once it has a snapshot row** (`listSnapshotContexts` skips snapshot-less apps). bulk-seed writes one per app, so this is handled — but any other insert path must also write a snapshot.
 3. **GROWTH 7D / Trending / Rising need day-over-day snapshots.** Running bulk-seed 10× in one day adds apps but growth stays flat (all snapshots share today's date). To populate growth, run on **successive days** (or run `jobs/snapshot.ts` daily). This is a time-series requirement, not a missing field.
 4. **The `rss.applemarketingtools.com` feed (old `seed.ts`) is failing.** Use genre-RSS (`itunes.apple.com/<cc>/rss/<feed>/limit/genre/json`) + Search — already wired in `discover.ts`.
-5. **Read-path is N+1** (per-app `countAppsInCategory` etc. in `signals.ts`) → first load after a reload is slow and gets worse with N. **Must be optimized (batch the per-app queries) before scaling past ~50K.**
+5. **List-path is batched; detail-path is not.** `listSnapshotContexts` bulk-loads in ~4 queries (see `packages/db/src/queries/signals.ts`). `getSnapshotContext` (single-app detail) still fires per-app queries — fine for one id, don't use it in loops.
 
 **Data completeness vs AppKittie's Database table (audited 2026-06-08):** their row = #·app·category·growth7d·rating·reviews·downloads·MRR·released·last-update·view. We capture **every underlying field** — rating/reviews from Lookup, downloads/revenue/growth **modeled at read-time** by `intelligence`, category/dates/icon/screenshots/description/price/contentRating/languages from Lookup. Not missing fundamental data. ~7% of apps legitimately have 0 US ratings (Apple returns 0 — not our bug).
 

@@ -12,6 +12,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   averageRating,
   ratingDistribution,
+  type MonitoredApp,
 } from "../../lib/api/reviews";
 import {
   topicTimeSeries,
@@ -28,9 +29,9 @@ import {
   type DimensionTimeSeries,
 } from "../../lib/api/reviewIntel";
 import { TrendChart, type TrendSeries } from "../../components/reviews/TrendChart";
-import { EmptyState, MockNotice } from "../../components/reviews/primitives";
-import { formatCompact, relativeTime } from "../../lib/format";
-import { IconStar, IconSearch, IconSpark, IconChart, IconUsers, IconRefresh } from "../../icons";
+import { EmptyState } from "../../components/reviews/primitives";
+import { formatCompact } from "../../lib/format";
+import { IconStar, IconSearch, IconSpark, IconChart, IconUsers, IconMessage, IconExternal } from "../../icons";
 
 /* ---- tiny star row ---- */
 function Stars({ value, size = 12 }: { value: number; size?: number }) {
@@ -46,47 +47,27 @@ function Stars({ value, size = 12 }: { value: number; size?: number }) {
   );
 }
 
-/* tiny inline trend line — replaces the awkward topic-timeline matrix */
-function Sparkline({ values, color }: { values: number[]; color: string }) {
-  const n = values.length;
-  if (n < 2) return <span className="rv-spark-empty">—</span>;
-  const max = Math.max(1, ...values);
-  const W = 84, H = 22, p = 2;
-  const x = (i: number) => p + (i / (n - 1)) * (W - 2 * p);
-  const y = (v: number) => p + (1 - v / max) * (H - 2 * p);
-  const d = values.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(" ");
-  return (
-    <svg className="rv-spark" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
-      <path d={d} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
-    </svg>
-  );
+/* Sentiment is a 4-way indicator (truth parity): Positive (green), Neutral
+   (grey), Negative (red), Mixed (orange). Topics get their OWN distinct
+   colours (SERIES_PALETTE) — sentiment colour and topic colour are separate. */
+const SENT_COLOR: Record<Sentiment4, string> = { positive: "#5fd08a", neutral: "#9a9aa3", negative: "#ff7a6b", mixed: "#f5a623" };
+const SENT_LABEL: Record<Sentiment4, string> = { positive: "Positive", neutral: "Neutral", negative: "Negative", mixed: "Mixed" };
+/** Absolute review date, e.g. "Jun 16, 2026" (truth shows absolute, not relative). */
+function fmtReviewDate(iso: string): string {
+  const d = new Date(iso);
+  return isNaN(+d) ? "" : d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
-
-/* Sentiment is a 3-way indicator: Positive (green), Negative (red), Mixed
-   (orange). The classifier's "neutral" folds into Mixed so there are exactly
-   three buckets, matching the reference. Topics get their OWN distinct colours
-   (SERIES_PALETTE) — sentiment colour and topic colour are separate systems. */
-type Sent3 = "positive" | "negative" | "mixed";
-function sent3(s: Sentiment4): Sent3 {
-  if (s === "positive") return "positive";
-  if (s === "negative") return "negative";
-  return "mixed"; // neutral + mixed
-}
-const SENT3_COLOR: Record<Sent3, string> = { positive: "#5fd08a", negative: "#ff7a6b", mixed: "#f5a623" };
-const SENT3_LABEL: Record<Sent3, string> = { positive: "Positive", negative: "Negative", mixed: "Mixed" };
 const topicColor = (i: number) => SERIES_PALETTE[i % SERIES_PALETTE.length] ?? "#888";
 
 const PERIODS: { label: string; days: number | null }[] = [
   { label: "All", days: null },
-  { label: "7d", days: 7 },
-  { label: "14d", days: 14 },
-  { label: "30d", days: 30 },
-  { label: "90d", days: 90 },
-  { label: "180d", days: 180 },
+  { label: "7 days", days: 7 },
+  { label: "14 days", days: 14 },
+  { label: "30 days", days: 30 },
+  { label: "90 days", days: 90 },
+  { label: "180 days", days: 180 },
 ];
 
-const INTERIM_NOTE =
-  "Topics are tagged by an interim keyword classifier, so the surface is live — counts, sentiment and ratings are real aggregates over the loaded reviews. Categorisation accuracy sharpens once the AI model is enabled.";
 
 /** Convert a dimension time-series into multi-series trend-chart input.
     Each topic gets its own distinct colour (like the reference) so lines are
@@ -104,7 +85,103 @@ function toTrend(ts: DimensionTimeSeries): { periods: string[]; series: TrendSer
 }
 
 /* ============================================================ Overview */
-export function OverviewTab({ tagged, appsMonitored }: { tagged: TaggedReview[]; appsMonitored: number }) {
+/** Top topic/area labels among reviews of the given sentiments (frequency-ranked). */
+function topLabelsBySentiment(
+  tagged: TaggedReview[],
+  sentiments: Sentiment4[],
+  pick: "topics" | "improvementAreas",
+  n: number,
+): string[] {
+  const counts = new Map<string, number>();
+  for (const t of tagged) {
+    if (!sentiments.includes(t.tags.sentiment)) continue;
+    for (const x of t.tags[pick]) counts.set(x, (counts.get(x) ?? 0) + 1);
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, n).map(([k]) => k);
+}
+
+export function OverviewTab({
+  tagged, appsMonitored, isAll, monitored, indexed, appName, onSelectApp, onViewReviews,
+}: {
+  tagged: TaggedReview[];
+  appsMonitored: number;
+  isAll: boolean;
+  monitored: MonitoredApp[];
+  indexed: Record<string, number>;
+  appName: string | null;
+  onSelectApp: (id: string) => void;
+  onViewReviews: () => void;
+}) {
+  if (isAll) {
+    return <AggregateOverview tagged={tagged} appsMonitored={appsMonitored} monitored={monitored} indexed={indexed} onSelectApp={onSelectApp} />;
+  }
+  return <SingleAppOverview tagged={tagged} appName={appName} onViewReviews={onViewReviews} />;
+}
+
+/* ---- aggregate (All Apps): KPIs + Your Apps grid ---- */
+function AggregateOverview({
+  tagged, appsMonitored, monitored, indexed, onSelectApp,
+}: {
+  tagged: TaggedReview[];
+  appsMonitored: number;
+  monitored: MonitoredApp[];
+  indexed: Record<string, number>;
+  onSelectApp: (id: string) => void;
+}) {
+  const reviews = tagged.map((t) => t.review);
+  const avg = averageRating(reviews);
+  const total = reviews.length;
+  return (
+    <div className="rv-overview">
+      <div className="rv-kpis">
+        <div className="rv-kpi">
+          <div className="rv-kpi-ic"><IconMessage style={{ width: 17, height: 17 }} /></div>
+          <div><div className="rv-kpi-num">{formatCompact(total)}</div><div className="rv-kpi-label">Total Reviews</div></div>
+        </div>
+        <div className="rv-kpi">
+          <div className="rv-kpi-ic"><IconStar style={{ width: 17, height: 17 }} /></div>
+          <div><div className="rv-kpi-num">{avg != null ? avg.toFixed(1) : "—"}</div><div className="rv-kpi-label">Average Rating</div></div>
+        </div>
+        <div className="rv-kpi">
+          <div className="rv-kpi-ic"><IconChart style={{ width: 17, height: 17 }} /></div>
+          <div><div className="rv-kpi-num">{appsMonitored}</div><div className="rv-kpi-label">Apps Monitored</div></div>
+        </div>
+      </div>
+
+      <div className="rv-yourapps-head">
+        <h2 className="rv-section-title">Your Apps</h2>
+        <span className="rv-card-meta">{appsMonitored} app{appsMonitored === 1 ? "" : "s"} monitored</span>
+      </div>
+      <div className="rv-yourapps-grid">
+        {monitored.map((a) => (
+          <button className="rv-card rv-appcard" key={a.id} onClick={() => onSelectApp(a.id)}>
+            <div className="rv-appcard-head">
+              {a.iconUrl
+                ? <img className="rv-appcard-ic" src={a.iconUrl} alt="" referrerPolicy="no-referrer" />
+                : <span className="rv-appcard-ic rv-appcard-ph">{a.title.charAt(0)}</span>}
+              <div className="rv-appcard-meta">
+                <div className="rv-appcard-name">{a.title}</div>
+                <div className="rv-appcard-dev">{a.developer}</div>
+              </div>
+            </div>
+            <div className="rv-appcard-foot">
+              <span className="rv-num">{indexed[a.id] != null ? formatCompact(indexed[a.id]!) : "…"}</span> reviews
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ---- single app: the rich dashboard (alerts · rating · reviews · AI summary · feedback) ---- */
+function SingleAppOverview({
+  tagged, appName, onViewReviews,
+}: {
+  tagged: TaggedReview[];
+  appName: string | null;
+  onViewReviews: () => void;
+}) {
   const reviews = tagged.map((t) => t.review);
   const dist = ratingDistribution(reviews);
   const avg = averageRating(reviews);
@@ -113,50 +190,54 @@ export function OverviewTab({ tagged, appsMonitored }: { tagged: TaggedReview[];
 
   const sent = sentimentCounts(tagged);
   const sTotal = total || 1;
-  const pos = sent.positive / sTotal;
-  const neg = sent.negative / sTotal;
-  const neu = Math.max(0, 1 - pos - neg);
-  const net = Math.round((pos - neg) * 100);
+  const posPct = Math.round((sent.positive / sTotal) * 100);
+  const negPct = Math.round((sent.negative / sTotal) * 100);
+  const net = posPct - negPct;
+
+  const topTopics = useMemo(() => topicFacets(tagged).slice(0, 10), [tagged]);
+  const love = useMemo(() => topLabelsBySentiment(tagged, ["positive", "mixed"], "topics", 5), [tagged]);
+  const needs = useMemo(() => {
+    const a = topLabelsBySentiment(tagged, ["negative", "mixed"], "improvementAreas", 5);
+    return a.length ? a : topLabelsBySentiment(tagged, ["negative", "mixed"], "topics", 5);
+  }, [tagged]);
+  const insights = useMemo(() => improvementFacets(tagged).slice(0, 6), [tagged]);
+  const insightMax = Math.max(1, ...insights.map((i) => i.count));
+  const minutesSaved = Math.round(total * 0.5);
+  const skew = net > 8 ? "skews positive" : net < -8 ? "skews negative" : "is mixed";
+  const summary =
+    `Across ${formatCompact(total)} analysed reviews, sentiment ${skew} (${posPct}% positive, ${negPct}% negative).` +
+    (topTopics.length ? ` Users most often discuss ${topTopics.slice(0, 3).map((t) => t.label).join(", ")}.` : "");
 
   return (
     <div className="rv-overview">
-      {/* KPI cards */}
-      <div className="rv-kpis">
-        <div className="rv-kpi">
-          <div className="rv-kpi-ic"><IconUsers style={{ width: 17, height: 17 }} /></div>
-          <div>
-            <div className="rv-kpi-num">{formatCompact(total)}</div>
-            <div className="rv-kpi-label">Total Reviews</div>
+      {/* Review alerts (UI; delivery deferred) */}
+      <section className="rv-card rv-alerts">
+        <div className="rv-card-head">
+          <div className="rv-card-title">Review alerts</div>
+          <span className="rv-alerts-stats">0 alert rules · Email available · Slack optional</span>
+        </div>
+        <p className="rv-alerts-intro">
+          We'll alert you as soon as a new review is detected{appName ? ` for ${appName}` : ""}, so you can jump in and respond quickly.
+        </p>
+        <div className="rv-alerts-empty">
+          <div className="rv-alerts-empty-title">No alerts configured yet</div>
+          <div className="rv-alerts-empty-sub">Add an email alert or connect Slack so fresh reviews reach your team right away.</div>
+          <div className="rv-alerts-actions">
+            <button className="btn btn-accent" title="Alerts delivery is coming soon">Add email alert</button>
+            <button className="btn" title="Slack integration is coming soon">Connect Slack</button>
           </div>
         </div>
-        <div className="rv-kpi">
-          <div className="rv-kpi-ic"><IconStar style={{ width: 17, height: 17 }} /></div>
-          <div>
-            <div className="rv-kpi-num">{avg != null ? avg.toFixed(2) : "—"}</div>
-            <div className="rv-kpi-label">Average Rating</div>
-          </div>
-        </div>
-        <div className="rv-kpi">
-          <div className="rv-kpi-ic"><IconChart style={{ width: 17, height: 17 }} /></div>
-          <div>
-            <div className="rv-kpi-num">{appsMonitored}</div>
-            <div className="rv-kpi-label">Apps Monitored</div>
-          </div>
-        </div>
-      </div>
+      </section>
 
       <div className="rv-grid-2">
-        {/* rating distribution — REAL */}
+        {/* Rating */}
         <section className="rv-card">
-          <div className="rv-card-head">
-            <div className="rv-card-title">Rating distribution</div>
-            <span className="rv-card-meta">{formatCompact(total)} loaded</span>
-          </div>
+          <div className="rv-card-head"><div className="rv-card-title">Rating</div></div>
           <div className="rv-avg">
             <div className="rv-avg-num">{avg != null ? avg.toFixed(2) : "—"}</div>
             <div>
               <Stars value={Math.round(avg ?? 0)} size={15} />
-              <div className="rv-avg-sub">across the latest {formatCompact(total)} reviews</div>
+              <div className="rv-avg-sub">{formatCompact(total)} reviews · based on reviews with comments only</div>
             </div>
           </div>
           <div className="rv-dist">
@@ -164,10 +245,7 @@ export function OverviewTab({ tagged, appsMonitored }: { tagged: TaggedReview[];
               <div className="rv-dist-row" key={k}>
                 <span className="rv-dist-k">{k}<IconStar style={{ width: 11, height: 11, color: "#f5c451" }} /></span>
                 <span className="rv-dist-track">
-                  <span
-                    className="rv-dist-fill"
-                    style={{ width: `${(dist[k] / maxBar) * 100}%`, background: k >= 4 ? "var(--positive)" : k === 3 ? "#f5b545" : "var(--negative)" }}
-                  />
+                  <span className="rv-dist-fill" style={{ width: `${(dist[k] / maxBar) * 100}%`, background: k >= 4 ? "var(--positive)" : k === 3 ? "#f5b545" : "var(--negative)" }} />
                 </span>
                 <span className="rv-dist-n">{formatCompact(dist[k])}</span>
               </div>
@@ -175,30 +253,73 @@ export function OverviewTab({ tagged, appsMonitored }: { tagged: TaggedReview[];
           </div>
         </section>
 
-        {/* sentiment — REAL (interim tags) */}
+        {/* Reviews */}
         <section className="rv-card">
-          <div className="rv-card-head">
-            <div className="rv-card-title">Sentiment summary</div>
-            <span className="rv-card-meta">tagged</span>
-          </div>
-          <div className="rv-net">
-            <div className="rv-net-num" style={{ color: net >= 0 ? "var(--positive)" : "var(--negative)" }}>
-              {net > 0 ? "+" : ""}{net}
-            </div>
-            <div className="rv-net-label">Net sentiment score</div>
+          <div className="rv-card-head"><div className="rv-card-title">Reviews</div></div>
+          <div className="rv-revstats">
+            <div className="rv-revstat"><div className="rv-revstat-num rv-num">{formatCompact(total)}</div><div className="rv-revstat-label">total reviews</div></div>
+            <div className="rv-revstat"><div className="rv-revstat-num rv-num">{avg != null ? avg.toFixed(2) : "—"}</div><div className="rv-revstat-label">avg. review rating</div></div>
+            <div className="rv-revstat"><div className="rv-revstat-num rv-num" style={{ color: "var(--positive)" }}>{posPct}%</div><div className="rv-revstat-label">positive</div></div>
+            <div className="rv-revstat"><div className="rv-revstat-num rv-num" style={{ color: "var(--negative)" }}>{negPct}%</div><div className="rv-revstat-label">negative</div></div>
           </div>
           <div className="rv-sent-bar">
-            <span style={{ width: `${pos * 100}%`, background: "#5fd08a" }} />
-            <span style={{ width: `${neu * 100}%`, background: "#f5a623" }} />
-            <span style={{ width: `${neg * 100}%`, background: "#ff7a6b" }} />
-          </div>
-          <div className="rv-sent-legend">
-            <span><i style={{ background: "#5fd08a" }} />Positive {Math.round(pos * 100)}%</span>
-            <span><i style={{ background: "#f5a623" }} />Mixed {Math.round(neu * 100)}%</span>
-            <span><i style={{ background: "#ff7a6b" }} />Negative {Math.round(neg * 100)}%</span>
+            <span style={{ width: `${posPct}%`, background: "#5fd08a" }} />
+            <span style={{ width: `${Math.max(0, 100 - posPct - negPct)}%`, background: "#f5a623" }} />
+            <span style={{ width: `${negPct}%`, background: "#ff7a6b" }} />
           </div>
         </section>
       </div>
+
+      {/* AI Summary (interim heuristic model — not LLM yet) */}
+      <section className="rv-card rv-aisum">
+        <div className="rv-card-head">
+          <div className="rv-card-title"><IconSpark style={{ width: 15, height: 15 }} /> AI Summary</div>
+          <span className="rv-mock-badge">interim model</span>
+        </div>
+        <div className="rv-aisum-stats">
+          <span><b className="rv-num">{formatCompact(total)}</b> reviews</span>
+          <span><b className="rv-num">{avg != null ? avg.toFixed(1) : "—"}</b> avg</span>
+          <span>~<b className="rv-num">{formatCompact(minutesSaved)}</b> min saved</span>
+        </div>
+        <p className="rv-aisum-text">{summary}</p>
+        {topTopics.length > 0 && (
+          <>
+            <div className="rv-aisum-label">Top topics</div>
+            <div className="rv-aisum-chips">
+              {topTopics.map((t) => <span className="rv-chip" key={t.label}>{t.label}<span className="rv-chip-n">{t.count}</span></span>)}
+            </div>
+          </>
+        )}
+        <div className="rv-aisum-cols">
+          <div>
+            <div className="rv-aisum-label rv-aisum-love">What users love</div>
+            <ul className="rv-aisum-list">{love.length ? love.map((x) => <li key={x}>{x}</li>) : <li className="rv-muted">Not enough positive reviews yet</li>}</ul>
+          </div>
+          <div>
+            <div className="rv-aisum-label rv-aisum-needs">What needs work</div>
+            <ul className="rv-aisum-list">{needs.length ? needs.map((x) => <li key={x}>{x}</li>) : <li className="rv-muted">Not enough critical reviews yet</li>}</ul>
+          </div>
+        </div>
+      </section>
+
+      {/* Feedback Insights */}
+      <section className="rv-card rv-feedback">
+        <div className="rv-card-head">
+          <div className="rv-card-title">Feedback Insights</div>
+          <span className="rv-card-meta"><b className="rv-num">{posPct}%</b> total satisfaction</span>
+        </div>
+        <div className="rv-feedback-bars">
+          {insights.map((i) => (
+            <div className="rv-feedback-row" key={i.label}>
+              <span className="rv-feedback-label">{i.label}</span>
+              <span className="rv-feedback-track"><span className="rv-feedback-fill" style={{ width: `${(i.count / insightMax) * 100}%` }} /></span>
+              <span className="rv-feedback-n rv-num">{formatCompact(i.count)}</span>
+            </div>
+          ))}
+          {insights.length === 0 && <div className="rv-muted">No improvement areas surfaced yet</div>}
+        </div>
+        <button className="rv-viewall" onClick={onViewReviews}>View all reviews <IconExternal style={{ width: 13, height: 13 }} /></button>
+      </section>
     </div>
   );
 }
@@ -206,24 +327,37 @@ export function OverviewTab({ tagged, appsMonitored }: { tagged: TaggedReview[];
 /* ============================================================ Reviews (feed) */
 type RatingFilter = "all" | "5" | "4" | "3" | "2" | "1";
 type SentFilter = "all" | Sentiment4;
-type ReviewSort = "newest" | "oldest" | "highest" | "lowest";
 
 export function ReviewsTab({ tagged }: { tagged: TaggedReview[] }) {
   const [sp, setSp] = useSearchParams();
-  const [rating, setRating] = useState<RatingFilter>("all");
-  const [sentiment, setSentiment] = useState<SentFilter>("all");
-  const [days, setDays] = useState<number | null>(null);
-  const [sort, setSort] = useState<ReviewSort>("newest");
-  const [q, setQ] = useState("");
 
-  // deep-link filters (?topic= / ?area=) — Improvements/Semantics drill into here
+  // Feed filters all live in the URL — reload-safe + shareable, like truth (?sentiment=…).
+  const rating = (sp.get("rating") ?? "all") as RatingFilter;
+  const sentiment = (sp.get("sentiment") ?? "all") as SentFilter;
+  // truth defaults the feed to a 30-day window; "all" is an explicit sentinel
+  const periodParam = sp.get("period");
+  const days = periodParam === "all" ? null : periodParam ? Number(periodParam) : 30;
+  const q = sp.get("q") ?? "";
   const topic = sp.get("topic");
-  const area = sp.get("area");
-  const setParam = (key: "topic" | "area", val: string | null) => {
+  const area = sp.get("improvementArea");
+  const page = Math.max(1, Number(sp.get("page") || "1"));
+  const PAGE_SIZE = 20;
+  const FACET_CAP = 8; // truth shows ~8 facet chips then "+N more"
+
+  // single URL writer; any filter change resets pagination unless keepPage
+  const update = (patch: Record<string, string | null>, keepPage = false) => {
     const next = new URLSearchParams(sp);
-    if (val) next.set(key, val); else next.delete(key);
+    for (const [k, v] of Object.entries(patch)) {
+      if (v == null || v === "" || v === "all") next.delete(k);
+      else next.set(k, v);
+    }
+    if (!keepPage) next.delete("page");
     setSp(next, { replace: true });
   };
+
+  const [growthMetric, setGrowthMetric] = useState<"new" | "total">("total");
+  const [topicsOpen, setTopicsOpen] = useState(false);
+  const [impsOpen, setImpsOpen] = useState(false);
 
   const periodSet = useMemo(() => withinPeriod(tagged, days), [tagged, days]);
   const sFacet = useMemo(() => sentimentCounts(periodSet), [periodSet]);
@@ -233,130 +367,163 @@ export function ReviewsTab({ tagged }: { tagged: TaggedReview[] }) {
   const filtered = useMemo(() => {
     let list = periodSet;
     if (rating !== "all") list = list.filter((t) => Math.round(t.review.rating) === Number(rating));
-    if (sentiment !== "all") list = list.filter((t) => sent3(t.tags.sentiment) === sentiment);
+    if (sentiment !== "all") list = list.filter((t) => t.tags.sentiment === sentiment);
     if (topic) list = list.filter((t) => t.tags.topics.includes(topic));
     if (area) list = list.filter((t) => t.tags.improvementAreas.includes(area));
     if (q.trim()) {
       const n = q.trim().toLowerCase();
       list = list.filter((t) => (t.review.title ?? "").toLowerCase().includes(n) || t.review.body.toLowerCase().includes(n));
     }
-    const sorted = [...list];
-    sorted.sort((a, b) => {
-      switch (sort) {
-        case "oldest": return +new Date(a.review.reviewedAt) - +new Date(b.review.reviewedAt);
-        case "highest": return b.review.rating - a.review.rating;
-        case "lowest": return a.review.rating - b.review.rating;
-        default: return +new Date(b.review.reviewedAt) - +new Date(a.review.reviewedAt);
-      }
-    });
-    return sorted;
-  }, [periodSet, rating, sentiment, topic, area, q, sort]);
+    return [...list].sort((a, b) => +new Date(b.review.reviewedAt) - +new Date(a.review.reviewedAt));
+  }, [periodSet, rating, sentiment, topic, area, q]);
 
-  const SENTS: SentFilter[] = ["all", "positive", "negative", "mixed"];
-  // 3-way counts: neutral folds into mixed.
-  const sFacet3 = { positive: sFacet.positive, negative: sFacet.negative, mixed: sFacet.mixed + sFacet.neutral };
+  const total = filtered.length;
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount);
+  const start = total === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1;
+  const end = Math.min(safePage * PAGE_SIZE, total);
+  const pageItems = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+  // Truth order: All / Positive / Negative / Neutral / Mixed (5-way, Neutral distinct).
+  const SENTS: SentFilter[] = ["all", "positive", "negative", "neutral", "mixed"];
+  const tShown = topicsOpen ? tFacets : tFacets.slice(0, FACET_CAP);
+  const iShown = impsOpen ? iFacets : iFacets.slice(0, FACET_CAP);
 
   return (
     <div className="rv-reviews">
-      {/* period */}
-      <div className="rv-period">
-        <span className="rv-period-label">Period</span>
-        {PERIODS.map((p) => (
-          <button key={p.label} className={`rv-chip ${days === p.days ? "on" : ""}`} onClick={() => setDays(p.days)}>{p.label}</button>
-        ))}
+      {/* Review Growth — historical metrics accrue from daily snapshots; empty until then (matches truth) */}
+      <div className="rv-card rv-growth">
+        <div className="rv-growth-head">
+          <h3 className="rv-card-title">Review Growth</h3>
+          <div className="rv-rating-seg rv-growth-toggle">
+            <button className={`rv-seg-btn ${growthMetric === "new" ? "on" : ""}`} onClick={() => setGrowthMetric("new")}>New</button>
+            <button className={`rv-seg-btn ${growthMetric === "total" ? "on" : ""}`} onClick={() => setGrowthMetric("total")}>Total</button>
+          </div>
+        </div>
+        <div className="rv-growth-periods">
+          <span className="rv-period-label">Period:</span>
+          {PERIODS.map((p) => (
+            <button key={p.label} className={`rv-chip ${days === p.days ? "on" : ""}`} onClick={() => update({ period: p.days == null ? "all" : String(p.days) })}>{p.label}</button>
+          ))}
+        </div>
+        <div className="rv-growth-empty">No historical review metrics yet</div>
       </div>
 
-      {/* rating + sentiment + sort + search */}
+      {/* search + rating + sentiment */}
       <div className="rv-filters">
+        <div className="search rv-search">
+          <IconSearch />
+          <input placeholder="Search reviews…" value={q} onChange={(e) => update({ q: e.target.value || null })} />
+        </div>
         <div className="rv-rating-seg">
           {(["all", "5", "4", "3", "2", "1"] as RatingFilter[]).map((r) => (
-            <button key={r} className={`rv-seg-btn ${rating === r ? "on" : ""}`} onClick={() => setRating(r)}>
+            <button key={r} className={`rv-seg-btn ${rating === r ? "on" : ""}`} onClick={() => update({ rating: r })}>
               {r === "all" ? "All" : <>{r}<IconStar style={{ width: 11, height: 11, color: rating === r ? "#f5c451" : "currentColor" }} /></>}
             </button>
           ))}
         </div>
         <div className="rv-rating-seg">
           {SENTS.map((s) => (
-            <button key={s} className={`rv-seg-btn ${sentiment === s ? "on" : ""}`} onClick={() => setSentiment(s)}>
-              {s === "all" ? "All" : SENT3_LABEL[s as Sent3]}
-              {s !== "all" && <span className="rv-seg-n">{sFacet3[s as Sent3]}</span>}
+            <button key={s} className={`rv-seg-btn ${sentiment === s ? "on" : ""}`} onClick={() => update({ sentiment: s })}>
+              {s === "all" ? "All" : SENT_LABEL[s as Sentiment4]}
+              {s !== "all" && <span className="rv-seg-n">{sFacet[s as Sentiment4]}</span>}
             </button>
           ))}
         </div>
-        <div className="select">
-          <select value={sort} onChange={(e) => setSort(e.target.value as ReviewSort)}>
-            <option value="newest">Newest first</option>
-            <option value="oldest">Oldest first</option>
-            <option value="highest">Highest rated</option>
-            <option value="lowest">Lowest rated</option>
-          </select>
-        </div>
-        <div className="search rv-search">
-          <IconSearch />
-          <input placeholder="Search review text…" value={q} onChange={(e) => setQ(e.target.value)} />
-        </div>
-        <span className="rv-filter-count">{formatCompact(filtered.length)} shown</span>
       </div>
 
-      {/* topic facets — single scrollable lane, not a wrapping wall of chips */}
+      {/* topic facets */}
       {tFacets.length > 0 && (
-        <div className="rv-facets rv-facets-scroll">
+        <div className="rv-facets">
           <span className="rv-facet-label">Topics</span>
-          <button className={`rv-chip ${!topic ? "on" : ""}`} onClick={() => setParam("topic", null)}>All</button>
-          {tFacets.map((f) => (
-            <button key={f.label} className={`rv-chip ${topic === f.label ? "on" : ""}`} onClick={() => setParam("topic", topic === f.label ? null : f.label)}>
+          <button className={`rv-chip ${!topic ? "on" : ""}`} onClick={() => update({ topic: null })}>All</button>
+          {tShown.map((f) => (
+            <button key={f.label} className={`rv-chip ${topic === f.label ? "on" : ""}`} onClick={() => update({ topic: topic === f.label ? null : f.label })}>
               {f.label}<span className="rv-chip-n">{f.count}</span>
             </button>
           ))}
+          {tFacets.length > FACET_CAP && (
+            <button className="rv-facet-more" onClick={() => setTopicsOpen((v) => !v)}>
+              {topicsOpen ? "Show less" : `+${tFacets.length - FACET_CAP} more`}
+            </button>
+          )}
         </div>
       )}
 
-      {/* improvement facets — same scrollable lane */}
+      {/* improvement facets */}
       {iFacets.length > 0 && (
-        <div className="rv-facets rv-facets-scroll">
+        <div className="rv-facets">
           <span className="rv-facet-label">Improvements</span>
-          <button className={`rv-chip ${!area ? "on" : ""}`} onClick={() => setParam("area", null)}>All</button>
-          {iFacets.map((f) => (
-            <button key={f.label} className={`rv-chip ${area === f.label ? "on" : ""}`} onClick={() => setParam("area", area === f.label ? null : f.label)}>
+          <button className={`rv-chip ${!area ? "on" : ""}`} onClick={() => update({ improvementArea: null })}>All</button>
+          {iShown.map((f) => (
+            <button key={f.label} className={`rv-chip ${area === f.label ? "on" : ""}`} onClick={() => update({ improvementArea: area === f.label ? null : f.label })}>
               {f.label}<span className="rv-chip-n">{f.count}</span>
             </button>
           ))}
+          {iFacets.length > FACET_CAP && (
+            <button className="rv-facet-more" onClick={() => setImpsOpen((v) => !v)}>
+              {impsOpen ? "Show less" : `+${iFacets.length - FACET_CAP} more`}
+            </button>
+          )}
         </div>
       )}
 
-      {filtered.length === 0 ? (
+      {total === 0 ? (
         <EmptyState
           icon={<IconSearch />}
           title="No reviews match these filters"
           sub="Try clearing a filter or widening the period."
         />
       ) : (
-        <ul className="rv-review-list">
-          {filtered.map((t) => {
-            const r = t.review;
-            return (
-              <li className="rv-review" key={r.id}>
-                <div className="rv-review-top">
-                  <Stars value={Math.round(r.rating)} />
-                  {r.title && <span className="rv-review-title">{r.title}</span>}
-                  <span className="rv-review-date">{relativeTime(r.reviewedAt)}</span>
-                </div>
-                <p className="rv-review-body">{r.body}</p>
-                <div className="rv-review-foot">
-                  <span className="rv-rev-sent" style={{ color: SENT3_COLOR[sent3(t.tags.sentiment)] }}>
-                    <i style={{ background: SENT3_COLOR[sent3(t.tags.sentiment)] }} />{SENT3_LABEL[sent3(t.tags.sentiment)]}
-                  </span>
-                  {t.tags.topics.slice(0, 3).map((tp) => (
-                    <button key={tp} className="rv-rev-topic" onClick={() => setParam("topic", tp)}>{tp}</button>
-                  ))}
-                  <span className="rv-review-author">{r.author ?? "Anonymous"}</span>
-                  <span className="rv-dot">·</span>
-                  <span>{r.country}</span>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+        <>
+          <div className="rv-feed-grid">
+            {pageItems.map((t) => {
+              const r = t.review;
+              const tags = [
+                ...t.tags.topics.map((label) => ({ label, kind: "topic" as const })),
+                ...t.tags.improvementAreas.map((label) => ({ label, kind: "area" as const })),
+              ].slice(0, 5);
+              const who = (r.author ?? "Anonymous").trim() || "Anonymous";
+              return (
+                <article className="rv-rcard" key={r.id}>
+                  <div className="rv-rcard-head">
+                    <Stars value={Math.round(r.rating)} />
+                    <span className="rv-rcard-sent" style={{ color: SENT_COLOR[t.tags.sentiment], borderColor: SENT_COLOR[t.tags.sentiment] }}>
+                      {SENT_LABEL[t.tags.sentiment]}
+                    </span>
+                  </div>
+                  {r.title && <h4 className="rv-rcard-title">{r.title}</h4>}
+                  <p className="rv-rcard-body">{r.body}</p>
+                  {tags.length > 0 && (
+                    <div className="rv-rcard-tags">
+                      {tags.map((tg) => (
+                        <button
+                          key={`${tg.kind}:${tg.label}`}
+                          className="rv-rev-topic"
+                          onClick={() => update(tg.kind === "topic" ? { topic: tg.label, improvementArea: null } : { improvementArea: tg.label, topic: null })}
+                        >
+                          {tg.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <div className="rv-rcard-author">
+                    <span className="rv-rcard-avatar" aria-hidden>{who.charAt(0).toUpperCase()}</span>
+                    <span className="rv-rcard-name">{who}</span>
+                    <span className="rv-rcard-date">{fmtReviewDate(r.reviewedAt)}</span>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+          <div className="rv-pager">
+            <span className="rv-pager-info">Showing <b>{start}</b>–<b>{end}</b> of <b>{formatCompact(total)}</b></span>
+            <div className="rv-pager-btns">
+              <button className="rv-pager-btn" disabled={safePage <= 1} onClick={() => update({ page: String(safePage - 1) }, true)} aria-label="Previous page">‹</button>
+              <button className="rv-pager-btn" disabled={safePage >= pageCount} onClick={() => update({ page: String(safePage + 1) }, true)} aria-label="Next page">›</button>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );
@@ -376,27 +543,15 @@ function PeriodChips({
   refreshing?: boolean;
   children?: React.ReactNode;
 }) {
+  // Refresh lives beside the app selector (truth) — not in the period row.
+  void onRefresh; void refreshing;
   return (
     <div className="rv-period">
-      <span className="rv-period-label">Period</span>
+      <span className="rv-period-label">Period:</span>
       {PERIODS.map((p) => (
         <button key={p.label} className={`rv-chip ${days === p.days ? "on" : ""}`} onClick={() => onChange(p.days)}>{p.label}</button>
       ))}
       {children}
-      {onRefresh && (
-        <>
-          <span className="rv-period-spacer" />
-          <button
-            className="rv-refresh"
-            onClick={onRefresh}
-            disabled={refreshing}
-            title="Fetch latest reviews for this app"
-          >
-            <IconRefresh className={refreshing ? "rv-spin" : ""} style={{ width: 13, height: 13 }} />
-            {refreshing ? "Refreshing…" : "Refresh"}
-          </button>
-        </>
-      )}
     </div>
   );
 }
@@ -406,54 +561,57 @@ export function SemanticsTab({ tagged, onRefresh, refreshing }: { tagged: Tagged
   const [days, setDays] = useState<number | null>(null);
   const ts = useMemo(() => topicTimeSeries(tagged, days), [tagged, days]);
   const trend = useMemo(() => toTrend(ts), [ts]);
-  const maxMentions = Math.max(1, ...ts.rows.map((r) => r.totalMentions));
   const gran = GRANULARITY_LABEL[ts.granularity];
 
   return (
     <div className="rv-semantics">
       <PeriodChips days={days} onChange={setDays} onRefresh={onRefresh} refreshing={refreshing} />
-      <MockNotice>{INTERIM_NOTE}</MockNotice>
 
       {ts.rows.length === 0 ? (
         <EmptyState icon={<IconSearch />} title="No topics in this period" sub="Widen the period or load more reviews to surface themes." />
       ) : (
         <>
-          {/* Topic trends chart */}
+          {/* Topic Trends chart */}
           <section className="rv-card">
             <div className="rv-card-head">
-              <div className="rv-card-title">Topic trends</div>
+              <div className="rv-card-title">Topic Trends <span className="rv-mock-badge">interim model</span></div>
               <span className="rv-card-meta">mentions / {gran} · top {Math.min(4, ts.rows.length)} shown · hover a topic to isolate</span>
             </div>
             <TrendChart periods={trend.periods} series={trend.series} />
           </section>
 
-          {/* Topics table — each row carries a compact trend sparkline, so the
-              per-topic history lives here instead of in a wide numeric matrix */}
+          {/* Topic Timeline — per-date mention matrix (truth parity) */}
           <section className="rv-card">
             <div className="rv-card-head">
-              <div className="rv-card-title">Topics ({ts.rows.length})</div>
-              <span className="rv-card-meta">{formatCompact(tagged.length)} reviews tagged · trend / {gran}</span>
+              <div className="rv-card-title">Topic Timeline</div>
+              <span className="rv-card-meta">{ts.rows.length} topics across {ts.periods.length} {gran}{ts.periods.length === 1 ? "" : "s"}</span>
             </div>
-            <div className="rv-topic-table">
-              <div className="rv-topic-h">
-                <span>Topic</span><span>Trend</span><span>Sentiment</span><span>Rating</span><span>Mentions</span>
-              </div>
-              {ts.rows.map((r, i) => (
-                <div className="rv-topic-row" key={r.label}>
-                  <span className="rv-topic-name"><i className="rv-topic-swatch" style={{ background: topicColor(i) }} />{r.label}</span>
-                  <span className="rv-topic-spark">
-                    <Sparkline values={ts.periods.map((p) => r.periodValues[p.key] ?? 0)} color={topicColor(i)} />
-                  </span>
-                  <span className="rv-topic-sent" style={{ color: SENT3_COLOR[sent3(r.sentiment)] }}>
-                    <i style={{ background: SENT3_COLOR[sent3(r.sentiment)] }} />{SENT3_LABEL[sent3(r.sentiment)]}
-                  </span>
-                  <span className="rv-topic-rating">{r.avgRating.toFixed(1)}</span>
-                  <span className="rv-topic-bar">
-                    <span className="rv-topic-fill" style={{ width: `${(r.totalMentions / maxMentions) * 100}%`, background: topicColor(i) }} />
-                    <span className="rv-topic-n">{r.totalMentions}</span>
-                  </span>
-                </div>
-              ))}
+            <div className="rv-timeline-wrap">
+              <table className="rv-timeline">
+                <thead>
+                  <tr>
+                    <th className="rv-tl-topic">Topic</th>
+                    <th>Sentiment</th>
+                    <th className="rv-tl-rt">Rating</th>
+                    <th className="rv-tl-rt">Total</th>
+                    {ts.periods.map((p) => <th key={p.key} className="rv-tl-date">{p.label}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {ts.rows.map((r, i) => (
+                    <tr key={r.label}>
+                      <td className="rv-tl-topic"><i className="rv-topic-swatch" style={{ background: topicColor(i) }} />{r.label}</td>
+                      <td><span className="rv-tl-sent" style={{ color: SENT_COLOR[r.sentiment] }}><i style={{ background: SENT_COLOR[r.sentiment] }} />{SENT_LABEL[r.sentiment]}</span></td>
+                      <td className="rv-tl-rt rv-num">{r.avgRating.toFixed(1)}</td>
+                      <td className="rv-tl-rt rv-num">{r.totalMentions}</td>
+                      {ts.periods.map((p) => {
+                        const v = r.periodValues[p.key];
+                        return <td key={p.key} className={`rv-tl-cell rv-num ${v ? "" : "rv-tl-zero"}`}>{v || "—"}</td>;
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </section>
         </>
@@ -477,6 +635,7 @@ function impTone(a: { sentiment: Sentiment4; avgRating: number }): { color: stri
 
 export function ImprovementsTab({ tagged, onRefresh, refreshing }: { tagged: TaggedReview[]; onRefresh?: () => void; refreshing?: boolean }) {
   const navigate = useNavigate();
+  const [sp] = useSearchParams();
   const [days, setDays] = useState<number | null>(null);
   const [filter, setFilter] = useState<ImpFilter>("all");
   const { improvements, totalMentions } = useMemo(() => improvementAreas(tagged, days), [tagged, days]);
@@ -500,22 +659,21 @@ export function ImprovementsTab({ tagged, onRefresh, refreshing }: { tagged: Tag
           </button>
         ))}
       </PeriodChips>
-      <MockNotice>{INTERIM_NOTE}</MockNotice>
 
       {shown.length === 0 ? (
         <EmptyState icon={<IconSpark />} title="No improvement areas here" sub="Try a different filter or a wider period." />
       ) : (
         <>
-          {/* Improvement trends chart */}
+          {/* Improvement Trends chart */}
           <section className="rv-card">
             <div className="rv-card-head">
-              <div className="rv-card-title">Improvement trends</div>
+              <div className="rv-card-title">Improvement Trends <span className="rv-mock-badge">interim model</span></div>
               <span className="rv-card-meta">mentions / {impGran} · top {Math.min(4, impTs.rows.length)} shown · hover an area to isolate</span>
             </div>
             <TrendChart periods={impTrend.periods} series={impTrend.series} />
           </section>
 
-          <div className="rv-imp-head">{formatCompact(totalMentions)} total mentions · {shown.length} areas</div>
+          <h2 className="rv-section-title rv-imp-head">Improvement Areas <span className="rv-card-meta">{formatCompact(totalMentions)} total mentions</span></h2>
           <div className="rv-area-grid">
             {shown.map((a) => {
               const tone = impTone(a);
@@ -523,7 +681,15 @@ export function ImprovementsTab({ tagged, onRefresh, refreshing }: { tagged: Tag
                 <button
                   className="rv-area"
                   key={a.id}
-                  onClick={() => navigate(`/reviews/reviews?area=${encodeURIComponent(a.category)}`)}
+                  onClick={() => {
+                    // copy current params so ?app= AND ?period= survive; switch the filter
+                    // to this area and drop any stale topic so they don't AND to an empty feed
+                    const qs = new URLSearchParams(sp);
+                    qs.set("improvementArea", a.category);
+                    qs.delete("topic");
+                    qs.delete("page");
+                    navigate(`/reviews/feed?${qs.toString()}`);
+                  }}
                   title={`See the ${a.mentionCount} review${a.mentionCount === 1 ? "" : "s"} about ${a.category}`}
                 >
                   <div className="rv-area-top">

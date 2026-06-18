@@ -4,26 +4,65 @@
    Do NOT move these into index.css (shell owns tokens).
    ============================================================ */
 
+/* ===================================================== Truth tokens (scoped)
+   appkittie Reviews uses Space Grotesk (UI) + JetBrains Mono (numbers),
+   vivid-lime accent #c8ff00, and 16px card radius. Scoped to .rv-page so the
+   global shell is untouched (a full-shell reskin is a separate decision). */
+.rv-page {
+  --accent: #c8ff00;
+  --accent-hover: #d6ff4d;
+  --accent-ink: #0a0a0a;
+  --accent-soft: color-mix(in srgb, #c8ff00 14%, transparent);
+  --radius-lg: 16px;
+  --radius: 13px;
+  --rv-mono: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
+  font-family: "Space Grotesk", ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+/* numeric stats render in mono with tabular figures, like truth */
+.rv-page .rv-kpi-num,
+.rv-page .rv-avg-num,
+.rv-page .rv-net-num,
+.rv-page .rv-num {
+  font-family: var(--rv-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
 /* ===================================================== Primitives */
+/* truth: "How review monitoring works" — lime-outline info pill below the header */
+.rv-howto-pill {
+  align-self: flex-start;
+  display: inline-flex; align-items: center; gap: 8px;
+  margin: 2px 0 16px; padding: 8px 14px; border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  color: var(--accent); font-size: 12.5px; font-weight: 600;
+  transition: background 0.12s;
+}
+.rv-howto-pill:hover, .rv-howto-pill.on { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+
+/* truth: underline tab bar (not a filled pill group) */
 .rv-tabs {
-  display: inline-flex;
-  gap: 2px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 3px;
+  display: flex;
+  gap: 4px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  padding: 0;
   margin: 4px 0 18px;
 }
 .rv-tab {
   display: inline-flex; align-items: center; gap: 7px;
   border: none; background: none;
   color: var(--text-secondary);
-  font-size: 12.5px; font-weight: 550;
-  padding: 7px 14px; border-radius: 7px;
-  transition: all 0.12s;
+  font-size: 13px; font-weight: 550;
+  padding: 9px 14px; border-radius: 0;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+  transition: color 0.12s, border-color 0.12s;
 }
 .rv-tab:hover { color: var(--text); }
-.rv-tab.on { background: var(--accent-soft); color: var(--accent); }
+.rv-tab.on { background: none; color: var(--text); border-bottom-color: var(--accent); }
 .rv-tab svg { opacity: 0.85; }
 
 .rv-empty {
@@ -305,7 +344,8 @@
 .rv-trend-empty-s { font-size: 12px; color: var(--text-tertiary); max-width: 420px; line-height: 1.5; }
 
 /* ---- improvements: area grid ---- */
-.rv-imp-head { font-size: 12px; color: var(--text-tertiary); margin-bottom: 13px; }
+.rv-imp-head { display: flex; align-items: baseline; gap: 10px; margin: 22px 0 13px; }
+.rv-imp-head .rv-card-meta { font-weight: 400; }
 .rv-area-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
 .rv-area { display: block; width: 100%; text-align: left; font: inherit; color: inherit; background: var(--surface); border: 1px solid var(--border-soft); border-radius: 12px; padding: 14px 15px; transition: border-color 0.14s, transform 0.14s; cursor: pointer; }
 .rv-area:hover { border-color: var(--border-strong); transform: translateY(-1px); }
@@ -571,3 +611,300 @@
   background: var(--accent-soft); color: var(--accent-ink);
 }
 .rv-rail-all.on .rv-rail-all-icon { background: var(--accent); color: var(--accent-ink); }
+
+/* ============================================================
+   P1 · Feed parity — Review Growth card, facet "+N more",
+   3-column review-card grid, pagination. (truth /feed)
+   ============================================================ */
+.rv-card {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+}
+.rv-card-title { font-size: 14px; font-weight: 650; color: var(--text); }
+
+/* Review Growth */
+.rv-growth { margin-bottom: 16px; }
+.rv-growth-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.rv-growth-toggle { margin-left: auto; }
+.rv-growth-periods { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 14px 0 0; }
+.rv-growth-empty {
+  display: flex; align-items: center; justify-content: center;
+  height: 200px; color: var(--text-tertiary); font-size: 13px;
+}
+
+/* facet "+N more" expander */
+.rv-facet-more {
+  border: none; background: none; color: var(--accent);
+  font-size: 12px; font-weight: 600; padding: 5px 8px; border-radius: 7px;
+  white-space: nowrap;
+}
+.rv-facet-more:hover { background: var(--accent-soft); }
+
+/* 3-column review-card grid */
+.rv-feed-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+@media (max-width: 1100px) { .rv-feed-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 720px) { .rv-feed-grid { grid-template-columns: 1fr; } }
+
+.rv-rcard {
+  display: flex; flex-direction: column; gap: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+  transition: border-color 0.12s, background 0.12s;
+}
+.rv-rcard:hover { border-color: rgba(255, 255, 255, 0.16); }
+.rv-rcard-head { display: flex; align-items: center; gap: 10px; }
+.rv-rcard-sent {
+  margin-left: auto; font-size: 10.5px; font-weight: 650;
+  text-transform: capitalize; letter-spacing: 0.02em;
+  padding: 2px 9px; border-radius: 999px;
+  border: 1px solid currentColor;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+.rv-rcard-title { font-size: 14px; font-weight: 650; color: var(--text); line-height: 1.3; }
+.rv-rcard-body {
+  font-size: 12.5px; line-height: 1.55; color: var(--text-secondary);
+  display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden;
+}
+.rv-rcard-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.rv-rcard-author { display: flex; align-items: center; gap: 8px; margin-top: auto; padding-top: 6px; }
+.rv-rcard-avatar {
+  width: 22px; height: 22px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface-2); color: var(--text-secondary);
+  font-size: 11px; font-weight: 700; flex-shrink: 0;
+}
+.rv-rcard-name { font-size: 12px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rv-rcard-date { margin-left: auto; font-size: 11px; color: var(--text-tertiary); white-space: nowrap; }
+
+/* pagination */
+.rv-pager {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border-soft);
+}
+.rv-pager-info { font-size: 12.5px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.rv-pager-info b { color: var(--text); }
+.rv-pager-btns { display: flex; gap: 8px; }
+.rv-pager-btn {
+  width: 34px; height: 34px; border-radius: 9px;
+  border: 1px solid var(--border); background: var(--surface);
+  color: var(--text); font-size: 16px; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.12s;
+}
+.rv-pager-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.rv-pager-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* ============================================================
+   P2 · App selector — truth "All Apps {N}" dropdown + Refresh.
+   ============================================================ */
+.rv-selector-row { display: flex; align-items: center; gap: 10px; margin: 4px 0 18px; }
+
+.rv-appsel { position: relative; }
+.rv-appsel-btn {
+  display: inline-flex; align-items: center; gap: 9px;
+  height: 40px; padding: 0 12px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 11px; color: var(--text);
+  font-size: 13.5px; font-weight: 600; transition: border-color 0.12s;
+}
+.rv-appsel-btn:hover { border-color: var(--border-strong); }
+.rv-appsel-ic {
+  width: 24px; height: 24px; border-radius: 7px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface-2); color: var(--text-secondary); overflow: hidden;
+}
+.rv-appsel-img { width: 100%; height: 100%; object-fit: cover; }
+.rv-appsel-ph { font-size: 12px; font-weight: 700; color: var(--text-secondary); }
+.rv-appsel-label { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rv-appsel-count {
+  min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--accent-soft); color: var(--accent);
+  font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.rv-appsel-chev { color: var(--text-tertiary); transition: transform 0.15s; }
+.rv-appsel-chev.up { transform: rotate(180deg); }
+
+.rv-appsel-menu {
+  position: absolute; top: calc(100% + 8px); left: 0; z-index: 50;
+  width: 420px; max-width: calc(100vw - 48px);
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 16px; padding: 6px; box-shadow: var(--shadow-pop);
+  max-height: 70vh; overflow-y: auto;
+}
+.rv-appsel-row { display: flex; align-items: center; border-radius: 11px; }
+.rv-appsel-row:hover { background: var(--surface-hover); }
+.rv-appsel-row.on { background: var(--accent-soft); }
+.rv-appsel-all { width: 100%; }
+.rv-appsel-pick, .rv-appsel-all {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px;
+  padding: 11px 12px; text-align: left; background: none; border: none; color: var(--text);
+}
+.rv-appsel-rowmeta { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.rv-appsel-rowname { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rv-appsel-rowsub { font-size: 11.5px; color: var(--text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rv-appsel-check { color: var(--accent); flex-shrink: 0; }
+.rv-appsel-act {
+  width: 30px; height: 30px; margin-right: 4px; border-radius: 8px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: none; border: none; color: var(--text-tertiary); transition: all 0.12s;
+}
+.rv-appsel-refresh:hover:not(:disabled) { color: var(--accent); background: var(--accent-soft); }
+.rv-appsel-refresh:disabled { opacity: 0.5; cursor: progress; }
+.rv-appsel-remove:hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); }
+.rv-appsel-add {
+  width: 100%; display: flex; align-items: center; gap: 8px;
+  padding: 11px 12px; margin-top: 4px; border-radius: 11px;
+  background: none; border: none; color: var(--accent);
+  font-size: 13px; font-weight: 650;
+}
+.rv-appsel-add:hover { background: var(--accent-soft); }
+
+.rv-refresh-btn { display: inline-flex; align-items: center; gap: 7px; height: 40px; }
+
+@keyframes rv-spin { to { transform: rotate(360deg); } }
+.rv-spin { animation: rv-spin 0.9s linear infinite; transform-origin: center; }
+
+/* ============================================================
+   P3 · Overview — aggregate "Your Apps" grid + single-app rich
+   dashboard (alerts · rating · reviews · AI summary · feedback).
+   ============================================================ */
+.rv-section-title { font-size: 17px; font-weight: 650; letter-spacing: -0.01em; }
+.rv-yourapps-head { display: flex; align-items: baseline; justify-content: space-between; margin: 22px 0 12px; }
+.rv-yourapps-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+.rv-appcard { display: flex; flex-direction: column; gap: 12px; text-align: left; cursor: pointer; transition: border-color 0.12s; }
+.rv-appcard:hover { border-color: rgba(255, 255, 255, 0.18); }
+.rv-appcard-head { display: flex; align-items: center; gap: 12px; }
+.rv-appcard-ic { width: 44px; height: 44px; border-radius: 11px; object-fit: cover; flex-shrink: 0; }
+.rv-appcard-ph { display: flex; align-items: center; justify-content: center; background: var(--surface-2); color: var(--text-secondary); font-weight: 700; }
+.rv-appcard-meta { min-width: 0; }
+.rv-appcard-name { font-size: 14px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rv-appcard-dev { font-size: 12px; color: var(--text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rv-appcard-foot { font-size: 12.5px; color: var(--text-secondary); border-top: 1px solid var(--border-soft); padding-top: 11px; }
+
+/* Review alerts */
+.rv-alerts { margin-bottom: 16px; }
+.rv-alerts-stats { font-size: 12px; color: var(--text-tertiary); }
+.rv-alerts-intro { font-size: 13px; color: var(--text-secondary); line-height: 1.55; margin: 4px 0 16px; max-width: 640px; }
+.rv-alerts-empty { background: var(--surface); border: 1px dashed var(--border-strong); border-radius: 13px; padding: 20px; text-align: center; }
+.rv-alerts-empty-title { font-size: 13.5px; font-weight: 650; }
+.rv-alerts-empty-sub { font-size: 12.5px; color: var(--text-secondary); margin: 5px 0 14px; }
+.rv-alerts-actions { display: flex; gap: 10px; justify-content: center; }
+
+/* Reviews stat card */
+.rv-revstats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px 20px; margin-bottom: 16px; }
+.rv-revstat-num { font-size: 24px; font-weight: 650; line-height: 1.1; }
+.rv-revstat-label { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
+
+/* AI Summary */
+.rv-aisum-stats { display: flex; gap: 18px; font-size: 12.5px; color: var(--text-secondary); margin: 2px 0 14px; }
+.rv-aisum-stats b { color: var(--text); font-weight: 650; }
+.rv-aisum-text { font-size: 13px; line-height: 1.6; color: var(--text-secondary); }
+.rv-aisum-label { font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-tertiary); margin: 16px 0 8px; }
+.rv-aisum-love { color: var(--positive); }
+.rv-aisum-needs { color: var(--negative); }
+.rv-aisum-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.rv-aisum-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+@media (max-width: 720px) { .rv-aisum-cols { grid-template-columns: 1fr; } }
+.rv-aisum-list { margin: 0; padding-left: 18px; }
+.rv-aisum-list li { font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); margin: 5px 0; }
+.rv-muted { color: var(--text-tertiary); list-style: none; }
+
+/* Feedback Insights */
+.rv-feedback-bars { display: flex; flex-direction: column; gap: 10px; margin: 8px 0 16px; }
+.rv-feedback-row { display: grid; grid-template-columns: 160px 1fr 44px; align-items: center; gap: 12px; }
+.rv-feedback-label { font-size: 12.5px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rv-feedback-track { height: 8px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.rv-feedback-fill { display: block; height: 100%; border-radius: 999px; background: var(--accent); }
+.rv-feedback-n { font-size: 12px; color: var(--text-secondary); text-align: right; }
+.rv-viewall {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: none; border: none; color: var(--accent);
+  font-size: 13px; font-weight: 600; padding: 4px 0;
+}
+.rv-viewall:hover { text-decoration: underline; }
+
+/* ============================================================
+   P5a · Semantics — per-date Topic Timeline matrix (truth parity)
+   ============================================================ */
+.rv-timeline-wrap { overflow-x: auto; margin: 0 -4px; }
+.rv-timeline { border-collapse: collapse; width: 100%; font-size: 12px; }
+.rv-timeline th {
+  text-align: right; padding: 8px 10px; white-space: nowrap;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+  color: var(--text-tertiary); border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; background: var(--panel);
+}
+.rv-timeline th.rv-tl-topic { text-align: left; }
+.rv-timeline td { padding: 8px 10px; white-space: nowrap; border-bottom: 1px solid var(--border-soft); }
+.rv-timeline tbody tr:hover { background: var(--surface-hover); }
+.rv-tl-topic {
+  text-align: left; font-weight: 600; color: var(--text);
+  position: sticky; left: 0; background: var(--panel); min-width: 170px;
+}
+.rv-timeline tbody tr:hover .rv-tl-topic { background: var(--surface); }
+.rv-tl-topic .rv-topic-swatch { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 8px; vertical-align: middle; }
+.rv-tl-rt, .rv-tl-cell, .rv-tl-date { text-align: right; }
+.rv-tl-cell { color: var(--text-secondary); }
+.rv-tl-zero { color: var(--text-faint); }
+.rv-tl-sent { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; text-transform: capitalize; }
+.rv-tl-sent i { width: 7px; height: 7px; border-radius: 50%; }
+
+/* ============================================================
+   P4 · Add-app flow — Search/Paste-URL tabs, confirm step,
+   sync % bar + Cancel/Minimize + background pill.
+   ============================================================ */
+.rv-addmode { display: inline-flex; gap: 3px; padding: 3px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; margin: 4px 0 14px; }
+.rv-addmode-tab { border: none; background: none; color: var(--text-secondary); font-size: 12.5px; font-weight: 600; padding: 6px 16px; border-radius: 7px; transition: all 0.12s; }
+.rv-addmode-tab:hover { color: var(--text); }
+.rv-addmode-tab.on { background: var(--accent-soft); color: var(--accent); }
+
+/* paste-url mode */
+.rv-url-mode { padding: 4px 2px 8px; }
+.rv-url-label { display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-tertiary); margin-bottom: 8px; }
+.rv-url-row { display: flex; gap: 10px; }
+.rv-url-input { flex: 1; height: 40px; padding: 0 13px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; color: var(--text); font-size: 13.5px; }
+.rv-url-input:focus { outline: none; border-color: var(--accent); }
+.rv-url-error { color: var(--danger); font-size: 12.5px; margin-top: 9px; }
+.rv-url-hint { display: flex; flex-direction: column; gap: 6px; margin-top: 16px; }
+.rv-url-store { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text-tertiary); font-family: var(--rv-mono); }
+
+/* confirm step */
+.rv-confirm { padding: 6px 2px; }
+.rv-confirm-card { display: flex; gap: 14px; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px; }
+.rv-confirm-icon { width: 56px; height: 56px; border-radius: 13px; flex-shrink: 0; }
+.rv-confirm-meta { min-width: 0; }
+.rv-confirm-name { display: flex; align-items: center; gap: 7px; font-size: 15px; font-weight: 650; }
+.rv-confirm-dev { font-size: 12.5px; color: var(--text-tertiary); margin: 2px 0 8px; }
+.rv-confirm-stats { display: flex; align-items: center; gap: 16px; font-size: 12.5px; color: var(--text-secondary); }
+.rv-confirm-rating { display: inline-flex; align-items: center; gap: 4px; }
+.rv-confirm-reviews b { color: var(--text); }
+.rv-confirm-note { font-size: 12.5px; color: var(--text-secondary); line-height: 1.5; margin: 16px 0; }
+.rv-confirm-actions { display: flex; gap: 10px; justify-content: flex-end; }
+
+/* sync progress bar + actions */
+.rv-sync-progress { margin: 16px 0 6px; }
+.rv-sync-progress-head { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-secondary); margin-bottom: 7px; }
+.rv-sync-bar, .rv-sync-pill-bar { height: 6px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.rv-sync-bar > span, .rv-sync-pill-bar > span { display: block; height: 100%; border-radius: 999px; background: var(--accent); transition: width 0.3s ease; }
+.rv-sync-actions { display: flex; gap: 10px; margin-top: 16px; }
+.rv-sync-actions .btn { flex: 1; justify-content: center; }
+.rv-sync-hint { font-size: 11.5px; color: var(--text-tertiary); line-height: 1.5; margin: 10px 2px 0; }
+
+/* minimized background pill */
+.rv-sync-pill { position: fixed; right: 22px; bottom: 22px; z-index: 60; width: 300px; display: flex; align-items: center; gap: 11px; padding: 12px 14px; background: var(--panel); border: 1px solid var(--border-strong); border-radius: 14px; box-shadow: var(--shadow-pop); }
+.rv-sync-pill .app-icon { width: 34px; height: 34px; border-radius: 9px; }
+.rv-sync-pill-meta { flex: 1; min-width: 0; }
+.rv-sync-pill-title { font-size: 12.5px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rv-sync-pill-sub { font-size: 11px; color: var(--text-secondary); margin: 2px 0 6px; }
+.rv-sync-pill-expand { border: none; background: var(--surface-2); color: var(--text-secondary); font-size: 11.5px; font-weight: 600; padding: 5px 10px; border-radius: 7px; }
+.rv-sync-pill-expand:hover { color: var(--accent); }

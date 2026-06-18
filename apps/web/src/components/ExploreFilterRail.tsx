@@ -1,7 +1,9 @@
 import { useState } from "react";
 import type { Store } from "@kittie/types";
-import { IconApple, IconGooglePlay, IconFilter } from "../icons";
+import type { CategoryFacet } from "../lib/api";
+import { IconApple, IconGooglePlay, IconFilter, IconChevron } from "../icons";
 import { FilterGroup, SubLabel } from "./FilterGroup";
+import { FilterSelectPopover } from "./FilterSelectPopover";
 import { Pills, TogglePill } from "./Pills";
 import { RangeFilter } from "./RangeFilter";
 import {
@@ -158,7 +160,7 @@ export function ExploreFilterRail({
   onClear,
 }: {
   filters: ExploreFilters;
-  categories: string[];
+  categories: CategoryFacet[];
   catMode: CategoryMode;
   onCatMode: (mode: CategoryMode) => void;
   langs: string[];
@@ -182,6 +184,8 @@ export function ExploreFilterRail({
     onPatch({ source: f.source == null ? (store === "apple" ? "google" : "apple") : undefined });
 
   const signalsActive = f.meta || f.aads || f.creators || f.web || f.email;
+  // Contacts sub-section collapses by default (truth parity); open it if a contact filter is on.
+  const [contactsOpen, setContactsOpen] = useState(f.web || f.email);
 
   return (
     <aside className="filter-rail">
@@ -241,35 +245,43 @@ export function ExploreFilterRail({
           active={f.cats.length > 0}
           summary={f.cats.length ? `${f.cats.length} ${catMode === "exclude" ? "excluded" : "included"}` : undefined}
         >
-          <div className="seg-mini">
-            <button className={catMode === "include" ? "on" : ""} onClick={() => onCatMode("include")}>
-              Include
-            </button>
-            <button className={catMode === "exclude" ? "on" : ""} onClick={() => onCatMode("exclude")}>
-              Exclude
-            </button>
-          </div>
-          {categories.length === 0 ? (
-            <div className="filter-hint">Loading categories…</div>
-          ) : (
-            <>
-              <div className="pill-wrap">
-                {categories.map((cat) => (
+          <FilterSelectPopover
+            label="Select categories"
+            searchable
+            searchPlaceholder="Search categories…"
+            items={categories.map((c) => ({
+              id: c.name,
+              label: `${catEmoji(c.name)} ${c.name}`,
+              stores: c.stores,
+            }))}
+            selected={f.cats}
+            onToggle={toggleCat}
+            emptyHint="Loading categories…"
+            header={
+              <div className="fselect-header">
+                <div className="seg-mini">
                   <button
-                    key={cat}
-                    className={`fpill ${f.cats.includes(cat) ? "on" : ""}`}
-                    onClick={() => toggleCat(cat)}
+                    type="button"
+                    className={catMode === "include" ? "on" : ""}
+                    onClick={() => onCatMode("include")}
                   >
-                    <span aria-hidden>{catEmoji(cat)}</span> {cat}
+                    Include
                   </button>
-                ))}
-              </div>
-              {f.cats.length > 0 && (
-                <div className="filter-hint">
-                  {f.cats.length} {catMode === "exclude" ? "excluded" : "included"}
+                  <button
+                    type="button"
+                    className={catMode === "exclude" ? "on" : ""}
+                    onClick={() => onCatMode("exclude")}
+                  >
+                    Exclude
+                  </button>
                 </div>
-              )}
-            </>
+              </div>
+            }
+          />
+          {f.cats.length > 0 && (
+            <div className="filter-hint">
+              {f.cats.length} {catMode === "exclude" ? "excluded" : "included"}
+            </div>
           )}
         </FilterGroup>
 
@@ -279,18 +291,12 @@ export function ExploreFilterRail({
           active={langs.length > 0}
           summary={langs.length ? `${langs.length} selected` : undefined}
         >
-          <SubLabel>Select languages</SubLabel>
-          <div className="pill-wrap">
-            {LANGUAGES.map((l) => (
-              <button
-                key={l.code}
-                className={`fpill ${langs.includes(l.code) ? "on" : ""}`}
-                onClick={() => toggleLang(l.code)}
-              >
-                {l.name}
-              </button>
-            ))}
-          </div>
+          <FilterSelectPopover
+            label="Select languages"
+            items={LANGUAGES.map((l) => ({ id: l.code, label: l.name }))}
+            selected={langs}
+            onToggle={toggleLang}
+          />
         </FilterGroup>
 
         {/* 5 — Marketing Signals */}
@@ -307,11 +313,21 @@ export function ExploreFilterRail({
             <TogglePill on={f.aads} onToggle={() => onPatch({ aads: !f.aads })}>Apple Ads</TogglePill>
             <TogglePill on={f.creators} onToggle={() => onPatch({ creators: !f.creators })}>Creators</TogglePill>
           </div>
-          <SubLabel>Contacts</SubLabel>
-          <div className="pill-wrap">
-            <TogglePill on={f.web} onToggle={() => onPatch({ web: !f.web })}>Has website</TogglePill>
-            <TogglePill on={f.email} onToggle={() => onPatch({ email: !f.email })}>Has email</TogglePill>
-          </div>
+          <button
+            type="button"
+            className={`fsub-toggle ${contactsOpen ? "open" : ""}`}
+            onClick={() => setContactsOpen((o) => !o)}
+            aria-expanded={contactsOpen}
+          >
+            Contacts
+            <IconChevron className="fsub-toggle-chev" />
+          </button>
+          {contactsOpen && (
+            <div className="pill-wrap">
+              <TogglePill on={f.web} onToggle={() => onPatch({ web: !f.web })}>Has website</TogglePill>
+              <TogglePill on={f.email} onToggle={() => onPatch({ email: !f.email })}>Has email</TogglePill>
+            </div>
+          )}
         </FilterGroup>
 
         {/* 6 — Growth Sort */}
@@ -323,7 +339,13 @@ export function ExploreFilterRail({
           <SubLabel>Reviews growth window</SubLabel>
           <div className="seg-mini">
             {(["7d", "14d", "30d", "60d", "90d"] as const).map((p) => (
-              <button key={p} className={f.period === p ? "on" : ""} onClick={() => onPatch({ period: p })}>
+              <button
+                key={p}
+                className={f.period === p ? "on" : ""}
+                onClick={() =>
+                  onPatch(p !== "7d" ? { period: p, sort: "growth" } : { period: p, sort: "revenue" })
+                }
+              >
                 {p}
               </button>
             ))}

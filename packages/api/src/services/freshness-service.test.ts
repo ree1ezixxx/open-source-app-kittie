@@ -50,4 +50,15 @@ describe("selectDueSweeps", () => {
     const lastRuns = new Map([["snapshots", NOW - 8 * HOUR]]);
     expect(selectDueSweeps([sweep("snapshots", 24)], lastRuns, NOW)).toEqual([]);
   });
+
+  it("snapshots-daily is due when last run exceeds 24h", () => {
+    const lastRuns = new Map([["snapshots-daily", NOW - 25 * HOUR]]);
+    const due = selectDueSweeps([sweep("snapshots-daily", 24)], lastRuns, NOW);
+    expect(due.map((s) => s.name)).toEqual(["snapshots-daily"]);
+  });
+
+  it("snapshots-daily stays fresh within 24h cadence", () => {
+    const lastRuns = new Map([["snapshots-daily", NOW - 23 * HOUR]]);
+    expect(selectDueSweeps([sweep("snapshots-daily", 24)], lastRuns, NOW)).toEqual([]);
+  });
 });

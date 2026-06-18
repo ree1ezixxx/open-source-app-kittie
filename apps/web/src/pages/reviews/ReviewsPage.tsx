@@ -1,5 +1,5 @@
 /* ============================================================
-   Lane D — Reviews page. /reviews/:tab  (overview|reviews|semantics|improvements)
+   Lane D — Reviews page. /reviews/:tab  (overview|feed|semantics|improvements)
    Monitor reviews, sentiment & AI insights.
 
    REAL: review text + rating distribution (POST /reviews).
@@ -22,12 +22,12 @@ import {
 import { enrichReviews } from "../../lib/api/reviewIntel";
 import { PageHeader, Tabs, EmptyState, type TabDef } from "../../components/reviews/primitives";
 import { AppPicker } from "../../components/reviews/AppPicker";
+import { AppSelector } from "../../components/reviews/AppSelector";
 import { SyncProgress } from "../../components/reviews/SyncProgress";
 import { OverviewTab, ReviewsTab, SemanticsTab, ImprovementsTab } from "./reviewTabs";
-import { formatCompact } from "../../lib/format";
 import {
-  IconStar, IconSun, IconMoon, IconInfo, IconClose, IconSearch,
-  IconChart, IconSpark, IconUsers, IconGrid,
+  IconStar, IconSun, IconMoon, IconInfo, IconSearch, IconRefresh, IconClose,
+  IconChart, IconSpark, IconUsers, IconMessage,
 } from "../../icons";
 
 /** Sentinel id for the cross-app rollup entry in the rail. */
@@ -35,7 +35,7 @@ const ALL_APPS = "__all__";
 
 const TABS: TabDef[] = [
   { id: "overview", label: "Overview", icon: <IconChart style={{ width: 14, height: 14 }} /> },
-  { id: "reviews", label: "Reviews", icon: <IconUsers style={{ width: 14, height: 14 }} /> },
+  { id: "feed", label: "Reviews", icon: <IconUsers style={{ width: 14, height: 14 }} /> },
   { id: "semantics", label: "Semantics", icon: <IconSearch style={{ width: 14, height: 14 }} /> },
   { id: "improvements", label: "Improvements", icon: <IconSpark style={{ width: 14, height: 14 }} /> },
 ];
@@ -63,6 +63,7 @@ export function ReviewsPage({ theme, onToggleTheme }: { theme: Theme; onToggleTh
   const [error, setError] = useState<string | null>(null);
   const [reloadTick, setReloadTick] = useState(0); // bumped to re-read from DB
   const [syncing, setSyncing] = useState(false);   // live pull in flight
+  const [busyId, setBusyId] = useState<string | null>(null); // per-app refresh in the selector
   const [indexed, setIndexed] = useState<Record<string, number>>({}); // real indexed counts per app
 
   // Indexed review counts for the rail — what we actually hold, not the store's
@@ -124,6 +125,13 @@ export function ReviewsPage({ theme, onToggleTheme }: { theme: Theme; onToggleTh
     }
   }, [isAll, selectedId, monitoredKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Per-app refresh from the selector dropdown — sync one app, then re-read.
+  const refreshApp = useCallback(async (id: string) => {
+    setBusyId(id);
+    try { await syncReviews(id); } catch { /* re-read anyway */ }
+    finally { setBusyId(null); setReloadTick((t) => t + 1); }
+  }, []);
+
   const tagged = useMemo(() => enrichReviews(reviews), [reviews]);
 
   const setTab = useCallback((id: string) => {
@@ -144,10 +152,10 @@ export function ReviewsPage({ theme, onToggleTheme }: { theme: Theme; onToggleTh
     setAdding(app);
   }
 
-  function handleSynced(app: MonitoredApp, _result: ReviewSyncResult) {
+  function handleSynced(app: MonitoredApp, _result: ReviewSyncResult, background: boolean) {
     const next = addMonitored(app);
     setMonitoredState(next);
-    selectApp(app.id);
+    if (!background) selectApp(app.id); // minimized adds register quietly — don't yank the user's view
     setReloadTick((t) => t + 1); // re-read so the freshly-synced reviews show
   }
 
@@ -163,139 +171,99 @@ export function ReviewsPage({ theme, onToggleTheme }: { theme: Theme; onToggleTh
   }
 
   return (
-    <main className="main">
+    <main className="main rv-page">
       <PageHeader
-        icon={<IconStar style={{ width: 18, height: 18 }} />}
+        icon={<IconMessage style={{ width: 18, height: 18 }} />}
         title="Reviews"
         subtitle="Monitor reviews, sentiment & AI insights across your apps"
         actions={
-          <>
-            <button className="btn" onClick={() => setHowto((v) => !v)}>
-              <IconInfo /> How it works
-            </button>
-            <button className="icon-btn" onClick={onToggleTheme} aria-label="Toggle theme">
-              {theme === "dark" ? <IconSun /> : <IconMoon />}
-            </button>
-          </>
+          <button className="icon-btn" onClick={onToggleTheme} aria-label="Toggle theme">
+            {theme === "dark" ? <IconSun /> : <IconMoon />}
+          </button>
         }
       />
 
+      {/* truth: lime info pill below the header (not a header action) */}
+      <button
+        className={`rv-howto-pill ${howto ? "on" : ""}`}
+        onClick={() => setHowto((v) => !v)}
+        aria-expanded={howto}
+      >
+        <IconInfo style={{ width: 14, height: 14 }} /> How review monitoring works
+      </button>
+
       {howto && <HowItWorks onClose={() => setHowto(false)} />}
 
-      <div className="rv-layout">
-        {/* monitoring rail */}
-        <aside className="rv-rail">
-          <div className="rv-rail-head">
-            <span className="rv-rail-title">Monitored apps</span>
-            <button className="rv-add-btn" onClick={() => setPicking(true)}>+ Add</button>
-          </div>
-          {monitored.length === 0 ? (
-            <div className="rv-rail-empty">No apps yet</div>
-          ) : (
-            <ul className="rv-rail-list">
-              {monitored.length > 1 && (
-                <li className="rv-rail-li" key={ALL_APPS}>
-                  <button
-                    className={`rv-rail-item rv-rail-all ${isAll ? "on" : ""}`}
-                    onClick={() => selectApp(ALL_APPS)}
-                  >
-                    <div className="app-icon placeholder rv-rail-all-icon"><IconGrid style={{ width: 16, height: 16 }} /></div>
-                    <div className="rv-rail-meta">
-                      <div className="rv-rail-name">All apps</div>
-                      <div className="rv-rail-sub">{monitored.length} apps combined</div>
-                    </div>
-                  </button>
-                </li>
-              )}
-              {monitored.map((a) => (
-                <li className="rv-rail-li" key={a.id}>
-                  <button
-                    className={`rv-rail-item ${selected?.id === a.id ? "on" : ""}`}
-                    onClick={() => selectApp(a.id)}
-                  >
-                    {a.iconUrl ? (
-                      <img className="app-icon" src={a.iconUrl} alt="" referrerPolicy="no-referrer" />
-                    ) : (
-                      <div className="app-icon placeholder">{a.title.charAt(0)}</div>
-                    )}
-                    <div className="rv-rail-meta">
-                      <div className="rv-rail-name">{a.title}</div>
-                      <div className="rv-rail-sub">
-                        {indexed[a.id] != null ? `${formatCompact(indexed[a.id]!)} indexed` : "…"}
-                      </div>
-                    </div>
-                  </button>
-                  <button
-                    className="rv-rail-x"
-                    aria-label={`Stop monitoring ${a.title}`}
-                    title={`Stop monitoring ${a.title}`}
-                    onClick={() => handleRemove(a.id)}
-                  >
-                    <IconClose style={{ width: 13, height: 13 }} />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </aside>
+      <Tabs tabs={TABS} active={activeTab} onChange={setTab} />
 
-        {/* content */}
-        <section className="rv-content">
-          {monitored.length === 0 ? (
-            <EmptyState
-              icon={<IconStar style={{ width: 30, height: 30 }} />}
-              title="No apps monitored yet"
-              sub="Add your first app to start tracking its reviews, sentiment and AI-surfaced improvement ideas."
-              action={<button className="btn btn-accent" onClick={() => setPicking(true)}>Add your first app</button>}
-            />
-          ) : (
-            <>
-              <div className="rv-selected">
-                {isAll ? (
-                  <>
-                    <div className="app-icon placeholder rv-rail-all-icon" style={{ width: 40, height: 40, borderRadius: 11 }}>
-                      <IconGrid style={{ width: 20, height: 20 }} />
-                    </div>
-                    <div>
-                      <div className="rv-selected-name">All apps</div>
-                      <div className="rv-selected-dev">Combined across {monitored.length} monitored apps</div>
-                    </div>
-                  </>
-                ) : selected ? (
-                  <>
-                    {selected.iconUrl ? (
-                      <img className="app-icon" style={{ width: 40, height: 40, borderRadius: 11 }} src={selected.iconUrl} alt="" referrerPolicy="no-referrer" />
-                    ) : (
-                      <div className="app-icon placeholder" style={{ width: 40, height: 40, borderRadius: 11 }}>{selected.title.charAt(0)}</div>
-                    )}
-                    <div>
-                      <div className="rv-selected-name">{selected.title}</div>
-                      <div className="rv-selected-dev">{selected.developer}</div>
-                    </div>
-                  </>
-                ) : null}
-              </div>
+      {/* app selector (truth: "All Apps {N}" dropdown) + single-app Refresh */}
+      <div className="rv-selector-row">
+        <AppSelector
+          monitored={monitored}
+          selectedId={selectedId}
+          isAll={isAll}
+          allowAll={activeTab === "overview"}
+          indexed={indexed}
+          busyId={busyId}
+          onSelect={selectApp}
+          onRefreshApp={refreshApp}
+          onRemoveApp={handleRemove}
+          onAddApp={() => setPicking(true)}
+        />
+        {!isAll && selected && (
+          <button
+            className="btn rv-refresh-btn"
+            onClick={refresh}
+            disabled={syncing}
+            title="Fetch latest reviews for this app"
+          >
+            <IconRefresh className={syncing ? "rv-spin" : ""} /> Refresh
+          </button>
+        )}
+      </div>
 
-              <Tabs tabs={TABS} active={activeTab} onChange={setTab} />
-
-              <div className="rv-panel">
-                {error ? (
-                  <EmptyState icon={<IconInfo />} title="Couldn’t load reviews" sub={error} />
-                ) : loading ? (
-                  <ReviewsSkeleton />
-                ) : activeTab === "overview" ? (
-                  <OverviewTab tagged={tagged} appsMonitored={monitored.length} />
-                ) : activeTab === "reviews" ? (
-                  <ReviewsTab tagged={tagged} />
-                ) : activeTab === "semantics" ? (
-                  <SemanticsTab tagged={tagged} onRefresh={refresh} refreshing={syncing || loading} />
-                ) : (
-                  <ImprovementsTab tagged={tagged} onRefresh={refresh} refreshing={syncing || loading} />
-                )}
-              </div>
-            </>
-          )}
-        </section>
+      <div className="rv-panel">
+        {monitored.length === 0 ? (
+          <EmptyState
+            icon={<IconStar style={{ width: 30, height: 30 }} />}
+            title="No apps monitored yet"
+            sub="Add your first app to start monitoring reviews, sentiment, and get AI-powered insights."
+          />
+        ) : activeTab !== "overview" && isAll ? (
+          // All-Apps is Overview-only (truth) — the data tabs need a specific app
+          <EmptyState
+            icon={<IconStar style={{ width: 30, height: 30 }} />}
+            title="Select an app"
+            sub={
+              activeTab === "semantics"
+                ? "Choose an app from the selector above to view its topic analysis."
+                : activeTab === "improvements"
+                  ? "Choose an app from the selector above to view its improvement areas."
+                  : "Choose an app from the selector above to view its reviews."
+            }
+          />
+        ) : error ? (
+          <EmptyState icon={<IconInfo />} title="Couldn’t load reviews" sub={error} />
+        ) : loading ? (
+          <ReviewsSkeleton />
+        ) : activeTab === "overview" ? (
+          <OverviewTab
+            tagged={tagged}
+            appsMonitored={monitored.length}
+            isAll={isAll}
+            monitored={monitored}
+            indexed={indexed}
+            appName={selected?.title ?? null}
+            onSelectApp={selectApp}
+            onViewReviews={() => setTab("feed")}
+          />
+        ) : activeTab === "feed" ? (
+          <ReviewsTab tagged={tagged} />
+        ) : activeTab === "semantics" ? (
+          <SemanticsTab tagged={tagged} onRefresh={refresh} refreshing={syncing || loading} />
+        ) : (
+          <ImprovementsTab tagged={tagged} onRefresh={refresh} refreshing={syncing || loading} />
+        )}
       </div>
 
       {picking && (

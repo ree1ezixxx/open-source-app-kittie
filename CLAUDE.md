@@ -10,13 +10,12 @@ Not a commercial product (for now). Ship fast: **days, not months**.
 
 ## Communication
 
-- **Concise and direct.** Lead with the answer or decision. No preamble, no recap of what the user just said.
-- **Short by default.** A few sentences or bullets beat an essay. Expand only when asked or the task genuinely needs it.
-- **No filler.** Cut throat-clearing ("Great question", "Let me break this down"), hedge stacks, and repeated explanations of the same point.
-- **Token compression.** Fewer words, less confusion. Don't pad simple questions with long explanations or option menus.
-- **Don't overcomplicate.** Prefer the simplest correct approach. Skip theory and analogies unless a real fork needs a decision.
-- **Punctual.** State what changed or what to do next. Skip diff narration — the user can read the diff.
-- **Clear over clever.** Plain language. One idea per sentence.
+Ultra compression — say the minimum that conveys the answer.
+
+- **Clear over clever.** Plain language beats jargon, metaphors, and throat-clearing.
+- **No verbosity or filler.** Don't pad to sound smart. No recaps, hedge stacks, or diff narration.
+- **Brevity by default.** Lead with the answer. A few bullets beat an essay. Expand only when asked or the task requires it.
+- **Simplify always.** Refuse unnecessary complexity. Prefer the simplest correct approach; skip theory, option menus, and layers nobody needs.
 
 ## Source of Truth (cross-check ALL clone work against this)
 
@@ -30,9 +29,35 @@ Not a commercial product (for now). Ship fast: **days, not months**.
   - …and the rest of the left-nav (Trending, Rising, ASO, Reviews, Hot Ideas, etc.)
 - **Cross-check the clone's localhost against the matching truth URL by path** (compared by path, not
   label) to confirm structure, data shape, behaviour, and visuals.
-- A separate **coordinator** owns the live browser and QAs each worktree against truth. Build agents do
-  **not** drive a browser; staged `TRUTH-<view>.snapshot.txt` a11y dumps live in each worktree for
-  offline cross-checking.
+- **"Truth" = the LIVE site. When auditing parity or cloning a feature, drive `appkittie.com` directly
+  via the Chrome DevTools MCP** — navigate to the page (use the explicit URLs above; if a page has no
+  listed URL, go to `/dashboard/explore` and click through the left-nav to reach it), then **exercise
+  the actual functionality** (open dropdowns, change filters, paginate, sort, hover, click rows) so the
+  audit reflects real behaviour, not just static structure. Compare live truth ↔ our clone ↔ gaps, per page.
+- **Truth browser — zero-touch launch (do this yourself, don't ask Rhodri):** run
+  `bash coordinator/truth-chrome.sh`. It boots Chrome on debug port **9222** with the **persistent
+  profile `~/.kittie-truth-chrome`** (already logged into appkittie.com — login survives reboots). If
+  it's already running it no-ops. Then attach via Chrome DevTools MCP: `list_pages` → `select_page`;
+  never `new_page` as the first action.
+- Only if the live page redirects to a login screen (session genuinely expired) do you STOP and ask
+  Rhodri to sign in once in that window — never guess from memory or stale snapshots.
+- Any staged `TRUTH-<view>.snapshot.txt` / `coordinator/.cache/*-truth.txt` dumps are a **point-in-time
+  cache only** — never a substitute for live navigation in a real audit. The live site wins on conflict.
+
+## Clone Fidelity Score (HARD GATE — applies to every cloned page/feature)
+
+- Every cloned surface MUST be scored **out of 5** for visual + behavioural fidelity to the LIVE source
+  of truth (appkittie.com), judged by side-by-side comparison in the truth browser (`coordinator/truth-chrome.sh`).
+- **Minimum acceptable = 4/5. A score of 3 or below is NOT a deliverable.** Do not hand work back as
+  "done" at ≤3 — keep iterating (re-inspect truth → fix the gap → re-score) until it reaches ≥4. Three
+  rounds is not a finish line; ten is not too many. Always state the score explicitly when reporting.
+- **Only permitted stop below 4:** a hard EXTERNAL blocker — a third-party API key / approval or data
+  that genuinely cannot be obtained (e.g. Meta/TikTok/Instagram ad ingest, paid feeds). Then STOP,
+  report the exact blocker, the current score, and precisely what would unblock it. Internal effort
+  (more components, more passes, more polish) is never a valid reason to ship a 3.
+- Rubric: **5** = pixel- & behaviour-indistinguishable · **4** = only minor cosmetic deltas, all
+  functionality present & correct · **3** = noticeable structural/behavioural gaps (REJECTED) ·
+  **≤2** = missing features or wrong data (REJECTED).
 
 ## Read First
 
@@ -72,6 +97,36 @@ Schema changes go through `packages/db` only. If ingest or API work needs a new 
 - **Do not cross-edit another lane's owned paths.** Shared types in `packages/types` are the contract.
 - `main` is **branch-protected** (required status check `check`). Land a lane via **PR → main** once it's
   verified and CI is green — never push to `main` directly.
+
+## Parallel Clone Lanes — Chrome Isolation (evergreen)
+
+When >1 lane clones in parallel, each agent drives the Chrome DevTools MCP. **The MCP drives ONE browser
+instance; two agents on the same Chrome collide over tabs/navigation and burn tokens fighting each other.**
+So each lane gets its **own Chrome on its own debug port + its own profile**. (All lanes may open the same
+truth URL at once — reading a public page never conflicts; the collision is the browser *instance*, not the URL.)
+
+**Slot → port scheme (independent of branch / section / worktree name):**
+- **Primary worktree = slot 0 → port 9222** (the default global chrome-devtools MCP + `~/.kittie-truth-chrome`).
+- **Each additional lane = slot N → port 9222+N** (slot 1 → 9223, slot 2 → 9224, …), profile `~/.kittie-chrome-laneN`.
+
+**Per-lane setup (do once per lane, then never again):**
+1. Launch the lane's isolated Chrome: `bash coordinator/lane-chrome.sh <slot>` (idempotent; slot 0 also
+   works via the existing `coordinator/truth-chrome.sh`). Extra-lane profiles are seeded from the truth
+   profile so they inherit the appkittie.com login. If a lane still lands on a login screen, STOP and ask
+   Rhodri to sign in once in that window — never guess from memory.
+2. Bind the lane's MCP to its port with an **untracked `.mcp.json`** at the worktree root:
+   ```json
+   { "mcpServers": { "chrome-devtools": { "type": "stdio", "command": "npx",
+     "args": ["-y", "chrome-devtools-mcp@latest", "--browserUrl=http://127.0.0.1:<port>"] } } }
+   ```
+   (Slot 0 needs none — it uses the global 9222 default.)
+3. On first boot, confirm via `list_pages` that the attached Chrome shows *this lane's* port/tabs, not 9222.
+
+**Stable-slot principle (this is what makes the above evergreen):** keep the worktree *directories* as
+permanent lane-slots and **rotate the branch inside them** — when a section is done, the slot checks out the
+next section's branch. Same dir, same port, same `.mcp.json`. The section name lives in the *branch*, not the
+dir. The wiring (script + port map + `.mcp.json`) is set once and survives every section rotation; only the
+branch + the section handoff change.
 
 ## Subagents & Token Efficiency
 

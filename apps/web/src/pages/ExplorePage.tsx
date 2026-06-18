@@ -7,7 +7,7 @@ import { ExploreFilterRail, type CategoryMode } from "../components/ExploreFilte
 import { ActiveFilters } from "../components/ActiveFilters";
 import { Pagination } from "../components/Pagination";
 import { useApps } from "../hooks/useApps";
-import { listApps } from "../lib/api";
+import { listCategories, type CategoryFacet } from "../lib/api";
 import {
   activeChips,
   EMPTY_FILTERS,
@@ -52,7 +52,7 @@ export function ExplorePage({
   }, [spStr]);
 
   const [searchInput, setSearchInput] = useState(filters.q);
-  const [categories, setCategories] = useState<string[]>([]);
+  const [categories, setCategories] = useState<CategoryFacet[]>([]);
 
   // apply a partial filter change → URL (replace, so filter tweaks don't spam history).
   // functional updater reads the *latest* params, so rapid successive clicks compose
@@ -92,12 +92,8 @@ export function ExplorePage({
   }, [filters.q]);
 
   useEffect(() => {
-    listApps({ limit: 100 })
-      .then((res) => {
-        const set = new Set<string>();
-        for (const a of res.data) if (a.category) set.add(a.category);
-        setCategories([...set].sort());
-      })
+    listCategories()
+      .then(setCategories)
       .catch(() => setCategories([]));
   }, []);
 
@@ -193,7 +189,7 @@ export function ExplorePage({
     <main className="main">
       <Topbar
         title="Explore Apps"
-        subtitle="Search and filter the app database"
+        subtitle="Search and filter"
         total={total}
         showing={apps.length}
         loading={loading}
@@ -201,6 +197,8 @@ export function ExplorePage({
         onToggleTheme={onToggleTheme}
         search={searchInput}
         onSearch={setSearchInput}
+        searchScope={filters.scope}
+        onSearchScope={(scope) => patch({ scope })}
         onRefresh={refresh}
         onExportCsv={() => exportRows("csv")}
         onExportJson={() => exportRows("json")}

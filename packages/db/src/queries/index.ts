@@ -12,16 +12,21 @@ export {
   appsWithAppleAds,
   appsWithCreators,
   getAppById as getAppRowById,
+  listAppIaps,
+  listAppsByIds,
   listFreshSet,
   loadAppRelations,
   updateAppListingFacts,
   reviewCountsByApp,
 } from "./detail.js";
 export { enrichSnapshotScores } from "./scoring.js";
+export { countAppIdsByText, ensureAppsFts, searchAppIds, toFtsMatch } from "./fts.js";
 export {
   findKeyword,
   keywordRowToDifficulty,
+  listStaleCatalogKeywords,
   makeKeywordLookupId,
+  touchKeywordChecked,
   upsertKeywordRow,
   type KeywordRow,
 } from "./keywords.js";
@@ -58,9 +63,12 @@ export {
   listIdeaFacets,
   listIdeas,
   listSimilarIdeas,
+  listStaleIdeaCandidates,
+  updateIdeaBlueprint,
   type IdeaCandidate,
   type IdeaListQuery,
   type IdeaSort,
+  type StaleIdeaCandidate,
 } from "./ideas.js";
 export {
   addBuilderMessage,

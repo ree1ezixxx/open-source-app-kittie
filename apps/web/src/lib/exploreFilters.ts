@@ -5,12 +5,30 @@ import type {
   PriceType,
   SortOrder,
   Store,
+  TextSearchField,
 } from "@kittie/types";
 import { formatCompact, formatMoney } from "./format";
+
+export type SearchScope = "all" | TextSearchField;
+
+export const SEARCH_SCOPE_LABELS: Record<SearchScope, string> = {
+  all: "All",
+  title: "Title",
+  developer: "Developer",
+  description: "Description",
+};
+
+const SEARCH_SCOPES: SearchScope[] = ["all", "title", "developer", "description"];
+
+function parseScope(raw: string | null): SearchScope {
+  const v = raw?.toLowerCase();
+  return SEARCH_SCOPES.includes(v as SearchScope) ? (v as SearchScope) : "all";
+}
 
 /** UI-facing filter state for the Explore rail. Single source of truth = the URL. */
 export interface ExploreFilters {
   q: string;
+  scope: SearchScope;
   source?: Store;
   cats: string[];
   price: PriceType;
@@ -37,6 +55,7 @@ export interface ExploreFilters {
 
 export const EMPTY_FILTERS: ExploreFilters = {
   q: "",
+  scope: "all",
   cats: [],
   price: "all",
   meta: false,
@@ -60,6 +79,7 @@ export function parseFilters(sp: URLSearchParams): ExploreFilters {
   };
   return {
     q: sp.get("q") ?? "",
+    scope: parseScope(sp.get("scope")),
     source: (sp.get("source") as Store) || undefined,
     cats: sp.get("cats") ? sp.get("cats")!.split(",").filter(Boolean) : [],
     price: (sp.get("price") as PriceType) || "all",
@@ -78,10 +98,11 @@ export function parseFilters(sp: URLSearchParams): ExploreFilters {
     creators: sp.get("creators") === "1",
     web: sp.get("web") === "1",
     email: sp.get("email") === "1",
-    period: (sp.get("period") as GrowthPeriod) || "7d",
+    period:
+      (sp.get("growthPeriod") as GrowthPeriod) || (sp.get("period") as GrowthPeriod) || "7d",
     gtype: (sp.get("gtype") as ExploreFilters["gtype"]) || "all",
-    sort: (sp.get("sort") as AppSortField) || "revenue",
-    order: (sp.get("order") as SortOrder) || "desc",
+    sort: (sp.get("sortBy") as AppSortField) || (sp.get("sort") as AppSortField) || "revenue",
+    order: (sp.get("sortOrder") as SortOrder) || (sp.get("order") as SortOrder) || "desc",
   };
 }
 
@@ -95,6 +116,7 @@ export function writeFilters(f: ExploreFilters): URLSearchParams {
     if (v) sp.set(k, "1");
   };
   if (f.q) sp.set("q", f.q);
+  if (f.scope !== "all") sp.set("scope", f.scope);
   if (f.source) sp.set("source", f.source);
   if (f.cats.length) sp.set("cats", f.cats.join(","));
   if (f.price !== "all") sp.set("price", f.price);
@@ -113,10 +135,10 @@ export function writeFilters(f: ExploreFilters): URLSearchParams {
   setB("creators", f.creators);
   setB("web", f.web);
   setB("email", f.email);
-  if (f.period !== "7d") sp.set("period", f.period);
+  if (f.period !== "7d") sp.set("growthPeriod", f.period);
   if (f.gtype !== "all") sp.set("gtype", f.gtype);
-  if (f.sort !== "revenue") sp.set("sort", f.sort);
-  if (f.order !== "desc") sp.set("order", f.order);
+  if (f.sort !== "revenue") sp.set("sortBy", f.sort);
+  if (f.order !== "desc") sp.set("sortOrder", f.order);
   return sp;
 }
 
@@ -127,6 +149,7 @@ const daysAgoEpoch = (d?: number) =>
 export function toApiParams(f: ExploreFilters): AppSearchParams {
   return {
     search: f.q || undefined,
+    textSearchFields: f.q && f.scope !== "all" ? f.scope : undefined,
     source: f.source,
     categories: f.cats.length ? f.cats.join(",") : undefined,
     priceType: f.price !== "all" ? f.price : undefined,
@@ -170,6 +193,7 @@ export function activeCount(f: ExploreFilters): number {
   if (f.web) n++;
   if (f.email) n++;
   if (f.gtype !== "all") n++;
+  if (f.period !== "7d") n++;
   return n;
 }
 
@@ -212,5 +236,7 @@ export function activeChips(f: ExploreFilters): Chip[] {
   if (f.email) c.push({ id: "email", label: "Has email", clear: { email: false } });
   if (f.gtype !== "all")
     c.push({ id: "gtype", label: f.gtype === "positive" ? "Growing" : "Declining", clear: { gtype: "all" } });
+  if (f.period !== "7d")
+    c.push({ id: "period", label: `Growth window: ${f.period}`, clear: { period: "7d", sort: "revenue" } });
   return c;
 }

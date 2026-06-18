@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import "../styles/aistudio.css";
-import pppData from "../datasets/ppp-index.json";
+import pppData from "../datasets/truth-ppp.json";
 import { StudioHeader } from "../components/aistudio/StudioHeader";
 import { StudioEmptyState } from "../components/aistudio/StudioEmptyState";
 import { IconCoin, IconSearch, IconDownload } from "../icons";
@@ -11,8 +11,8 @@ interface Country {
   code: string;
   currency: string;
   symbol: string;
-  pli: number;
-  fx: number;
+  /** Local-currency amount per $1 of base — appkittie's global purchasing-power index (FX × PPP, baked in). */
+  factor: number;
 }
 const COUNTRIES = (pppData.countries as Country[]);
 
@@ -27,8 +27,7 @@ const MAX_PRICES = 4;
 /** Charm-rounded local price (e.g. $2.99, ₹229, ¥980). */
 function charm(value: number, currency: string): number {
   if (ZERO_DECIMAL.has(currency)) {
-    if (value >= 1000) return Math.round(value / 100) * 100;
-    if (value >= 100) return Math.round(value / 10) * 10;
+    if (value >= 100) return Math.round(value / 10) * 10; // nearest 10 (¥1,090, not ¥1,100)
     return Math.max(1, Math.round(value));
   }
   if (value < 100) return Math.max(0.99, Math.round(value) - 0.01);
@@ -36,8 +35,9 @@ function charm(value: number, currency: string): number {
 }
 
 function fmt(value: number, currency: string): string {
-  const min = ZERO_DECIMAL.has(currency) ? 0 : 2;
-  return new Intl.NumberFormat("en-US", { minimumFractionDigits: min, maximumFractionDigits: min }).format(value);
+  // truth omits ".00" on whole charm-rounded prices (₹369, $109) but keeps cents on .99 prices
+  const dec = ZERO_DECIMAL.has(currency) || Number.isInteger(value) ? 0 : 2;
+  return new Intl.NumberFormat("en-US", { minimumFractionDigits: dec, maximumFractionDigits: dec }).format(value);
 }
 
 function flagEmoji(cc: string): string {
@@ -46,10 +46,9 @@ function flagEmoji(cc: string): string {
   return String.fromCodePoint(A + cc.charCodeAt(0) - 65, A + cc.charCodeAt(1) - 65);
 }
 
+/** appkittie-parity local price: base × the country's purchasing-power factor, charm-rounded. */
 function localize(baseUSD: number, c: Country) {
-  const usdEquivalent = baseUSD * c.pli;
-  const raw = usdEquivalent * c.fx;
-  return { usdEquivalent, local: charm(raw, c.currency) };
+  return { local: charm(baseUSD * c.factor, c.currency) };
 }
 
 export function PricingCalculatorPage() {
@@ -87,11 +86,7 @@ export function PricingCalculatorPage() {
         country: c.country,
         code: c.code,
         currency: c.currency,
-        purchasingPowerIndex: c.pli,
-        prices: validPrices.map((base) => {
-          const { usdEquivalent, local } = localize(base, c);
-          return { baseUSD: base, localPrice: local, currency: c.currency, usdEquivalent: Math.round(usdEquivalent * 100) / 100 };
-        }),
+        prices: validPrices.map((base) => ({ baseUSD: base, localPrice: localize(base, c).local, currency: c.currency })),
       })),
     };
   }
@@ -189,9 +184,8 @@ export function PricingCalculatorPage() {
                   <tr>
                     <th>Country</th>
                     <th>Currency</th>
-                    <th className="num">Purchasing power</th>
                     {validPrices.map((base, i) => (
-                      <th className="num" key={i}>${base.toFixed(2)}</th>
+                      <th className="num" key={i}>${base.toFixed(2)} USD</th>
                     ))}
                   </tr>
                 </thead>
@@ -207,23 +201,14 @@ export function PricingCalculatorPage() {
                       <td>
                         <span className="ppp-cc">{c.currency}</span>
                       </td>
-                      <td className="num">
-                        <span className="ppp-pli">
-                          <span className="ppp-pli-bar">
-                            <span className="ppp-pli-fill" style={{ width: `${Math.min(100, c.pli * 100)}%` }} />
-                          </span>
-                          {Math.round(c.pli * 100)}%
-                        </span>
-                      </td>
                       {validPrices.map((base, i) => {
-                        const { usdEquivalent, local } = localize(base, c);
+                        const { local } = localize(base, c);
                         return (
                           <td className="num" key={i}>
                             <div className="ppp-local">
                               {c.symbol}
                               {fmt(local, c.currency)}
                             </div>
-                            <div className="ppp-usd cell-sub">≈ ${usdEquivalent.toFixed(2)}</div>
                           </td>
                         );
                       })}
@@ -237,8 +222,8 @@ export function PricingCalculatorPage() {
           <div className="notice" style={{ marginTop: 16 }}>
             <IconCoin style={{ width: 14, height: 14 }} />
             <span>
-              Local prices = base USD × purchasing-power index × FX, charm-rounded. Dataset is approximate World Bank ICP
-              ratios + rough FX — fully offline, no backend. Swap <code>data/ppp-index.json</code> for fresh ICP data anytime.
+              Local prices use a global purchasing-power index (FX × PPP) calibrated to real-world digital-product pricing,
+              charm-rounded to local conventions. Fully offline, no backend. Index in <code>datasets/truth-ppp.json</code>.
             </span>
           </div>
         </div>

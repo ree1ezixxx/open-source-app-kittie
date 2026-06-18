@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, asc, lt } from "drizzle-orm";
 import { computeOpportunityScore } from "@kittie/intelligence";
 import type { KeywordDifficulty, Store } from "@kittie/types";
 
@@ -20,6 +20,48 @@ export interface KeywordRow {
 
 export function makeKeywordLookupId(store: Store, country: string, keyword: string): string {
   return `${store}:${country.toUpperCase()}:${keyword.trim().toLowerCase()}`;
+}
+
+/**
+ * Catalog keywords whose lookup row is older than `maxAgeDays`, oldest first,
+ * capped at `limit`. The catalog-refresh sweep feeds these back through the
+ * lookup path (which refetches live on the stale TTL), so even keywords nobody
+ * has viewed stay fresh — not just tracked ones. Paced + capped per run so it
+ * cycles the whole catalog over a few days without hammering the stores.
+ */
+export async function listStaleCatalogKeywords(
+  db: Db,
+  maxAgeDays = 7,
+  limit = 300,
+): Promise<Array<{ keyword: string; country: string; store: Store }>> {
+  const cutoff = new Date(Date.now() - maxAgeDays * 86_400_000);
+  const rows = await db
+    .select({ keyword: keywords.keyword, country: keywords.country, store: keywords.store })
+    .from(keywords)
+    .where(lt(keywords.computedAt, cutoff))
+    .orderBy(asc(keywords.computedAt))
+    .limit(limit);
+  return rows.map((r) => ({ ...r, store: r.store as Store }));
+}
+
+/**
+ * Advance a keyword's `computedAt` to now without touching its metrics. The
+ * catalog-refresh sweep calls this after every attempt so a keyword that can't
+ * re-sync (store error, or a stale row returned from cache without a refetch)
+ * rotates to the BACK of the oldest-first staleness queue — otherwise it sits at
+ * the head and is re-selected every run, starving the rest of the catalog.
+ * Matches on the natural key (the exact stored keyword/country/store values).
+ */
+export async function touchKeywordChecked(
+  db: Db,
+  keyword: string,
+  country: string,
+  store: Store,
+): Promise<void> {
+  await db
+    .update(keywords)
+    .set({ computedAt: new Date() })
+    .where(and(eq(keywords.keyword, keyword), eq(keywords.country, country), eq(keywords.store, store)));
 }
 
 export async function findKeyword(

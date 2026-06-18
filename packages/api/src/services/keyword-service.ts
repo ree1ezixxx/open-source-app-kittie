@@ -107,8 +107,8 @@ export async function getRelatedKeywords(
 
 /** Markets we score a keyword across (cross-market opportunity finder). */
 export const SUPPORTED_MARKETS = [
-  "US", "GB", "CA", "AU", "IE", "NZ", "DE", "FR", "IT", "ES", "JP", "BR", "MX", "IN",
-  "NL", "SE", "NO", "DK", "FI", "PL", "PT", "CH", "AT", "BE", "KR", "TR",
+  "US", "GB", "CA", "AU", "NZ", "IE", "DE", "FR", "IT", "ES", "NL", "BE", "AT",
+  "CH", "PT", "LU", "SE", "NO", "DK", "FI", "CN", "JP", "KR", "TW", "HK", "SG",
 ] as const;
 
 export interface KeywordMarket {

@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import {
   getIdeaByStoreAppId,
+  listAppIaps,
   listIdeaFacets,
   listIdeas,
   listSimilarIdeas,
@@ -9,6 +10,7 @@ import {
 } from "@kittie/db";
 
 import { getDb } from "../lib/db.js";
+import { normalizeBlueprint } from "../services/idea-blueprint.js";
 
 const SORTS: ReadonlySet<string> = new Set([
   "created",
@@ -34,7 +36,9 @@ function toWire(idea: AppIdea) {
     needsBackend: idea.needsBackend,
     needsDatabase: idea.needsDatabase,
     needsAi: idea.needsAi,
-    blueprint: JSON.parse(idea.blueprint) as unknown,
+    // Normalize on read so clients always get a valid doc: building fields present,
+    // opportunity/marketing either fully-valid or null (never a half-formed section).
+    blueprint: normalizeBlueprint(idea.blueprint),
     reviews: idea.reviewCount,
     rating: idea.rating,
     downloads: idea.downloadsEstimate,
@@ -84,7 +88,10 @@ ideasRouter.get("/:storeAppId", async (c) => {
   if (!found) return c.json({ error: "idea not found" }, 404);
 
   const { idea, sourceApp } = found;
-  const similar = await listSimilarIdeas(db, idea.sourceCategory, idea.id);
+  const [similar, inAppPurchases] = await Promise.all([
+    listSimilarIdeas(db, idea.sourceCategory, idea.id),
+    listAppIaps(db, sourceApp.id),
+  ]);
   return c.json({
     data: {
       idea: { ...toWire(idea), storeAppId: sourceApp.storeAppId },
@@ -102,6 +109,7 @@ ideasRouter.get("/:storeAppId", async (c) => {
         downloads: idea.downloadsEstimate,
         revenue: idea.revenueEstimate,
       },
+      inAppPurchases,
       similar: similar.map(toWire),
     },
   });
