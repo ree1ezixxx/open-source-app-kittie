@@ -92,8 +92,11 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
     const ctrl = new AbortController();
     loadOpps(selected, ctrl.signal);
     return () => ctrl.abort();
+    // Key off selected?.id, not selectedId: after addApp sets selectedId the tracked
+    // list refreshes a tick later, so selected goes null→row without selectedId changing.
+    // Keying on selectedId alone left the opportunities panel blank after every add.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId]);
+  }, [selected?.id]);
 
   async function addApp(a: AppListItem) {
     // Already tracked → just select it (server add is idempotent regardless).
