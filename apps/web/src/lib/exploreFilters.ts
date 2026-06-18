@@ -215,7 +215,7 @@ const star = (n: number) => `${n}★`;
 export function activeChips(f: ExploreFilters): Chip[] {
   const c: Chip[] = [];
   if (f.source)
-    c.push({ id: "source", label: f.source === "apple" ? "App Store" : "Google Play", clear: { source: undefined } });
+    c.push({ id: "source", label: f.source === "apple" ? "Apple Store" : "Google Play", clear: { source: undefined } });
   if (f.cats.length)
     c.push({ id: "cats", label: f.cats.length === 1 ? f.cats[0]! : `${f.cats.length} categories`, clear: { cats: [] } });
   if (f.price !== "all") c.push({ id: "price", label: f.price === "free" ? "Free" : "Paid", clear: { price: "all" } });

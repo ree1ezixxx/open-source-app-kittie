@@ -84,7 +84,7 @@ export function TrendingPage({ theme, onToggleTheme }: { theme: Theme; onToggleT
         value={store}
         onChange={setStore}
         options={[
-          { id: "apple", label: "App Store" },
+          { id: "apple", label: "Apple Store" },
           { id: "google", label: "Google Play" },
         ]}
       />

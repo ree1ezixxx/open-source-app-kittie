@@ -216,7 +216,7 @@ export function RisingPage({ theme, onToggleTheme }: { theme: Theme; onToggleThe
       <span className="filter-label" style={{ alignSelf: "center" }}>Growth signal</span>
       <Segmented<Signal> value={signal} onChange={(v) => patch({ signal: v })} options={[{ id: "2W", label: "2W" }, { id: "1M", label: "1M" }, { id: "3M", label: "3M" }]} />
       <div className="toolbar-divider" />
-      <Segmented<Store> value={store} onChange={(v) => patch({ store: v })} options={[{ id: "apple", label: "App Store" }, { id: "google", label: "Google Play" }]} />
+      <Segmented<Store> value={store} onChange={(v) => patch({ store: v })} options={[{ id: "apple", label: "Apple Store" }, { id: "google", label: "Google Play" }]} />
 
       <div style={{ position: "relative" }}>
         <button className="btn" onClick={() => setFiltersOpen((o) => !o)} aria-expanded={filtersOpen}>
