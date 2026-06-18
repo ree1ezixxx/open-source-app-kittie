@@ -60,6 +60,9 @@ export const appSnapshots = sqliteTable(
     uniqueIndex("snapshots_app_date_idx").on(t.appId, t.snapshotDate),
     index("snapshots_growth_idx").on(t.growthScore),
     index("snapshots_date_idx").on(t.snapshotDate),
+    // Serves the /apps list: order the latest-day partition by review count
+    // (the default sort + every live-metric proxy) without a temp b-tree sort.
+    index("snapshots_date_reviews_idx").on(t.snapshotDate, t.reviewCount),
   ],
 );
 
