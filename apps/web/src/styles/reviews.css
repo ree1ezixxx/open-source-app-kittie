@@ -858,3 +858,53 @@
 .rv-tl-zero { color: var(--text-faint); }
 .rv-tl-sent { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; text-transform: capitalize; }
 .rv-tl-sent i { width: 7px; height: 7px; border-radius: 50%; }
+
+/* ============================================================
+   P4 · Add-app flow — Search/Paste-URL tabs, confirm step,
+   sync % bar + Cancel/Minimize + background pill.
+   ============================================================ */
+.rv-addmode { display: inline-flex; gap: 3px; padding: 3px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; margin: 4px 0 14px; }
+.rv-addmode-tab { border: none; background: none; color: var(--text-secondary); font-size: 12.5px; font-weight: 600; padding: 6px 16px; border-radius: 7px; transition: all 0.12s; }
+.rv-addmode-tab:hover { color: var(--text); }
+.rv-addmode-tab.on { background: var(--accent-soft); color: var(--accent); }
+
+/* paste-url mode */
+.rv-url-mode { padding: 4px 2px 8px; }
+.rv-url-label { display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-tertiary); margin-bottom: 8px; }
+.rv-url-row { display: flex; gap: 10px; }
+.rv-url-input { flex: 1; height: 40px; padding: 0 13px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; color: var(--text); font-size: 13.5px; }
+.rv-url-input:focus { outline: none; border-color: var(--accent); }
+.rv-url-error { color: var(--danger); font-size: 12.5px; margin-top: 9px; }
+.rv-url-hint { display: flex; flex-direction: column; gap: 6px; margin-top: 16px; }
+.rv-url-store { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text-tertiary); font-family: var(--rv-mono); }
+
+/* confirm step */
+.rv-confirm { padding: 6px 2px; }
+.rv-confirm-card { display: flex; gap: 14px; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px; }
+.rv-confirm-icon { width: 56px; height: 56px; border-radius: 13px; flex-shrink: 0; }
+.rv-confirm-meta { min-width: 0; }
+.rv-confirm-name { display: flex; align-items: center; gap: 7px; font-size: 15px; font-weight: 650; }
+.rv-confirm-dev { font-size: 12.5px; color: var(--text-tertiary); margin: 2px 0 8px; }
+.rv-confirm-stats { display: flex; align-items: center; gap: 16px; font-size: 12.5px; color: var(--text-secondary); }
+.rv-confirm-rating { display: inline-flex; align-items: center; gap: 4px; }
+.rv-confirm-reviews b { color: var(--text); }
+.rv-confirm-note { font-size: 12.5px; color: var(--text-secondary); line-height: 1.5; margin: 16px 0; }
+.rv-confirm-actions { display: flex; gap: 10px; justify-content: flex-end; }
+
+/* sync progress bar + actions */
+.rv-sync-progress { margin: 16px 0 6px; }
+.rv-sync-progress-head { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-secondary); margin-bottom: 7px; }
+.rv-sync-bar, .rv-sync-pill-bar { height: 6px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.rv-sync-bar > span, .rv-sync-pill-bar > span { display: block; height: 100%; border-radius: 999px; background: var(--accent); transition: width 0.3s ease; }
+.rv-sync-actions { display: flex; gap: 10px; margin-top: 16px; }
+.rv-sync-actions .btn { flex: 1; justify-content: center; }
+.rv-sync-hint { font-size: 11.5px; color: var(--text-tertiary); line-height: 1.5; margin: 10px 2px 0; }
+
+/* minimized background pill */
+.rv-sync-pill { position: fixed; right: 22px; bottom: 22px; z-index: 60; width: 300px; display: flex; align-items: center; gap: 11px; padding: 12px 14px; background: var(--panel); border: 1px solid var(--border-strong); border-radius: 14px; box-shadow: var(--shadow-pop); }
+.rv-sync-pill .app-icon { width: 34px; height: 34px; border-radius: 9px; }
+.rv-sync-pill-meta { flex: 1; min-width: 0; }
+.rv-sync-pill-title { font-size: 12.5px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rv-sync-pill-sub { font-size: 11px; color: var(--text-secondary); margin: 2px 0 6px; }
+.rv-sync-pill-expand { border: none; background: var(--surface-2); color: var(--text-secondary); font-size: 11.5px; font-weight: 600; padding: 5px 10px; border-radius: 7px; }
+.rv-sync-pill-expand:hover { color: var(--accent); }

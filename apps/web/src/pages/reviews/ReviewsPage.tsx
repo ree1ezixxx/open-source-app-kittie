@@ -152,10 +152,10 @@ export function ReviewsPage({ theme, onToggleTheme }: { theme: Theme; onToggleTh
     setAdding(app);
   }
 
-  function handleSynced(app: MonitoredApp, _result: ReviewSyncResult) {
+  function handleSynced(app: MonitoredApp, _result: ReviewSyncResult, background: boolean) {
     const next = addMonitored(app);
     setMonitoredState(next);
-    selectApp(app.id);
+    if (!background) selectApp(app.id); // minimized adds register quietly — don't yank the user's view
     setReloadTick((t) => t + 1); // re-read so the freshly-synced reviews show
   }
 
