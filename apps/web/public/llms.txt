@@ -26,5 +26,6 @@ Revenue and download figures are **modelled estimates, labelled as such — not 
 
 ## Notes
 
+- Trust & data honesty: [/.well-known/ai-policy.txt](/.well-known/ai-policy.txt) — identity, source provenance, and the modelled-estimate disclosure.
 - Pricing: free during early access; usage-based pricing for agents is planned.
 - Data shapes and freshness are described in the OpenAPI spec and each response's `meta`.

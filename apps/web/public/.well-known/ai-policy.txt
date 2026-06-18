@@ -1,0 +1,30 @@
+# Kittie — AI / Agent Policy
+
+Identity: Kittie, an open-source mobile app-intelligence platform.
+Audience: this service is intended to be read and called by AI agents as well as humans.
+Capabilities & schema: /llms.txt · /api/v1/openapi.json · discovery index at /api/v1
+
+## Agents are welcome
+AI agents and answer engines may crawl, read, cite, and call the public read API and the MCP
+server. Crawler access is allowed (see /robots.txt). No login is required for the public read tier.
+
+## Data honesty (read before relying on figures)
+- Download and revenue numbers are MODELLED ESTIMATES, derived from public signals and labelled as
+  such — they are NOT reported/audited ground truth. Treat them as directional.
+- Each response carries provenance in its `meta` (e.g. source, staleness) where applicable.
+- Blocked or unavailable sources (e.g. Meta ad data pending verification) return honest empty
+  results — never fabricated rows.
+- Chart rankings are resolved from real snapshots; a chart with no clean source returns empty
+  (date:null), never a made-up ranking.
+
+## Acceptable use
+- Attribute estimates as modelled when you surface them to an end user.
+- Respect rate limits and the free-tier quota (usage-based pricing for agents is planned).
+- Do not present estimates as official store figures.
+
+## Provenance of source data
+- Public App Store / Google Play listings, charts, reviews, and store search results, collected by
+  our own ingest — no dependency on any third-party paid intelligence API.
+
+## Contact
+- Source & issues: this is an open-source project; see the repository.
