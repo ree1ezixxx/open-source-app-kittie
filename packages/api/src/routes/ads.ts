@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { apps, metaAds } from "@kittie/db";
+import { apps, listAppsByIds, metaAds } from "@kittie/db";
 import { getDb } from "../lib/db.js";
 
 /**
@@ -9,9 +9,9 @@ import { getDb } from "../lib/db.js";
  * The join + filter + sort happens in memory: this package doesn't depend on
  * drizzle-orm (only on @kittie/db's exported helpers), and the rest of the API
  * already filters/sorts hydrated rows in JS (see services/filter-sort.ts). The
- * meta_ads table is small — ingest writes a handful of creatives per app — so
- * two full selects per request is fine; swap to a @kittie/db query helper if
- * that ever changes.
+ * meta_ads table is small — ingest writes a handful of creatives per app — so we
+ * load every creative, then hydrate ONLY the apps those creatives reference via a
+ * bounded id lookup (never the full ~1.1M-row catalog).
  */
 export const adsRouter = new Hono();
 
@@ -44,11 +44,10 @@ adsRouter.get("/", async (c) => {
   const params = parsed.data;
 
   const db = getDb();
-  const [adRows, appRows] = await Promise.all([
-    db.select().from(metaAds),
-    db.select().from(apps),
-  ]);
-
+  // Meta creatives are few; load ONLY the apps they reference (bounded inArray)
+  // rather than scanning the full ~1.1M-row catalog into memory on every request.
+  const adRows = await db.select().from(metaAds);
+  const appRows = await listAppsByIds(db, [...new Set(adRows.map((a) => a.appId))]);
   const appsById = new Map<string, AppRow>(appRows.map((a) => [a.id, a]));
 
   const categories = (params.categories ?? "")

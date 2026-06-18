@@ -4,7 +4,7 @@ export {
   getLatestSnapshot,
   getSnapshotContext,
   listHistoricals,
-  listSnapshotContexts,
+  streamSnapshotContexts,
   parseJsonArray,
   type SnapshotContext,
 } from "./signals.js";
@@ -13,6 +13,7 @@ export {
   appsWithCreators,
   getAppById as getAppRowById,
   listAppIaps,
+  listAppsByIds,
   listFreshSet,
   loadAppRelations,
   updateAppListingFacts,

@@ -1,4 +1,4 @@
-import { count, eq } from "drizzle-orm";
+import { and, count, eq, getTableColumns, gt, gte, lte, sql } from "drizzle-orm";
 import type { GrowthPeriod } from "@kittie/types";
 import { GROWTH_PERIOD_DAYS } from "@kittie/intelligence";
 import type { Db } from "../client.js";
@@ -21,6 +21,11 @@ export interface SnapshotContext {
   metaAdCount: number;
   metaAdCountPrior: number | null;
   categoryAppCount: number;
+  /** Last ≤7 daily review counts (oldest→newest) for the row sparkline. */
+  sparkline: number[];
+  /** Signed chart-rank movement (prior − latest) across the two most recent
+   *  ranked days; null when fewer than two snapshots carry a chart rank. */
+  rankDelta: number | null;
 }
 
 export function parseJsonArray(value: string | null): string[] {
@@ -64,6 +69,22 @@ function pickPrior(
   if (best) return best;
   const oldest = sortedSnaps[0];
   return oldest && oldest.snapshotDate < latestDate ? oldest : null;
+}
+
+/** Last ≤7 review counts (oldest→newest) for the row sparkline. */
+function sparklineFrom(sortedSnaps: AppSnapshot[]): number[] {
+  return sortedSnaps.slice(-7).map((s) => s.reviewCount);
+}
+
+/**
+ * Signed chart-rank movement (prior − latest; positive = climbed) across the two
+ * most recent snapshots that carry a chart rank; null when fewer than two do.
+ */
+function rankDeltaFrom(sortedSnaps: AppSnapshot[]): number | null {
+  const ranked: number[] = [];
+  for (const s of sortedSnaps) if (s.chartRank != null) ranked.push(s.chartRank);
+  if (ranked.length < 2) return null;
+  return ranked[ranked.length - 2]! - ranked[ranked.length - 1]!;
 }
 
 export async function countApps(db: Db): Promise<number> {
@@ -138,74 +159,115 @@ export async function getSnapshotContext(
     metaAdCount: metaRows.length,
     metaAdCountPrior,
     categoryAppCount: await countAppsInCategory(db, app.category),
+    sparkline: sparklineFrom(allSnaps),
+    rankDelta: rankDeltaFrom(allSnaps),
   };
 }
 
-export async function listSnapshotContexts(
+/**
+ * Stream every app's snapshot context in id-ordered chunks, instead of loading
+ * the whole catalog (1.1M apps + 3M snapshots + contexts) into memory at once —
+ * that all-at-once build peaked ~7GB and was the Explore OOM. Each chunk keysets
+ * the next `chunkSize` apps (`id > lastId`), then range-scans their snapshots /
+ * iaps / meta ads by the contiguous id window (`app_id BETWEEN firstId..lastId`,
+ * exact because keyset chunks are gap-free), assembles contexts, and yields. The
+ * caller scores + discards each chunk, so only the retained scored rows plus one
+ * chunk are ever live — peak stays a couple GB regardless of catalog size.
+ */
+export async function* streamSnapshotContexts(
   db: Db,
   period: GrowthPeriod = "7d",
-): Promise<SnapshotContext[]> {
-  // Bulk-load everything in a handful of queries, then assemble in memory.
-  // The per-app version (getSnapshotContext) fires ~6 queries each — at 100K
-  // apps that's ~600K queries and a ~30s cold build. This is the same data in 4.
+  chunkSize = 5000,
+): AsyncGenerator<SnapshotContext[]> {
   const periodDays = GROWTH_PERIOD_DAYS[period] ?? 7;
-  const [allApps, allSnapshots, allIaps, allMetaAds] = await Promise.all([
-    db.select().from(apps),
-    db.select().from(appSnapshots).orderBy(appSnapshots.appId, appSnapshots.snapshotDate),
-    db.select({ appId: iaps.appId }).from(iaps),
-    db.select().from(metaAds),
-  ]);
 
-  // Group by appId (snapshots arrive pre-sorted by date).
-  const snapshotsByApp = new Map<string, AppSnapshot[]>();
-  for (const snap of allSnapshots) {
-    const list = snapshotsByApp.get(snap.appId);
-    if (list) list.push(snap);
-    else snapshotsByApp.set(snap.appId, [snap]);
-  }
-
-  const iapCountByApp = new Map<string, number>();
-  for (const { appId } of allIaps) iapCountByApp.set(appId, (iapCountByApp.get(appId) ?? 0) + 1);
-
-  const metaAdsByApp = new Map<string, typeof allMetaAds>();
-  for (const ad of allMetaAds) {
-    const list = metaAdsByApp.get(ad.appId);
-    if (list) list.push(ad);
-    else metaAdsByApp.set(ad.appId, [ad]);
-  }
-
-  // Category counts are derivable from the apps list — no per-app COUNT query.
+  // Category totals from one grouped query — never load the full apps list.
   const categoryCount = new Map<string, number>();
-  for (const app of allApps) {
-    if (app.category) categoryCount.set(app.category, (categoryCount.get(app.category) ?? 0) + 1);
+  for (const r of await db
+    .select({ category: apps.category, n: count() })
+    .from(apps)
+    .groupBy(apps.category)) {
+    if (r.category) categoryCount.set(r.category, Number(r.n));
   }
 
-  const contexts: SnapshotContext[] = [];
-  for (const app of allApps) {
-    const snaps = snapshotsByApp.get(app.id);
-    const latest = snaps?.at(-1);
-    if (!latest) continue; // mirrors getSnapshotContext: no snapshot → skip
+  let lastId = "";
+  for (;;) {
+    const appChunk = await db
+      .select({
+        // List/score/filter never read description or screenshotUrls — null them
+        // so SQLite never ships the heavy listing text (avg ~1.9KB/row). App shape intact.
+        ...getTableColumns(apps),
+        description: sql<string | null>`NULL`,
+        screenshotUrls: sql<string | null>`NULL`,
+      })
+      .from(apps)
+      .where(gt(apps.id, lastId))
+      .orderBy(apps.id)
+      .limit(chunkSize);
+    if (appChunk.length === 0) break;
+    const firstId = appChunk[0]!.id;
+    lastId = appChunk[appChunk.length - 1]!.id;
 
-    const prior = pickPrior(snaps!, latest.snapshotDate, periodDays);
+    const [snaps, iapRows, metaRows] = await Promise.all([
+      db
+        .select()
+        .from(appSnapshots)
+        .where(and(gte(appSnapshots.appId, firstId), lte(appSnapshots.appId, lastId)))
+        .orderBy(appSnapshots.appId, appSnapshots.snapshotDate),
+      db
+        .select({ appId: iaps.appId })
+        .from(iaps)
+        .where(and(gte(iaps.appId, firstId), lte(iaps.appId, lastId))),
+      db
+        .select()
+        .from(metaAds)
+        .where(and(gte(metaAds.appId, firstId), lte(metaAds.appId, lastId))),
+    ]);
 
-    const metaRows = metaAdsByApp.get(app.id) ?? [];
-    const metaAdCountPrior = prior
-      ? metaRows.filter((ad) => ad.firstSeenAt && ad.firstSeenAt <= prior.createdAt).length
-      : null;
+    // Group this chunk's children by appId (snapshots arrive pre-sorted by date).
+    const snapshotsByApp = new Map<string, AppSnapshot[]>();
+    for (const snap of snaps) {
+      const list = snapshotsByApp.get(snap.appId);
+      if (list) list.push(snap);
+      else snapshotsByApp.set(snap.appId, [snap]);
+    }
+    const iapCountByApp = new Map<string, number>();
+    for (const { appId } of iapRows) iapCountByApp.set(appId, (iapCountByApp.get(appId) ?? 0) + 1);
+    const metaAdsByApp = new Map<string, typeof metaRows>();
+    for (const ad of metaRows) {
+      const list = metaAdsByApp.get(ad.appId);
+      if (list) list.push(ad);
+      else metaAdsByApp.set(ad.appId, [ad]);
+    }
 
-    contexts.push({
-      app,
-      latest,
-      prior,
-      priorDays: prior ? dayGap(latest.snapshotDate, prior.snapshotDate) : null,
-      iapCount: iapCountByApp.get(app.id) ?? 0,
-      metaAdCount: metaRows.length,
-      metaAdCountPrior,
-      categoryAppCount: app.category ? (categoryCount.get(app.category) ?? 0) : 0,
-    });
+    const contexts: SnapshotContext[] = [];
+    for (const app of appChunk) {
+      const appSnaps = snapshotsByApp.get(app.id);
+      const latest = appSnaps?.at(-1);
+      if (!latest) continue; // mirrors getSnapshotContext: no snapshot → skip
+
+      const prior = pickPrior(appSnaps!, latest.snapshotDate, periodDays);
+      const appMetaRows = metaAdsByApp.get(app.id) ?? [];
+      const metaAdCountPrior = prior
+        ? appMetaRows.filter((ad) => ad.firstSeenAt && ad.firstSeenAt <= prior.createdAt).length
+        : null;
+
+      contexts.push({
+        app,
+        latest,
+        prior,
+        priorDays: prior ? dayGap(latest.snapshotDate, prior.snapshotDate) : null,
+        iapCount: iapCountByApp.get(app.id) ?? 0,
+        metaAdCount: appMetaRows.length,
+        metaAdCountPrior,
+        categoryAppCount: app.category ? (categoryCount.get(app.category) ?? 0) : 0,
+        sparkline: sparklineFrom(appSnaps!),
+        rankDelta: rankDeltaFrom(appSnaps!),
+      });
+    }
+
+    if (contexts.length > 0) yield contexts;
   }
-
-  return contexts;
 }
 
 export async function listHistoricals(db: Db, appId: string): Promise<AppSnapshot[]> {

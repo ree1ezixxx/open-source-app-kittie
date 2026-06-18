@@ -1,12 +1,11 @@
 import {
-  appSnapshots,
   appsWithAppleAds,
   appsWithCreators,
   countApps,
   getAppRowById,
   getSnapshotContext,
   listHistoricals,
-  listSnapshotContexts,
+  streamSnapshotContexts,
   loadAppRelations,
   parseJsonArray,
   updateAppListingFacts,
@@ -98,100 +97,59 @@ function filterMetaFromContext(ctx: SnapshotContext): ScoredAppRow["meta"] {
 
 async function loadScoredRows(period: GrowthPeriod): Promise<ScoredAppRow[]> {
   const db = getDb();
-  const [contexts, appleAdApps, creatorApps, rankDeltas] = await Promise.all([
-    listSnapshotContexts(db, period),
+  const [appleAdApps, creatorApps] = await Promise.all([
     appsWithAppleAds(db),
     appsWithCreators(db),
-    getRankDeltas(),
   ]);
 
-  return contexts.map((ctx) => {
-    const meta = filterMetaFromContext(ctx);
-    meta.hasAppleAds = appleAdApps.has(ctx.app.id);
-    meta.hasCreators = creatorApps.has(ctx.app.id);
-    return {
-      item: listItemFromContext(ctx, period, rankDeltas.get(ctx.app.id) ?? null),
-      meta,
-    };
-  });
+  // Stream contexts in id-ordered chunks and score each chunk into `out`, so only
+  // the retained scored rows (plus one in-flight chunk) are ever resident — the
+  // build no longer materializes the whole catalog at once. rankDelta + sparkline
+  // ride on each context from its single snapshot scan (see streamSnapshotContexts).
+  const out: ScoredAppRow[] = [];
+  for await (const chunk of streamSnapshotContexts(db, period)) {
+    for (const ctx of chunk) {
+      const meta = filterMetaFromContext(ctx);
+      meta.hasAppleAds = appleAdApps.has(ctx.app.id);
+      meta.hasCreators = creatorApps.has(ctx.app.id);
+      const item = listItemFromContext(ctx, period, ctx.rankDelta);
+      item.sparkline = ctx.sparkline;
+      out.push({ item, meta });
+    }
+  }
+  return out;
 }
 
 // Module-level cache of scored rows, keyed by growth period. Resets on process
 // reload (tsx watch). Rebuilds from the DB on the next request after a reseed.
 let cachedRows: ScoredAppRow[] | null = null;
 let cachePeriod: GrowthPeriod | null = null;
+// Single-flight guard: collapse concurrent cold-cache builds into ONE shared
+// promise. Without it, simultaneous requests (Explore + Highlights + Rising, or
+// a StrictMode double-mount) each materialize the full ~1.1M-row catalog in
+// parallel — N× heap, the Explore OOM. Cleared in finally so a failed build retries.
+let inflightRows: Promise<ScoredAppRow[]> | null = null;
+let inflightRowsPeriod: GrowthPeriod | null = null;
 
 async function getScoredRows(period: GrowthPeriod): Promise<ScoredAppRow[]> {
   if (cachedRows && cachePeriod === period) return cachedRows;
-  cachedRows = await loadScoredRows(period);
-  cachePeriod = period;
-  return cachedRows;
+  if (inflightRows && inflightRowsPeriod === period) return inflightRows;
+  inflightRowsPeriod = period;
+  inflightRows = loadScoredRows(period)
+    .then((rows) => {
+      cachedRows = rows;
+      cachePeriod = period;
+      return rows;
+    })
+    .finally(() => {
+      inflightRows = null;
+      inflightRowsPeriod = null;
+    });
+  return inflightRows;
 }
 
 export async function dbHasApps(): Promise<boolean> {
   return (await countApps(getDb())) > 0;
-}
-
-// Rank-delta cache — appId → signed chart-rank movement between an app's two
-// most recent *ranked* snapshot days (priorRank − latestRank; positive =
-// climbed). Built from ONE grouped query (same no-N+1 / process-lifetime cache
-// semantics as getSparklines). Apps without two ranked snapshots are absent →
-// the caller defaults them to null. Powers the Highlights "1D" column.
-let cachedRankDeltas: Map<string, number> | null = null;
-
-async function getRankDeltas(): Promise<Map<string, number>> {
-  if (cachedRankDeltas) return cachedRankDeltas;
-  const rows = await getDb()
-    .select({ appId: appSnapshots.appId, chartRank: appSnapshots.chartRank })
-    .from(appSnapshots)
-    .orderBy(appSnapshots.appId, appSnapshots.snapshotDate);
-
-  // Keep the last two non-null chart ranks per app (oldest→newest within app).
-  const lastTwo = new Map<string, number[]>();
-  for (const row of rows) {
-    if (row.chartRank == null) continue;
-    const list = lastTwo.get(row.appId);
-    if (!list) {
-      lastTwo.set(row.appId, [row.chartRank]);
-    } else {
-      list.push(row.chartRank);
-      if (list.length > 2) list.shift();
-    }
-  }
-
-  const map = new Map<string, number>();
-  for (const [appId, ranks] of lastTwo) {
-    if (ranks.length === 2) map.set(appId, ranks[0]! - ranks[1]!); // prior − latest
-  }
-  cachedRankDeltas = map;
-  return map;
-}
-
-// Sparkline cache — appId → last ≤7 daily reviewCount values (oldest→newest).
-// Built from ONE grouped query over app_snapshots (no per-app N+1), with the
-// same process-lifetime cache semantics as cachedRows above: page handlers
-// just pick out the ids they're returning.
-let cachedSparklines: Map<string, number[]> | null = null;
-
-async function getSparklines(): Promise<Map<string, number[]>> {
-  if (cachedSparklines) return cachedSparklines;
-  const rows = await getDb()
-    .select({ appId: appSnapshots.appId, reviewCount: appSnapshots.reviewCount })
-    .from(appSnapshots)
-    .orderBy(appSnapshots.appId, appSnapshots.snapshotDate);
-
-  const map = new Map<string, number[]>();
-  for (const row of rows) {
-    const list = map.get(row.appId);
-    if (!list) {
-      map.set(row.appId, [row.reviewCount]);
-    } else {
-      list.push(row.reviewCount);
-      if (list.length > 7) list.shift();
-    }
-  }
-  cachedSparklines = map;
-  return map;
 }
 
 export async function searchAppsFromDb(params: AppSearchParams): Promise<PaginatedResponse<AppListItem>> {
@@ -201,15 +159,10 @@ export async function searchAppsFromDb(params: AppSearchParams): Promise<Paginat
   const sorted = sortApps(filtered, params);
   const { data, nextCursor, totalCount } = paginateApps(sorted, params);
 
-  // Attach mini review-count trend per returned row only.
-  const sparklines = await getSparklines();
-  const withSparkline = data.map((item) => ({
-    ...item,
-    sparkline: sparklines.get(item.id) ?? [],
-  }));
-
+  // sparkline + rankDelta are already on each item, populated from the single
+  // app_snapshots scan in listSnapshotContexts — no extra per-request passes.
   return {
-    data: withSparkline,
+    data,
     pagination: { nextCursor, totalCount },
   };
 }
@@ -310,8 +263,8 @@ export async function getAppByIdFromDb(id: string): Promise<AppDetail | null> {
   const ctx = await getSnapshotContext(db, id, "7d");
   if (!ctx) return null;
 
-  const rankDeltas = await getRankDeltas();
-  const list = listItemFromContext(ctx, "7d", rankDeltas.get(id) ?? null);
+  const list = listItemFromContext(ctx, "7d", ctx.rankDelta);
+  list.sparkline = ctx.sparkline;
   const relations = await loadAppRelations(db, id);
   const mapped = mapRelations(
     relations.iapRows,
