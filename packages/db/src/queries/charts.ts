@@ -30,6 +30,27 @@ export function normalizeChartType(raw: string | null): ChartType | null {
   return null;
 }
 
+/**
+ * Split a raw `chart_category` into its canonical type AND its genre. The modern
+ * feed encodes both in one column: `top-free` is the OVERALL free chart, while
+ * `top-free:Games` is the free *Games* chart. Genre is the part after the colon
+ * (null for an overall chart); legacy ids like `topfreeapplications` carry no
+ * genre. Returns null when the value isn't a chart at all.
+ *
+ * This is what makes the category selector real: the chart's own genre lives
+ * here, NOT in `apps.category` (an app's listed category is a different axis —
+ * a Game can chart on the overall list without being "the Games chart").
+ */
+export function parseChartCategory(
+  raw: string | null,
+): { type: ChartType; genre: string | null } | null {
+  const type = normalizeChartType(raw);
+  if (!type || !raw) return null;
+  const idx = raw.indexOf(":");
+  const genre = idx >= 0 ? raw.slice(idx + 1).trim() || null : null;
+  return { type, genre };
+}
+
 /** A chart-bearing snapshot row joined to its app — the pure assembler's input. */
 export interface ChartRow {
   appId: string;
@@ -73,10 +94,19 @@ export function assembleTopCharts(
     category: params.category ?? null,
   };
 
-  // Keep only rows of the requested canonical type with a real rank.
-  const typed = rows.filter(
-    (r) => r.chartRank != null && normalizeChartType(r.chartCategory) === params.type,
-  );
+  // Keep only rows of the requested chart IDENTITY — both the canonical type AND
+  // the requested genre. An overall request (category null) takes only the genre-
+  // less encodings (`top-free`); a "Games" request takes only `top-free:Games`.
+  // This is the core correctness fix: previously every genre's `top-free:<genre>`
+  // shared one canonical type, so a 100-row genre chart out-sized the real 99-row
+  // overall `top-free` and silently rendered a genre as "the free chart" (with
+  // garbage deltas, since the prior day resolved to a *different* genre).
+  const wantGenre = params.category ?? null;
+  const typed = rows.filter((r) => {
+    if (r.chartRank == null) return false;
+    const pc = parseChartCategory(r.chartCategory);
+    return pc?.type === params.type && (pc.genre ?? null) === wantGenre;
+  });
   if (typed.length === 0) {
     return { ...base, date: null, entries: [] };
   }

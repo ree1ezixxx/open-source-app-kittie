@@ -39,8 +39,11 @@ import {
 } from "drizzle-orm";
 import { lookupAppleApp } from "@kittie/ingest";
 import {
+  type AppSignals,
   computeGrowthPct,
   computeGrowthScore,
+  estimateDownloads,
+  estimateRevenue,
   GROWTH_PERIOD_DAYS,
   isFirstMover,
   priorEstimates,
@@ -441,6 +444,65 @@ async function buildScoredRowsForIds(ids: string[], period: GrowthPeriod): Promi
 
 export async function dbHasApps(): Promise<boolean> {
   return (await countApps(getDb())) > 0;
+}
+
+/** Minimal per-entry inputs the revenue/downloads model needs from a chart row. */
+export interface ChartEstimateInput {
+  id: string;
+  reviewCount: number;
+  rating: number | null;
+  /** The app's position on the chart — a rank *lift* in the revenue model. */
+  chartRank: number | null;
+  category: string | null;
+}
+
+/**
+ * Downloads / MRR estimates for a set of chart entries, via the SAME revenue model
+ * (`estimateRevenue` / `estimateDownloads`) Explore scores through — so the figures
+ * are model-consistent across surfaces. Trending computes them live because the
+ * stored snapshot estimate columns are populated on only ~31% of chart rows;
+ * proxying or blanking the rest would either lie or leave most of the chart empty.
+ *
+ * Fast by construction: every signal but the iap/ad counts already rides on the
+ * chart entry, and those two come from grouped-count seeks over the (≤100) entry
+ * ids — no per-app snapshot history is loaded. Velocity uses the model's built-in
+ * fallback (no prior review count), which only nudges a minor multiplier.
+ */
+export async function estimateChartEntries(
+  entries: ChartEstimateInput[],
+): Promise<Map<string, { downloads: number; revenue: number }>> {
+  const map = new Map<string, { downloads: number; revenue: number }>();
+  if (!entries.length) return map;
+  const db = getDb();
+  const ids = entries.map((e) => e.id);
+
+  const [iapRows, metaRows] = await Promise.all([
+    db.select({ appId: iaps.appId, c: count() }).from(iaps).where(inArray(iaps.appId, ids)).groupBy(iaps.appId),
+    db.select({ appId: metaAds.appId, c: count() }).from(metaAds).where(inArray(metaAds.appId, ids)).groupBy(metaAds.appId),
+  ]);
+  const iapCount = new Map(iapRows.map((r) => [r.appId, Number(r.c)]));
+  const metaCount = new Map(metaRows.map((r) => [r.appId, Number(r.c)]));
+
+  for (const e of entries) {
+    const signals: AppSignals = {
+      category: e.category,
+      chartRank: e.chartRank,
+      reviewCount: e.reviewCount,
+      reviewCountPrior: null,
+      rating: e.rating,
+      iapCount: iapCount.get(e.id) ?? 0,
+      metaAdCount: metaCount.get(e.id) ?? 0,
+      metaAdCountPrior: null,
+      chartRankPrior: null,
+      priorDays: null,
+      updatedAt: null,
+      releasedAt: null,
+      categoryAppCount: 0,
+    };
+    const revenue = estimateRevenue(signals);
+    map.set(e.id, { downloads: estimateDownloads(signals, revenue), revenue });
+  }
+  return map;
 }
 
 export interface CategoryFacet {

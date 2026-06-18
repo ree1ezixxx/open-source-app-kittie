@@ -7,7 +7,7 @@ import { Segmented } from "../components/Segmented";
 import { EmptyState } from "../components/EmptyState";
 import { listCharts } from "../lib/api";
 import { categoryColor, pillStyle } from "../lib/palette";
-import { formatCompact } from "../lib/format";
+import { formatCompact, formatMoney } from "../lib/format";
 import { IconTrending, IconChart } from "../icons";
 import type { Theme } from "../lib/theme";
 
@@ -18,13 +18,30 @@ const CATEGORIES = [
   "Utilities", "Weather",
 ];
 
+// Storefronts offered in the country selector (mirrors truth's control). Only US
+// chart data is ingested today; other storefronts render the honest empty-state
+// until their feeds are collected — never fabricated rows.
+const COUNTRIES: { code: string; label: string }[] = [
+  { code: "US", label: "United States" },
+  { code: "GB", label: "United Kingdom" },
+  { code: "CA", label: "Canada" },
+  { code: "AU", label: "Australia" },
+  { code: "DE", label: "Germany" },
+  { code: "FR", label: "France" },
+  { code: "JP", label: "Japan" },
+  { code: "BR", label: "Brazil" },
+];
+
 export function TrendingPage({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => void }) {
   const nav = useNavigate();
   const [chart, setChart] = useState<ChartType>("free");
   const [store, setStore] = useState<Store>("apple");
   const [category, setCategory] = useState("All categories");
+  const [country, setCountry] = useState("US");
   const [result, setResult] = useState<TopChartsResult | null>(null);
   const [loading, setLoading] = useState(true);
+  // Bumped by "Refresh rankings" to re-pull the latest snapshot-derived chart.
+  const [refreshTick, setRefreshTick] = useState(0);
 
   useEffect(() => {
     const ac = new AbortController();
@@ -33,6 +50,7 @@ export function TrendingPage({ theme, onToggleTheme }: { theme: Theme; onToggleT
       {
         store,
         type: chart,
+        country,
         category: category === "All categories" ? undefined : category,
         limit: 100,
       },
@@ -44,7 +62,7 @@ export function TrendingPage({ theme, onToggleTheme }: { theme: Theme; onToggleT
       })
       .finally(() => setLoading(false));
     return () => ac.abort();
-  }, [chart, store, category]);
+  }, [chart, store, category, country, refreshTick]);
 
   const entries = result?.entries ?? [];
   const updated = result?.date
@@ -71,10 +89,18 @@ export function TrendingPage({ theme, onToggleTheme }: { theme: Theme; onToggleT
         ]}
       />
       <div className="select">
-        <select value={category} onChange={(e) => setCategory(e.target.value)}>
+        <select value={country} onChange={(e) => setCountry(e.target.value)} aria-label="Country">
+          {COUNTRIES.map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}
+        </select>
+      </div>
+      <div className="select">
+        <select value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Category">
           {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
         </select>
       </div>
+      <button className="btn" onClick={() => setRefreshTick((t) => t + 1)} disabled={loading}>
+        Refresh rankings
+      </button>
       {updated && <span className="pill" style={pillStyle("#9a9aa3")}>Updated {updated}</span>}
     </div>
   );
@@ -99,7 +125,9 @@ export function TrendingPage({ theme, onToggleTheme }: { theme: Theme; onToggleT
             sub={
               store === "google"
                 ? "Google Play chart data isn't ingested yet."
-                : "No clean chart for this store / category yet."
+                : country !== "US"
+                  ? `${COUNTRIES.find((c) => c.code === country)?.label ?? country} chart data isn't ingested yet.`
+                  : "No clean chart for this store / category yet."
             }
           />
         ) : (
@@ -109,8 +137,8 @@ export function TrendingPage({ theme, onToggleTheme }: { theme: Theme; onToggleT
                 <th className="num" style={{ width: 56 }}>Rank</th>
                 <th className="num" style={{ width: 64 }}>24h</th>
                 <th className="col-app">App</th>
-                <th className="num">Rating</th>
-                <th className="num">Reviews</th>
+                <th className="num">Downloads</th>
+                <th className="num">MRR</th>
               </tr>
             </thead>
             <tbody>
@@ -124,7 +152,7 @@ export function TrendingPage({ theme, onToggleTheme }: { theme: Theme; onToggleT
                       <span className="num-muted">0</span>
                     ) : (
                       <span className={`delta ${e.rankDelta > 0 ? "up" : "down"}`}>
-                        {e.rankDelta > 0 ? "▲" : "▼"}{Math.abs(e.rankDelta)}
+                        {e.rankDelta > 0 ? "+" : "−"}{Math.abs(e.rankDelta)}
                       </span>
                     )}
                   </td>
@@ -143,8 +171,8 @@ export function TrendingPage({ theme, onToggleTheme }: { theme: Theme; onToggleT
                       </div>
                     </div>
                   </td>
-                  <td className="num num-strong">{e.rating != null ? e.rating.toFixed(2) : "—"}</td>
-                  <td className="num num-strong">{formatCompact(e.reviewCount)}</td>
+                  <td className="num num-strong">{formatCompact(e.downloadsEstimate)}</td>
+                  <td className="num num-strong">{formatMoney(e.revenueEstimate)}</td>
                 </tr>
               ))}
             </tbody>

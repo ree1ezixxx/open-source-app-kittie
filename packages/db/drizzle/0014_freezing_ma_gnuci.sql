@@ -1,0 +1,1 @@
+CREATE INDEX `snapshots_chart_idx` ON `app_snapshots` (`chart_country`,`chart_rank`,`app_id`) WHERE "app_snapshots"."chart_rank" is not null;
