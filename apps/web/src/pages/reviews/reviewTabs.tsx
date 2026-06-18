@@ -479,7 +479,10 @@ export function ReviewsTab({ tagged }: { tagged: TaggedReview[] }) {
           <div className="rv-feed-grid">
             {pageItems.map((t) => {
               const r = t.review;
-              const tags = [...t.tags.topics, ...t.tags.improvementAreas].slice(0, 5);
+              const tags = [
+                ...t.tags.topics.map((label) => ({ label, kind: "topic" as const })),
+                ...t.tags.improvementAreas.map((label) => ({ label, kind: "area" as const })),
+              ].slice(0, 5);
               const who = (r.author ?? "Anonymous").trim() || "Anonymous";
               return (
                 <article className="rv-rcard" key={r.id}>
@@ -493,8 +496,14 @@ export function ReviewsTab({ tagged }: { tagged: TaggedReview[] }) {
                   <p className="rv-rcard-body">{r.body}</p>
                   {tags.length > 0 && (
                     <div className="rv-rcard-tags">
-                      {tags.map((tp) => (
-                        <button key={tp} className="rv-rev-topic" onClick={() => update({ topic: tp })}>{tp}</button>
+                      {tags.map((tg) => (
+                        <button
+                          key={`${tg.kind}:${tg.label}`}
+                          className="rv-rev-topic"
+                          onClick={() => update(tg.kind === "topic" ? { topic: tg.label } : { improvementArea: tg.label })}
+                        >
+                          {tg.label}
+                        </button>
                       ))}
                     </div>
                   )}
@@ -626,6 +635,7 @@ function impTone(a: { sentiment: Sentiment4; avgRating: number }): { color: stri
 
 export function ImprovementsTab({ tagged, onRefresh, refreshing }: { tagged: TaggedReview[]; onRefresh?: () => void; refreshing?: boolean }) {
   const navigate = useNavigate();
+  const [sp] = useSearchParams();
   const [days, setDays] = useState<number | null>(null);
   const [filter, setFilter] = useState<ImpFilter>("all");
   const { improvements, totalMentions } = useMemo(() => improvementAreas(tagged, days), [tagged, days]);
@@ -671,7 +681,12 @@ export function ImprovementsTab({ tagged, onRefresh, refreshing }: { tagged: Tag
                 <button
                   className="rv-area"
                   key={a.id}
-                  onClick={() => navigate(`/reviews/feed?improvementArea=${encodeURIComponent(a.category)}`)}
+                  onClick={() => {
+                    const qs = new URLSearchParams({ improvementArea: a.category });
+                    const app = sp.get("app");
+                    if (app) qs.set("app", app); // keep the selected app — don't reset to monitored[0]
+                    navigate(`/reviews/feed?${qs.toString()}`);
+                  }}
                   title={`See the ${a.mentionCount} review${a.mentionCount === 1 ? "" : "s"} about ${a.category}`}
                 >
                   <div className="rv-area-top">

@@ -4,11 +4,9 @@ import {
   appsWithAppleAds,
   appsWithCreators,
   countApps,
-  countAppIdsByText,
   getAppRowById,
   getSnapshotContext,
   iaps,
-  searchAppIds,
   toFtsMatch,
   listHistoricals,
   loadAppRelations,
@@ -291,6 +289,24 @@ async function countMatches(c: AppConditions, maxDate: string): Promise<number> 
  *  live-growth sorts (no SQL column) we proxy by review count — the busiest apps are
  *  where the movers are — then re-sort the pool exactly in memory. */
 async function selectCandidateIds(c: AppConditions, params: AppSearchParams): Promise<string[]> {
+  const conds = allConditions(c);
+
+  // rankDelta has no stored column AND a review-count proxy picks the wrong apps (the
+  // biggest chart movers aren't the most-reviewed). Only charting apps can have a delta,
+  // and the charted set (~4k) fits under POOL_CAP — so pool ALL of them and let sortApps
+  // order by the live delta. This makes Highlights gainers/losers exact, not approximate.
+  if (params.sortBy === "rankDelta") {
+    conds.push(isNotNull(appSnapshots.chartRank));
+    const rows = await getDb()
+      .select({ id: apps.id })
+      .from(apps)
+      .innerJoin(appSnapshots, eq(appSnapshots.appId, apps.id))
+      .where(and(...conds))
+      .orderBy(asc(appSnapshots.chartRank), apps.id)
+      .limit(POOL_CAP);
+    return rows.map((r) => r.id);
+  }
+
   const col = sqlSortColumn(params.sortBy) ?? appSnapshots.reviewCount;
   const dir = (params.sortOrder ?? "desc") === "asc" ? asc : desc;
   // No `col IS NULL` term: SQLite already sorts NULLs to the bottom of a DESC scan,
@@ -301,10 +317,41 @@ async function selectCandidateIds(c: AppConditions, params: AppSearchParams): Pr
     .select({ id: apps.id })
     .from(apps)
     .innerJoin(appSnapshots, eq(appSnapshots.appId, apps.id))
-    .where(and(...allConditions(c)))
+    .where(and(...conds))
     .orderBy(dir(col), apps.id)
     .limit(POOL_CAP);
   return rows.map((r) => r.id);
+}
+
+/**
+ * Search candidate pool: an FTS5 MATCH on title/developer INTERSECTED with the SQL
+ * filters (category / source / numeric ranges / latest-day pin), most-relevant first.
+ * Applying the filters DURING selection — not just in matchesSearch afterward — keeps
+ * filtered matches that rank beyond POOL_CAP, which a text-only FTS pool would drop.
+ */
+async function ftsCandidateIds(match: string, filter: SQL): Promise<string[]> {
+  const rows = await getDb().all<{ id: string }>(sql`
+    SELECT apps.id AS id
+    FROM apps_fts
+    JOIN apps ON apps.id = apps_fts.app_id
+    JOIN app_snapshots ON app_snapshots.app_id = apps.id
+    WHERE apps_fts MATCH ${match} AND ${filter}
+    ORDER BY apps_fts.rank
+    LIMIT ${POOL_CAP}
+  `);
+  return rows.map((r) => r.id);
+}
+
+/** Total apps matching the search text AND the SQL filters — the accurate "X of Y" count. */
+async function ftsCount(match: string, filter: SQL): Promise<number> {
+  const row = await getDb().get<{ c: number }>(sql`
+    SELECT count(*) AS c
+    FROM apps_fts
+    JOIN apps ON apps.id = apps_fts.app_id
+    JOIN app_snapshots ON app_snapshots.app_id = apps.id
+    WHERE apps_fts MATCH ${match} AND ${filter}
+  `);
+  return row?.c ?? 0;
 }
 
 /** Build scored rows for a bounded id set — the same assembly the old bulk loader did
@@ -480,19 +527,18 @@ export async function searchAppsFromDb(params: AppSearchParams): Promise<Paginat
   const maxDate = await latestSnapshotDate();
   if (!maxDate) return { data: [], pagination: { nextCursor: null, totalCount: 0 } };
 
-  // Free-text search routes through FTS5 (fast, token-prefix) to resolve the candidate
-  // pool; otherwise the pool comes from the SQL filter/sort. matchesSearch then applies
-  // the authoritative substring check + every other filter on the scored pool either way.
+  // Free-text search routes through FTS5 (fast, token-prefix), INTERSECTED with the SQL
+  // filters; otherwise the pool comes from the SQL filter/sort. matchesSearch then applies
+  // the authoritative substring check + the live-only filters on the scored pool either way.
   const search = params.search?.trim();
+  const ftsMatch = search ? toFtsMatch(search) : null;
+  const conds = buildConditions(params, maxDate);
   let totalCount: number;
   let ids: string[];
-  if (search && toFtsMatch(search)) {
-    [totalCount, ids] = await Promise.all([
-      countAppIdsByText(getDb(), search),
-      searchAppIds(getDb(), search, POOL_CAP),
-    ]);
+  if (ftsMatch) {
+    const filter = and(...allConditions(conds))!;
+    [totalCount, ids] = await Promise.all([ftsCount(ftsMatch, filter), ftsCandidateIds(ftsMatch, filter)]);
   } else {
-    const conds = buildConditions(params, maxDate);
     [totalCount, ids] = await Promise.all([countMatches(conds, maxDate), selectCandidateIds(conds, params)]);
   }
 

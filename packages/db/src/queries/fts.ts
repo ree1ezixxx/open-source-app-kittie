@@ -33,10 +33,19 @@ export async function ensureAppsFts(db: Db): Promise<void> {
   await db.run(sql`CREATE TRIGGER IF NOT EXISTS apps_fts_ad AFTER DELETE ON apps BEGIN
     DELETE FROM apps_fts WHERE app_id = old.id;
   END`);
-  const row = await db.get<{ c: number }>(sql`SELECT count(*) AS c FROM apps_fts`);
-  if ((row?.c ?? 0) === 0) {
-    await db.run(sql`INSERT INTO apps_fts(app_id, title, developer) SELECT id, title, developer FROM apps`);
-  }
+  // Backfill once, atomically. BEGIN IMMEDIATE serialises concurrent boots: if two API
+  // instances run against the same DB, the second blocks until the first commits, then
+  // sees a non-empty table and skips. Without it both could see count==0 and insert every
+  // app — FTS5 has no unique key, so search would then return every result twice.
+  await db.transaction(
+    async (tx) => {
+      const row = await tx.get<{ c: number }>(sql`SELECT count(*) AS c FROM apps_fts`);
+      if ((row?.c ?? 0) === 0) {
+        await tx.run(sql`INSERT INTO apps_fts(app_id, title, developer) SELECT id, title, developer FROM apps`);
+      }
+    },
+    { behavior: "immediate" },
+  );
 }
 
 /** App ids whose title/developer match the text, most-relevant first, capped. */
