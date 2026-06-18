@@ -29,10 +29,11 @@ export async function getAppAbout(
   const latest = ctx?.latest;
 
   const prompt = [
-    "Write a 3-4 sentence analyst narrative about this app for an app-intelligence dashboard.",
-    "Tone: factual, third person, no hype. Mention what it does, who it serves, and how it",
-    "monetizes. Where metrics are referenced, present them as estimates ('an estimated…'),",
-    "never as reported figures. No headings, no lists — one paragraph of plain text.",
+    "Write a SHORT analyst note (1-2 sentences, ≤40 words) about this app for an",
+    "app-intelligence dashboard. Plain, factual, third person — NO hype or filler words",
+    "(seamless, powerful, comprehensive, cutting-edge). Say only: what it does, who it's for,",
+    "and how it monetizes. Metrics are estimates ('an estimated…'), never reported figures.",
+    "One short paragraph, no headings, no lists.",
     "",
     `App: ${app.title} (${app.store === "apple" ? "App Store" : "Google Play"})`,
     `Developer: ${app.developer}`,
@@ -49,7 +50,7 @@ export async function getAppAbout(
   // Input key is a version tag, not the prompt: About never regenerates.
   // Falls back to the batch model when flash's daily bucket is dry — a
   // slightly plainer narrative beats an empty block.
-  const { output, cached } = await cachedGenerate("app_about", appId, "v1", async () => {
+  const { output, cached } = await cachedGenerate("app_about", appId, "v2-concise", async () => {
     try {
       return await generate(prompt);
     } catch (e) {

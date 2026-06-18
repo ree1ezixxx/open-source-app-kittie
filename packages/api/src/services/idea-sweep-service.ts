@@ -97,7 +97,7 @@ const IDEA_SCHEMA = {
     title: { type: "string", description: "Concise product name for the new app idea" },
     summary: {
       type: "string",
-      description: "2-3 sentence card description of the idea and who it serves",
+      description: "ONE plain sentence (≤20 words): what it is + who it's for. No filler, no buzzwords.",
     },
     ideaCategory: { type: "string", enum: [...IDEA_CATEGORIES] },
     needsBackend: { type: "boolean" },
@@ -107,16 +107,16 @@ const IDEA_SCHEMA = {
       type: "object",
       properties: {
         difficulty: { type: "string", enum: ["easy", "medium", "hard"] },
-        difficultyReasoning: { type: "string" },
+        difficultyReasoning: { type: "string", description: "One short sentence." },
         timelineWeeks: { type: "integer" },
         requirements: { type: "array", items: { type: "string" } },
-        mvpFeatures: { type: "array", items: { type: "string" } },
-        keyFeatures: { type: "array", items: { type: "string" } },
-        v2Features: { type: "array", items: { type: "string" } },
-        architecture: { type: "string" },
-        techStack: { type: "array", items: { type: "string" } },
-        mvpScope: { type: "string" },
-        thirdPartyServices: { type: "array", items: { type: "string" } },
+        mvpFeatures: { type: "array", items: { type: "string" }, description: "Terse 3-7 word items." },
+        keyFeatures: { type: "array", items: { type: "string" }, description: "Terse 3-7 word items." },
+        v2Features: { type: "array", items: { type: "string" }, description: "Terse 3-7 word items." },
+        architecture: { type: "string", description: "One short sentence, plain language." },
+        techStack: { type: "array", items: { type: "string" }, description: "Short items, e.g. 'Flutter — mobile UI'." },
+        mvpScope: { type: "string", description: "One short sentence — the single core thing to ship first." },
+        thirdPartyServices: { type: "array", items: { type: "string" }, description: "Short 'Name — why' items." },
       },
       required: [
         "difficulty",
@@ -135,14 +135,14 @@ const IDEA_SCHEMA = {
     opportunity: {
       type: "object",
       properties: {
-        summary: { type: "string", description: "2-3 sentence opportunity thesis for the new idea" },
-        whyThisApp: { type: "string", description: "Why this specific source app is worth deriving from" },
-        marketSizeInsight: { type: "string", description: "Qualitative read on how big the demand is" },
-        painPoints: { type: "array", items: { type: "string" }, description: "Real user pain points (from the complaints)" },
-        featureGaps: { type: "array", items: { type: "string" }, description: "Gaps in the incumbent a new app can win on" },
-        targetAudience: { type: "string" },
-        monetizationStrategy: { type: "string" },
-        competitiveAdvantages: { type: "array", items: { type: "string" } },
+        summary: { type: "string", description: "One short sentence — the opportunity in plain terms." },
+        whyThisApp: { type: "string", description: "One short sentence." },
+        marketSizeInsight: { type: "string", description: "One short sentence." },
+        painPoints: { type: "array", items: { type: "string" }, description: "Terse items, grounded in the complaints." },
+        featureGaps: { type: "array", items: { type: "string" }, description: "Terse 3-7 word items." },
+        targetAudience: { type: "string", description: "Short phrase." },
+        monetizationStrategy: { type: "string", description: "One short sentence." },
+        competitiveAdvantages: { type: "array", items: { type: "string" }, description: "Terse 3-7 word items." },
       },
       required: [
         "summary",
@@ -158,15 +158,15 @@ const IDEA_SCHEMA = {
     marketing: {
       type: "object",
       properties: {
-        marketingStrategy: { type: "string", description: "Overall go-to-market / growth approach" },
-        marketingPlatforms: { type: "array", items: { type: "string" } },
-        contentHooks: { type: "array", items: { type: "string" }, description: "Concrete post/ad angles" },
-        ugcFormats: { type: "array", items: { type: "string" } },
-        campaignIdeas: { type: "array", items: { type: "string" } },
-        creatorTypes: { type: "array", items: { type: "string" } },
-        keySellingPoints: { type: "array", items: { type: "string" } },
+        marketingStrategy: { type: "string", description: "One short sentence." },
+        marketingPlatforms: { type: "array", items: { type: "string" }, description: "Platform names only." },
+        contentHooks: { type: "array", items: { type: "string" }, description: "Terse post/ad angles." },
+        ugcFormats: { type: "array", items: { type: "string" }, description: "Terse 3-7 word items." },
+        campaignIdeas: { type: "array", items: { type: "string" }, description: "Terse 3-7 word items." },
+        creatorTypes: { type: "array", items: { type: "string" }, description: "Short items." },
+        keySellingPoints: { type: "array", items: { type: "string" }, description: "Terse 3-7 word items." },
         asoKeywords: { type: "array", items: { type: "string" }, description: "Seed ASO keywords for the listing" },
-        goToMarket: { type: "string", description: "Sequenced launch plan" },
+        goToMarket: { type: "string", description: "One short sentence." },
       },
       required: [
         "marketingStrategy",
@@ -216,6 +216,12 @@ function buildBatchPrompt(sources: Array<{ c: IdeaCandidate; complaints: string[
     "You are an app-opportunity analyst. For EACH numbered source app below, derive ONE new app concept.",
     "Each concept must serve the same proven demand as its source but be a DIFFERENT product — not a clone.",
     "Every concept must be distinct from the others in this batch.",
+    "",
+    "STYLE — write PLAIN and SHORT. This is the hard rule, follow it for every field:",
+    "- Every string field: at most ONE sentence. List items: 3-7 words, no trailing clauses.",
+    "- No filler or hype words (seamless, cutting-edge, leverage, effortlessly, robust, powerful,",
+    "  comprehensive, revolutionary, game-changing). No restating the obvious. No marketing fluff.",
+    "- Use the fewest words that stay concrete and specific. Prefer a noun phrase over a sentence.",
   ];
   sources.forEach(({ c, complaints }, i) => {
     lines.push(
@@ -236,14 +242,15 @@ function buildBatchPrompt(sources: Array<{ c: IdeaCandidate; complaints: string[
   lines.push(
     "",
     `Return JSON: { "ideas": [...] } with EXACTLY ${sources.length} entries, one per source app,`,
-    "each with its sourceIndex (0-based, matching the numbering above), a concise title, a 2-3",
-    "sentence summary, an ideaCategory from the allowed list, the three blueprint need flags, and:",
+    "each with its sourceIndex (0-based, matching the numbering above), a concise title, a",
+    "ONE-sentence summary, an ideaCategory from the allowed list, the three blueprint need flags, and:",
     "1. blueprint — difficulty + reasoning, timelineWeeks, requirements, MVP/key/V2 features,",
     "   architecture, techStack, mvpScope, thirdPartyServices. Concrete and buildable by a solo dev.",
     "2. opportunity — summary, whyThisApp, marketSizeInsight, painPoints (ground these in the source",
     "   app's complaints above), featureGaps, targetAudience, monetizationStrategy, competitiveAdvantages.",
     "3. marketing — marketingStrategy, marketingPlatforms, contentHooks, ugcFormats, campaignIdeas,",
     "   creatorTypes, keySellingPoints, asoKeywords, goToMarket. Specific and actionable, not generic.",
+    "Remember the STYLE rule above: short, plain, no filler — far terser than a typical AI answer.",
   );
   return lines.join("\n");
 }
