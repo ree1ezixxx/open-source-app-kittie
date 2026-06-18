@@ -23,6 +23,7 @@ import {
   and,
   asc,
   count,
+  countDistinct,
   desc,
   eq,
   gt,
@@ -132,7 +133,7 @@ function filterMetaFromContext(ctx: SnapshotContext): ScoredAppRow["meta"] {
 
 /** Drop in-memory list/sparkline/rank caches so Explore picks up new snapshot days. */
 export function invalidateAppReadCaches(): void {
-  cachedMaxDate = undefined;
+  cachedMaxDate.clear();
 }
 
 // Upper bound on apps materialized + scored per /apps request. Explore, Highlights
@@ -141,15 +142,30 @@ export function invalidateAppReadCaches(): void {
 // ~1.1M apps in memory — what this path used to do — OOMs the heap.
 const POOL_CAP = 5000;
 
-// Latest snapshot day across the catalog; apps are listed from their row on this
-// day (≈99% of apps have one). Refreshed when snapshots-daily invalidates caches.
-let cachedMaxDate: string | null | undefined;
-async function latestSnapshotDate(): Promise<string | null> {
-  if (cachedMaxDate !== undefined) return cachedMaxDate;
-  const [row] = await getDb().select({ d: max(appSnapshots.snapshotDate) }).from(appSnapshots);
+// Latest snapshot day PER MARKET; apps are listed from their row on this day for
+// the requested market (≈99% have one). Per-country so a market that ingests on a
+// later day than US can't blank the US-pinned view (and vice-versa). Refreshed when
+// snapshots-daily invalidates caches.
+const cachedMaxDate = new Map<string, string | null>();
+async function latestSnapshotDate(country = "US"): Promise<string | null> {
+  const hit = cachedMaxDate.get(country);
+  if (hit !== undefined) return hit;
+  const [row] = await getDb()
+    .select({ d: max(appSnapshots.snapshotDate) })
+    .from(appSnapshots)
+    .where(eq(appSnapshots.chartCountry, country));
   const d = row?.d ?? null;
-  cachedMaxDate = d;
+  cachedMaxDate.set(country, d);
   return d;
+}
+
+/** Comma-separated ISO market codes → de-blanked upper-case list. */
+function parseCsvUpper(raw: string | undefined): string[] {
+  return raw ? raw.split(",").map((s) => s.trim().toUpperCase()).filter(Boolean) : [];
+}
+/** The single market that scopes per-row snapshot reads — first requested country, else US. */
+function marketCountryOf(params: AppSearchParams): string {
+  return parseCsvUpper(params.countries)[0] ?? "US";
 }
 
 function chunk<T>(arr: T[], size: number): T[][] {
@@ -194,13 +210,34 @@ function pickPrior(sorted: AppSnapshot[], latestDate: string, periodDays: number
 interface AppConditions {
   /** Predicates on the `apps` table — countable without joining to a snapshot. */
   appCols: SQL[];
-  /** Predicates on the latest-day snapshot (incl. the date pin) — force the join. */
-  snapCols: SQL[];
+  /** The always-on snapshot pin: latest day + the market (chart_country). */
+  snapPin: SQL[];
+  /** Selective snapshot-metric filters (rating/reviews/dl/rev ranges) — presence forces the join. */
+  snapMetricCols: SQL[];
+  /** True when a market was explicitly requested → the apps-only fast count is invalid. */
+  explicitCountry: boolean;
+  /** Single market scoping per-row snapshot reads (default "US"). */
+  marketCountry: string;
 }
 
 function buildConditions(params: AppSearchParams, maxDate: string): AppConditions {
   const appCols: SQL[] = [];
-  const snapCols: SQL[] = [eq(appSnapshots.snapshotDate, maxDate)];
+  const snapMetricCols: SQL[] = [];
+
+  // Per-country market dimension (ADR 0007). chart_country lives on the snapshot and
+  // the table is now multi-row per app/day across markets, so EVERY read pins a single
+  // market — otherwise an app holding rows in N markets is counted/listed N times. The
+  // default is US (the catalog is 100% US today, so this is a no-op now); an explicit
+  // `countries`/`excludedCountries` forces the join (the market genuinely narrows).
+  const include = parseCsvUpper(params.countries);
+  const exclude = parseCsvUpper(params.excludedCountries);
+  const explicitCountry = include.length > 0 || exclude.length > 0;
+  const marketCountry = include[0] ?? "US";
+
+  const snapPin: SQL[] = [eq(appSnapshots.snapshotDate, maxDate)];
+  if (include.length) snapPin.push(inArray(appSnapshots.chartCountry, include));
+  else if (exclude.length) snapPin.push(notInArray(appSnapshots.chartCountry, exclude));
+  else snapPin.push(eq(appSnapshots.chartCountry, marketCountry));
 
   if (params.search) {
     const q = `%${params.search.toLowerCase()}%`;
@@ -230,29 +267,14 @@ function buildConditions(params: AppSearchParams, maxDate: string): AppCondition
   if (params.excludedSource) appCols.push(ne(apps.store, params.excludedSource));
   if (params.developer) appCols.push(like(sql`lower(${apps.developer})`, `%${params.developer.toLowerCase()}%`));
 
-  if (params.minRating != null) snapCols.push(gte(sql`coalesce(${appSnapshots.rating}, 0)`, params.minRating));
-  if (params.maxRating != null) snapCols.push(lte(sql`coalesce(${appSnapshots.rating}, 0)`, params.maxRating));
-  if (params.minReviews != null) snapCols.push(gte(appSnapshots.reviewCount, params.minReviews));
-  if (params.maxReviews != null) snapCols.push(lte(appSnapshots.reviewCount, params.maxReviews));
-  if (params.minDownloads != null) snapCols.push(gte(sql`coalesce(${appSnapshots.downloadsEstimate}, 0)`, params.minDownloads));
-  if (params.maxDownloads != null) snapCols.push(lte(sql`coalesce(${appSnapshots.downloadsEstimate}, 0)`, params.maxDownloads));
-  if (params.minRevenue != null) snapCols.push(gte(sql`coalesce(${appSnapshots.revenueEstimate}, 0)`, params.minRevenue));
-  if (params.maxRevenue != null) snapCols.push(lte(sql`coalesce(${appSnapshots.revenueEstimate}, 0)`, params.maxRevenue));
-
-  // Per-country market filter — chart_country lives on the snapshot (ADR 0007).
-  // Applied ONLY when a market is explicitly requested: the catalog is 100% US
-  // today, so the default (no param) needs no pin and keeps the fast apps-only
-  // count path. ⚠️ When non-US snapshots land (E-aso ingest), the DEFAULT must
-  // pin chart_country='US' here (+ a (chart_country, snapshot_date) index) or
-  // global views will double-count apps holding rows in several markets.
-  if (params.countries) {
-    const cc = params.countries.split(",").map((c) => c.trim().toUpperCase()).filter(Boolean);
-    if (cc.length) snapCols.push(inArray(appSnapshots.chartCountry, cc));
-  }
-  if (params.excludedCountries) {
-    const ex = params.excludedCountries.split(",").map((c) => c.trim().toUpperCase()).filter(Boolean);
-    if (ex.length) snapCols.push(or(isNull(appSnapshots.chartCountry), notInArray(appSnapshots.chartCountry, ex))!);
-  }
+  if (params.minRating != null) snapMetricCols.push(gte(sql`coalesce(${appSnapshots.rating}, 0)`, params.minRating));
+  if (params.maxRating != null) snapMetricCols.push(lte(sql`coalesce(${appSnapshots.rating}, 0)`, params.maxRating));
+  if (params.minReviews != null) snapMetricCols.push(gte(appSnapshots.reviewCount, params.minReviews));
+  if (params.maxReviews != null) snapMetricCols.push(lte(appSnapshots.reviewCount, params.maxReviews));
+  if (params.minDownloads != null) snapMetricCols.push(gte(sql`coalesce(${appSnapshots.downloadsEstimate}, 0)`, params.minDownloads));
+  if (params.maxDownloads != null) snapMetricCols.push(lte(sql`coalesce(${appSnapshots.downloadsEstimate}, 0)`, params.maxDownloads));
+  if (params.minRevenue != null) snapMetricCols.push(gte(sql`coalesce(${appSnapshots.revenueEstimate}, 0)`, params.minRevenue));
+  if (params.maxRevenue != null) snapMetricCols.push(lte(sql`coalesce(${appSnapshots.revenueEstimate}, 0)`, params.maxRevenue));
 
   if (params.releasedAfter != null) appCols.push(gte(apps.releasedAt, new Date(params.releasedAfter * 1000)));
   if (params.updatedAfter != null) appCols.push(gte(apps.updatedAt, new Date(params.updatedAfter * 1000)));
@@ -267,7 +289,12 @@ function buildConditions(params: AppSearchParams, maxDate: string): AppCondition
   // Match if the app supports ANY requested code; quote-wrap so "en" can't match a
   // longer token. Superset of matchesSearch's exact parseJsonArray().includes() pass.
   if (params.languages) {
-    const want = params.languages.split(",").map((l) => l.trim().toLowerCase()).filter(Boolean);
+    // Strip LIKE metacharacters (%/_) from each ISO code so a crafted value can't widen
+    // the candidate pool into a wildcard scan. Codes are alphanumeric, so this is lossless.
+    const want = params.languages
+      .split(",")
+      .map((l) => l.trim().toLowerCase().replace(/[%_]/g, ""))
+      .filter(Boolean);
     const ors = want.map((l) => like(sql`lower(${apps.languages})`, `%"${l}"%`));
     if (ors.length) appCols.push(or(...ors)!);
   }
@@ -282,12 +309,12 @@ function buildConditions(params: AppSearchParams, maxDate: string): AppCondition
   if (params.hasCreators === true) appCols.push(sql`exists (select 1 from ${creators} where ${creators.appId} = ${apps.id})`);
   if (params.hasCreators === false) appCols.push(sql`not exists (select 1 from ${creators} where ${creators.appId} = ${apps.id})`);
 
-  return { appCols, snapCols };
+  return { appCols, snapPin, snapMetricCols, explicitCountry, marketCountry };
 }
 
 /** Flattened predicate list for the joined candidate query. */
 function allConditions(c: AppConditions): SQL[] {
-  return [...c.snapCols, ...c.appCols];
+  return [...c.snapPin, ...c.snapMetricCols, ...c.appCols];
 }
 
 /**
@@ -308,14 +335,15 @@ function sqlSortColumn(sortBy: AppSearchParams["sortBy"]): AnyColumn | null {
   }
 }
 
-async function countMatches(c: AppConditions, maxDate: string): Promise<number> {
+async function countMatches(c: AppConditions): Promise<number> {
   const db = getDb();
-  // Only snapshot-side filter is the date pin → the count is decided entirely by
-  // the apps table. Skip the join entirely (it was the 4s cost on filtered loads).
-  if (c.snapCols.length === 1) {
+  // No snapshot-metric filter AND no explicit market → the count is decided by the
+  // apps table (the default US market is ≈the whole catalog). Skip the join entirely
+  // (it was the 4s cost on filtered loads).
+  if (c.snapMetricCols.length === 0 && !c.explicitCountry) {
     if (c.appCols.length === 0) {
-      // Unfiltered → count the latest-day partition straight off its index.
-      const [row] = await db.select({ c: count() }).from(appSnapshots).where(eq(appSnapshots.snapshotDate, maxDate));
+      // Unfiltered → count the latest-day rows for the default market straight off.
+      const [row] = await db.select({ c: count() }).from(appSnapshots).where(and(...c.snapPin));
       return row?.c ?? 0;
     }
     // apps-column filters only (category/source/developer/price/…) → count off the
@@ -324,10 +352,10 @@ async function countMatches(c: AppConditions, maxDate: string): Promise<number> 
     const [row] = await db.select({ c: count() }).from(apps).where(and(...c.appCols));
     return row?.c ?? 0;
   }
-  // A snapshot-metric filter (rating/reviews/downloads/revenue range) is present →
-  // the join is unavoidable.
+  // A snapshot-metric filter or an explicit market is present → the join is unavoidable.
+  // countDistinct(apps.id) so an app charting in several requested markets is counted once.
   const [row] = await db
-    .select({ c: count() })
+    .select({ c: countDistinct(apps.id) })
     .from(apps)
     .innerJoin(appSnapshots, eq(appSnapshots.appId, apps.id))
     .where(and(...allConditions(c)));
@@ -353,7 +381,8 @@ async function selectCandidateIds(c: AppConditions, params: AppSearchParams): Pr
       .where(and(...conds))
       .orderBy(asc(appSnapshots.chartRank), apps.id)
       .limit(POOL_CAP);
-    return rows.map((r) => r.id);
+    // Dedupe: an app charting in several requested markets yields one row per market.
+    return [...new Set(rows.map((r) => r.id))];
   }
 
   const col = sqlSortColumn(params.sortBy) ?? appSnapshots.reviewCount;
@@ -369,7 +398,7 @@ async function selectCandidateIds(c: AppConditions, params: AppSearchParams): Pr
     .where(and(...conds))
     .orderBy(dir(col), apps.id)
     .limit(POOL_CAP);
-  return rows.map((r) => r.id);
+  return [...new Set(rows.map((r) => r.id))];
 }
 
 /**
@@ -388,13 +417,14 @@ async function ftsCandidateIds(match: string, filter: SQL): Promise<string[]> {
     ORDER BY apps_fts.rank, apps.id
     LIMIT ${POOL_CAP}
   `);
-  return rows.map((r) => r.id);
+  // Dedupe: the snapshot join yields one row per market for multi-market requests.
+  return [...new Set(rows.map((r) => r.id))];
 }
 
 /** Total apps matching the search text AND the SQL filters — the accurate "X of Y" count. */
 async function ftsCount(match: string, filter: SQL): Promise<number> {
   const row = await getDb().get<{ c: number }>(sql`
-    SELECT count(*) AS c
+    SELECT count(distinct apps.id) AS c
     FROM apps_fts
     JOIN apps ON apps.id = apps_fts.app_id
     JOIN app_snapshots ON app_snapshots.app_id = apps.id
@@ -405,7 +435,11 @@ async function ftsCount(match: string, filter: SQL): Promise<number> {
 
 /** Build scored rows for a bounded id set — the same assembly the old bulk loader did
  *  for the whole catalog, but scoped to the page's candidate pool. */
-async function buildScoredRowsForIds(ids: string[], period: GrowthPeriod): Promise<ScoredAppRow[]> {
+async function buildScoredRowsForIds(
+  ids: string[],
+  period: GrowthPeriod,
+  country = "US",
+): Promise<ScoredAppRow[]> {
   if (!ids.length) return [];
   const db = getDb();
   const periodDays = GROWTH_PERIOD_DAYS[period] ?? 7;
@@ -417,7 +451,7 @@ async function buildScoredRowsForIds(ids: string[], period: GrowthPeriod): Promi
   for (const part of chunk(ids, 400)) {
     const [a, s, i, m] = await Promise.all([
       db.select().from(apps).where(inArray(apps.id, part)),
-      db.select().from(appSnapshots).where(inArray(appSnapshots.appId, part)).orderBy(appSnapshots.appId, appSnapshots.snapshotDate),
+      db.select().from(appSnapshots).where(and(inArray(appSnapshots.appId, part), eq(appSnapshots.chartCountry, country))).orderBy(appSnapshots.appId, appSnapshots.snapshotDate),
       db.select({ appId: iaps.appId }).from(iaps).where(inArray(iaps.appId, part)),
       db.select({ appId: metaAds.appId, firstSeenAt: metaAds.firstSeenAt }).from(metaAds).where(inArray(metaAds.appId, part)),
     ]);
@@ -457,7 +491,7 @@ async function buildScoredRowsForIds(ids: string[], period: GrowthPeriod): Promi
   const [appleAdApps, creatorApps, rankDeltas] = await Promise.all([
     appsWithAppleAds(db),
     appsWithCreators(db),
-    getRankDeltasFor(ids),
+    getRankDeltasFor(ids, country),
   ]);
 
   const rows: ScoredAppRow[] = [];
@@ -509,22 +543,25 @@ export interface ChartEstimateInput {
  * stored snapshot estimate columns are populated on only ~31% of chart rows;
  * proxying or blanking the rest would either lie or leave most of the chart empty.
  *
- * Fast by construction: every signal but the iap/ad counts already rides on the
- * chart entry, and those two come from grouped-count seeks over the (≤100) entry
- * ids — no per-app snapshot history is loaded. Velocity uses the model's built-in
- * fallback (no prior review count), which only nudges a minor multiplier.
+ * Fast by construction: the iap/ad counts come from grouped-count seeks over the
+ * (≤100) entry ids, and the review prior from one bounded snapshot read scoped to
+ * the chart's market. We pass the REAL prior review count (not null) so the
+ * review-velocity bonus matches what Explore computes for the same app — a null
+ * prior would diverge the two surfaces' Downloads/MRR by up to that 1.5× bonus.
  */
 export async function estimateChartEntries(
   entries: ChartEstimateInput[],
+  country = "US",
 ): Promise<Map<string, { downloads: number; revenue: number }>> {
   const map = new Map<string, { downloads: number; revenue: number }>();
   if (!entries.length) return map;
   const db = getDb();
   const ids = entries.map((e) => e.id);
 
-  const [iapRows, metaRows] = await Promise.all([
+  const [iapRows, metaRows, reviewPrior] = await Promise.all([
     db.select({ appId: iaps.appId, c: count() }).from(iaps).where(inArray(iaps.appId, ids)).groupBy(iaps.appId),
     db.select({ appId: metaAds.appId, c: count() }).from(metaAds).where(inArray(metaAds.appId, ids)).groupBy(metaAds.appId),
+    reviewPriorFor(db, ids, country, GROWTH_PERIOD_DAYS["7d"] ?? 7),
   ]);
   const iapCount = new Map(iapRows.map((r) => [r.appId, Number(r.c)]));
   const metaCount = new Map(metaRows.map((r) => [r.appId, Number(r.c)]));
@@ -534,7 +571,7 @@ export async function estimateChartEntries(
       category: e.category,
       chartRank: e.chartRank,
       reviewCount: e.reviewCount,
-      reviewCountPrior: null,
+      reviewCountPrior: reviewPrior.get(e.id) ?? null,
       rating: e.rating,
       iapCount: iapCount.get(e.id) ?? 0,
       metaAdCount: metaCount.get(e.id) ?? 0,
@@ -547,6 +584,47 @@ export async function estimateChartEntries(
     };
     const revenue = estimateRevenue(signals);
     map.set(e.id, { downloads: estimateDownloads(signals, revenue), revenue });
+  }
+  return map;
+}
+
+/** Per-app review count ≈`periodDays` before its latest snapshot, scoped to one
+ *  market — the velocity prior Explore scores with (see {@link pickPrior}). */
+async function reviewPriorFor(
+  db: ReturnType<typeof getDb>,
+  ids: string[],
+  country: string,
+  periodDays: number,
+): Promise<Map<string, number>> {
+  const map = new Map<string, number>();
+  if (!ids.length) return map;
+  for (const part of chunk(ids, 400)) {
+    const rows = await db
+      .select({
+        appId: appSnapshots.appId,
+        snapshotDate: appSnapshots.snapshotDate,
+        reviewCount: appSnapshots.reviewCount,
+      })
+      .from(appSnapshots)
+      .where(and(inArray(appSnapshots.appId, part), eq(appSnapshots.chartCountry, country)))
+      .orderBy(appSnapshots.appId, appSnapshots.snapshotDate);
+    const byApp = new Map<string, { snapshotDate: string; reviewCount: number }[]>();
+    for (const r of rows) {
+      const list = byApp.get(r.appId);
+      if (list) list.push(r);
+      else byApp.set(r.appId, [r]);
+    }
+    for (const [appId, series] of byApp) {
+      const latest = series.at(-1)!;
+      const target = daysBefore(latest.snapshotDate, periodDays);
+      let best: { snapshotDate: string; reviewCount: number } | null = null;
+      for (const row of series) {
+        if (row.snapshotDate <= target) best = row;
+        if (row.snapshotDate > target) break;
+      }
+      if (!best && series[0] && series[0].snapshotDate < latest.snapshotDate) best = series[0];
+      if (best) map.set(appId, best.reviewCount);
+    }
   }
   return map;
 }
@@ -577,7 +655,7 @@ export async function listCategoryFacetsFromDb(): Promise<CategoryFacet[]> {
 // (the unique (app_id, snapshot_date) index makes WHERE app_id IN (…) a seek) so it
 // never scans the whole 3M-row snapshot table. Apps without two ranked snapshots are
 // absent → the caller defaults them to null. Powers the Highlights "1D" column.
-async function getRankDeltasFor(ids: string[]): Promise<Map<string, number>> {
+async function getRankDeltasFor(ids: string[], country = "US"): Promise<Map<string, number>> {
   const map = new Map<string, number>();
   if (!ids.length) return map;
   const db = getDb();
@@ -585,7 +663,9 @@ async function getRankDeltasFor(ids: string[]): Promise<Map<string, number>> {
     const rows = await db
       .select({ appId: appSnapshots.appId, chartRank: appSnapshots.chartRank })
       .from(appSnapshots)
-      .where(inArray(appSnapshots.appId, part))
+      // Scope to one market so the two compared ranks are day-over-day within the same
+      // chart — not a US rank vs a JP rank, which would fabricate a huge phantom delta.
+      .where(and(inArray(appSnapshots.appId, part), eq(appSnapshots.chartCountry, country)))
       .orderBy(appSnapshots.appId, appSnapshots.snapshotDate);
 
     // Keep the last two non-null chart ranks per app (oldest→newest within app).
@@ -608,7 +688,7 @@ async function getRankDeltasFor(ids: string[]): Promise<Map<string, number>> {
 
 // Last ≤7 daily reviewCount values per app (oldest→newest), scoped to the returned
 // page's ids — the mini review-count trend rendered per row.
-async function getSparklinesFor(ids: string[]): Promise<Map<string, number[]>> {
+async function getSparklinesFor(ids: string[], country = "US"): Promise<Map<string, number[]>> {
   const map = new Map<string, number[]>();
   if (!ids.length) return map;
   const db = getDb();
@@ -616,7 +696,8 @@ async function getSparklinesFor(ids: string[]): Promise<Map<string, number[]>> {
     const rows = await db
       .select({ appId: appSnapshots.appId, reviewCount: appSnapshots.reviewCount })
       .from(appSnapshots)
-      .where(inArray(appSnapshots.appId, part))
+      // One market only, else the trend interleaves different markets' review counts.
+      .where(and(inArray(appSnapshots.appId, part), eq(appSnapshots.chartCountry, country)))
       .orderBy(appSnapshots.appId, appSnapshots.snapshotDate);
     for (const row of rows) {
       const list = map.get(row.appId);
@@ -632,7 +713,8 @@ async function getSparklinesFor(ids: string[]): Promise<Map<string, number[]>> {
 
 export async function searchAppsFromDb(params: AppSearchParams): Promise<PaginatedResponse<AppListItem>> {
   const period = params.growthPeriod ?? "7d";
-  const maxDate = await latestSnapshotDate();
+  const marketCountry = marketCountryOf(params);
+  const maxDate = await latestSnapshotDate(marketCountry);
   if (!maxDate) return { data: [], pagination: { nextCursor: null, totalCount: 0 } };
 
   // Free-text search routes through FTS5 (fast, token-prefix), INTERSECTED with the SQL
@@ -647,18 +729,18 @@ export async function searchAppsFromDb(params: AppSearchParams): Promise<Paginat
     const filter = and(...allConditions(conds))!;
     [totalCount, ids] = await Promise.all([ftsCount(ftsMatch, filter), ftsCandidateIds(ftsMatch, filter)]);
   } else {
-    [totalCount, ids] = await Promise.all([countMatches(conds, maxDate), selectCandidateIds(conds, params)]);
+    [totalCount, ids] = await Promise.all([countMatches(conds), selectCandidateIds(conds, params)]);
   }
 
   // Score only the bounded candidate pool, then filter/sort/paginate it exactly as
   // before — matchesSearch finalises the live-growth filters the SQL pool omits.
-  const rows = await buildScoredRowsForIds(ids, period);
+  const rows = await buildScoredRowsForIds(ids, period, marketCountry);
   const filtered = rows.filter((row) => matchesSearch(row, params));
   const sorted = sortApps(filtered, params);
   const { data, nextCursor } = paginateApps(sorted, params);
 
   // Attach mini review-count trend per returned row only.
-  const sparklines = await getSparklinesFor(data.map((d) => d.id));
+  const sparklines = await getSparklinesFor(data.map((d) => d.id), marketCountry);
   const withSparkline = data.map((item) => ({
     ...item,
     sparkline: sparklines.get(item.id) ?? [],

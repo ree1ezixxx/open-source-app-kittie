@@ -17,8 +17,18 @@ export const chartsRouter = new Hono();
 const chartQuerySchema = z.object({
   store: z.enum(["apple", "google"]),
   type: z.enum(["free", "paid", "grossing"]).default("free"),
-  country: z.string().default("US"),
-  category: z.string().optional(),
+  // Normalize to the stored casing: chart_country is persisted upper-case, so a
+  // lower/mixed-case or empty `country` (any direct API/deep-link caller) must
+  // resolve to "US" rather than silently matching zero rows.
+  country: z
+    .string()
+    .default("US")
+    .transform((s) => (s.trim() || "US").toUpperCase()),
+  // Empty `category=` means "overall", not a genre named "" (which matches nothing).
+  category: z
+    .string()
+    .optional()
+    .transform((s) => (s?.trim() ? s.trim() : undefined)),
   date: z.string().optional(),
   limit: z.coerce.number().min(1).max(100).default(100),
 });
@@ -40,6 +50,7 @@ chartsRouter.get("/", async (c) => {
       chartRank: e.rank,
       category: e.app.category,
     })),
+    parsed.data.country,
   );
   const entries = result.entries.map((e) => {
     const m = est.get(e.app.id);
