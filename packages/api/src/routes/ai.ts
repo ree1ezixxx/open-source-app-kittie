@@ -29,8 +29,21 @@ const artDirectionSchema = z.object({
   targetAudience: z.string().nullish(),
   brandKeywords: z.array(z.string()).default([]),
   appStoreKeywords: z.array(z.string()).default([]),
-  style: z.enum(["bold", "minimal", "playful", "premium"]).default("minimal"),
-  count: z.number().int().min(1).max(10).default(5),
+  style: z
+    .enum([
+      "modern",
+      "editorial",
+      "ios-native",
+      "premium",
+      "feature-focused",
+      "minimal",
+      "playful",
+      "professional",
+      "bold",
+      "elegant",
+    ])
+    .default("modern"),
+  count: z.number().int().min(1).max(10).default(6),
 });
 
 /**
@@ -91,7 +104,8 @@ const translateSchema = z.object({
   imageDataUrl: z.string().startsWith("data:image/"),
   /** Target language name, e.g. "German". */
   language: z.string().min(2),
-  countryCode: z.string().min(2).max(2),
+  /** App-Store language/locale code, e.g. "DE" or "ZH-CN" — cache-key only. */
+  countryCode: z.string().min(2).max(8),
 });
 
 /**
@@ -129,6 +143,124 @@ aiRouter.post("/translate-screenshot", async (c) => {
   } catch (e) {
     const status = e instanceof GeminiDailyQuotaError ? 502 : 500;
     return c.json({ error: e instanceof Error ? e.message : "translation failed" }, status);
+  }
+});
+
+/* ============================================================
+   App finder — Search the App Store / paste a store URL to pull a real
+   listing into the AI Studio (autofill + import screenshots). Backed by the
+   public iTunes Search/Lookup APIs; no key, no catalog scan.
+   ============================================================ */
+
+interface ItunesApp {
+  trackId: number;
+  trackName: string;
+  artistName?: string;
+  primaryGenreName?: string;
+  artworkUrl512?: string;
+  artworkUrl100?: string;
+  description?: string;
+  screenshotUrls?: string[];
+  ipadScreenshotUrls?: string[];
+  averageUserRating?: number;
+  userRatingCount?: number;
+}
+
+function mapItunesApp(a: ItunesApp) {
+  return {
+    storeAppId: String(a.trackId),
+    title: a.trackName,
+    developer: a.artistName ?? "",
+    category: a.primaryGenreName ?? null,
+    iconUrl: a.artworkUrl512 ?? a.artworkUrl100 ?? null,
+    description: a.description ?? null,
+    rating: a.averageUserRating ?? null,
+    reviewCount: a.userRatingCount ?? 0,
+    screenshotUrls: [...(a.screenshotUrls ?? []), ...(a.ipadScreenshotUrls ?? [])],
+  };
+}
+
+const appSearchSchema = z.object({
+  q: z.string().trim().min(1).max(120),
+  country: z.string().min(2).max(2).default("us"),
+  limit: z.coerce.number().int().min(1).max(20).default(8),
+});
+
+/** App Store search by term (public iTunes Search API). */
+aiRouter.get("/app-search", async (c) => {
+  const parsed = appSearchSchema.safeParse(c.req.query());
+  if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
+  const { q, country, limit } = parsed.data;
+  const url = new URL("https://itunes.apple.com/search");
+  url.searchParams.set("term", q);
+  url.searchParams.set("entity", "software");
+  url.searchParams.set("country", country.toLowerCase());
+  url.searchParams.set("limit", String(limit));
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return c.json({ error: `store search failed (${res.status})` }, 502);
+    const body = (await res.json()) as { results?: ItunesApp[] };
+    return c.json({ data: (body.results ?? []).map(mapItunesApp) });
+  } catch (e) {
+    return c.json({ error: e instanceof Error ? e.message : "store search failed" }, 502);
+  }
+});
+
+const appLookupSchema = z.object({
+  /** A numeric App Store id, or a full App Store URL to extract it from. */
+  id: z.string().trim().min(1).max(400),
+  country: z.string().min(2).max(2).default("us"),
+});
+
+/** Full listing by id or pasted App Store URL (public iTunes Lookup API). */
+aiRouter.get("/app-lookup", async (c) => {
+  const parsed = appLookupSchema.safeParse(c.req.query());
+  if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
+  const { id, country } = parsed.data;
+  // Accept a raw id or any App Store URL containing /id<digits>.
+  const storeId = (/\/id(\d+)/.exec(id)?.[1]) ?? (/^\d+$/.test(id) ? id : null);
+  if (!storeId) return c.json({ error: "no App Store id found in input" }, 400);
+  const url = `https://itunes.apple.com/lookup?id=${storeId}&country=${country.toLowerCase()}`;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return c.json({ error: `store lookup failed (${res.status})` }, 502);
+    const body = (await res.json()) as { results?: ItunesApp[] };
+    const app = body.results?.[0];
+    if (!app) return c.json({ error: "app not found" }, 404);
+    return c.json({ data: mapItunesApp(app) });
+  } catch (e) {
+    return c.json({ error: e instanceof Error ? e.message : "store lookup failed" }, 502);
+  }
+});
+
+// Allow-list of store CDN hosts the asset proxy may fetch (prevents SSRF).
+const ASSET_HOSTS = /(^|\.)mzstatic\.com$|(^|\.)apple\.com$|(^|\.)googleusercontent\.com$/i;
+
+/**
+ * Same-origin proxy for store screenshot/icon assets so the client can import
+ * them as data URLs without CORS. Host-allow-listed to store CDNs only.
+ */
+aiRouter.get("/store-asset", async (c) => {
+  const raw = c.req.query("url");
+  if (!raw) return c.json({ error: "url required" }, 400);
+  let target: URL;
+  try {
+    target = new URL(raw);
+  } catch {
+    return c.json({ error: "invalid url" }, 400);
+  }
+  if (target.protocol !== "https:" || !ASSET_HOSTS.test(target.hostname)) {
+    return c.json({ error: "host not allowed" }, 403);
+  }
+  try {
+    const res = await fetch(target);
+    if (!res.ok) return c.json({ error: `asset fetch failed (${res.status})` }, 502);
+    const type = res.headers.get("content-type") ?? "image/png";
+    if (!type.startsWith("image/")) return c.json({ error: "not an image" }, 415);
+    const buf = await res.arrayBuffer();
+    return c.body(buf, 200, { "content-type": type, "cache-control": "public, max-age=86400" });
+  } catch (e) {
+    return c.json({ error: e instanceof Error ? e.message : "asset fetch failed" }, 502);
   }
 });
 

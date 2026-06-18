@@ -13,8 +13,17 @@ export type SlideLayout =
   | "split" // caption stacked over an offset device (character-hero feel)
   | "no-device"; // big standalone headline, no device
 
-/** Background treatment rendered behind a slide. */
-export type BackgroundStyle = "gradient" | "mesh" | "duotone" | "glow" | "solid";
+/** Background treatment rendered behind a slide (mirrors appkittie's 9). */
+export type BackgroundStyle =
+  | "minimal"
+  | "mesh"
+  | "glass"
+  | "spotlight"
+  | "layered"
+  | "solid"
+  | "gradient"
+  | "pattern"
+  | "blurred";
 
 /** Deck-level narrative flow (sequence of layouts). */
 export type FlowStrategy = "default" | "hero-split" | "alternating-split";
@@ -26,19 +35,22 @@ export type FontId = "anton" | "grotesk" | "archivo" | "poppins" | "playfair" | 
 export type Palette = {
   base: string; // background base
   base2: string; // secondary background tone
-  accent: string;
-  brand: string; // secondary brand colour
+  accent: string; // PRIMARY: headline emphasis, wordmark, device glow
+  brand: string; // SECONDARY: background treatments' 2nd colour
+  tint: string; // ACCENT: kicker pill + 3rd background stop
   fg: string; // headline text
   muted: string; // kicker / sub text
 };
 
-/** Deck-level design spec resolved by aiService and consumed by the engine. */
+/** Deck-level design spec resolved by aiService and consumed by the engine.
+ *  Three brand colours, surfaced in the UI as Primary / Secondary / Accent. */
 export type DesignSpec = {
   background: BackgroundStyle;
   font: FontId;
   flow: FlowStrategy;
-  accent: string;
-  brand: string;
+  accent: string; // Primary
+  brand: string; // Secondary
+  tint: string; // Accent
 };
 
 export type ThemeId =
@@ -46,7 +58,9 @@ export type ThemeId =
   | "dark-bold"
   | "warm-editorial"
   | "ocean-fresh"
-  | "bloom-roast";
+  | "bloom-roast"
+  | "midnight-pro"
+  | "ivory-elegant";
 
 export type Theme = {
   id: string;

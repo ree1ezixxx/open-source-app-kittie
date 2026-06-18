@@ -78,7 +78,7 @@ export function GenerationResult({ generation }: { generation: ScreenshotGenerat
       <div className="studio-shots">
         {generation.slides.map((s, i) => (
           <div className="studio-shot" key={s.id}>
-            <SlidePreview slide={s} theme={theme} device={device} design={design} appName={generation.appName} width={220} />
+            <SlidePreview slide={s} theme={theme} device={device} design={design} appName={generation.appName} appIcon={generation.appIcon} width={220} />
             <div className="cap" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {s.headline.replace(/\n/g, " ")}
@@ -108,7 +108,7 @@ export function GenerationResult({ generation }: { generation: ScreenshotGenerat
             }}
             style={{ width: w, height: h }}
           >
-            <SlideCanvas slide={s} theme={theme} device={device} design={design} appName={generation.appName} />
+            <SlideCanvas slide={s} theme={theme} device={device} design={design} appName={generation.appName} appIcon={generation.appIcon} />
           </div>
         ))}
       </div>

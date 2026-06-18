@@ -30,12 +30,25 @@ export interface UploadedImage {
 
 export type JobStatus = "done" | "error";
 
-export type ScreenshotStyle = "bold" | "minimal" | "playful" | "premium";
+// Mirrors appkittie's Design Style presets (same names, same order).
+export type ScreenshotStyle =
+  | "modern"
+  | "editorial"
+  | "ios-native"
+  | "premium"
+  | "feature-focused"
+  | "minimal"
+  | "playful"
+  | "professional"
+  | "bold"
+  | "elegant";
 
 export interface GenerateScreenshotsInput {
   /** Tracked App id, or null when describing a new / unreleased app. */
   appId: string | null;
   appName: string;
+  /** App icon as a data URL (uploaded or imported) — shown on each slide. */
+  appIcon?: string | null;
   /** App-listing intake — drives the on-screen copy. */
   subtitle?: string;
   developer?: string;
@@ -51,9 +64,10 @@ export interface GenerateScreenshotsInput {
   style?: ScreenshotStyle;
   /** How many optimized frames to produce. */
   count?: number;
-  /** Optional design overrides (UI controls). */
+  /** Optional design overrides (UI controls) — Primary / Secondary / Accent. */
   accent?: string;
   brand?: string;
+  tint?: string;
   background?: BackgroundStyle;
   font?: FontId;
   flow?: FlowStrategy;
@@ -63,6 +77,7 @@ export interface ScreenshotGeneration {
   id: string;
   appId: string | null;
   appName: string;
+  appIcon: string | null;
   style: ScreenshotStyle;
   device: Device;
   /** Theme id used by the engine (resolve with themeById). */
@@ -113,24 +128,31 @@ function flagMockOnce(method: string) {
 
 type StyleDesign = {
   themeId: string;
-  accent: string;
-  brand: string;
+  accent: string; // Primary
+  brand: string; // Secondary
+  tint: string; // Accent
   background: BackgroundStyle;
   font: FontId;
   flow: FlowStrategy;
 };
 
 const STYLE_DESIGN: Record<ScreenshotStyle, StyleDesign> = {
-  bold: { themeId: "dark-bold", accent: "#c6f24d", brand: "#8b5cf6", background: "mesh", font: "anton", flow: "hero-split" },
-  minimal: { themeId: "clean-light", accent: "#5b7cfa", brand: "#0ea5e9", background: "gradient", font: "inter", flow: "default" },
-  playful: { themeId: "ocean-fresh", accent: "#0284c7", brand: "#f59e0b", background: "mesh", font: "poppins", flow: "alternating-split" },
-  premium: { themeId: "bloom-roast", accent: "#b8794a", brand: "#24352f", background: "duotone", font: "playfair", flow: "default" },
+  modern: { themeId: "clean-light", accent: "#5b7cfa", brand: "#0ea5e9", tint: "#a78bfa", background: "gradient", font: "inter", flow: "default" },
+  editorial: { themeId: "warm-editorial", accent: "#d97706", brand: "#b45309", tint: "#f59e0b", background: "minimal", font: "playfair", flow: "default" },
+  "ios-native": { themeId: "clean-light", accent: "#0a84ff", brand: "#30d158", tint: "#ff9f0a", background: "minimal", font: "inter", flow: "default" },
+  premium: { themeId: "bloom-roast", accent: "#b8794a", brand: "#24352f", tint: "#e8c9a0", background: "glass", font: "playfair", flow: "default" },
+  "feature-focused": { themeId: "dark-bold", accent: "#c6f24d", brand: "#8b5cf6", tint: "#22d3ee", background: "spotlight", font: "grotesk", flow: "alternating-split" },
+  minimal: { themeId: "clean-light", accent: "#5b7cfa", brand: "#94a3b8", tint: "#0ea5e9", background: "minimal", font: "inter", flow: "default" },
+  playful: { themeId: "ocean-fresh", accent: "#0284c7", brand: "#f59e0b", tint: "#ec4899", background: "mesh", font: "poppins", flow: "alternating-split" },
+  professional: { themeId: "midnight-pro", accent: "#5b9cff", brand: "#38bdf8", tint: "#818cf8", background: "gradient", font: "dmsans", flow: "default" },
+  bold: { themeId: "dark-bold", accent: "#c6f24d", brand: "#8b5cf6", tint: "#f43f5e", background: "mesh", font: "anton", flow: "hero-split" },
+  elegant: { themeId: "ivory-elegant", accent: "#9a7b4f", brand: "#2a2622", tint: "#c0a080", background: "layered", font: "playfair", flow: "default" },
 };
 
 /** The design controls' starting values for a given style preset. */
 export function designDefaults(style: ScreenshotStyle): DesignSpec {
   const d = STYLE_DESIGN[style];
-  return { accent: d.accent, brand: d.brand, background: d.background, font: d.font, flow: d.flow };
+  return { accent: d.accent, brand: d.brand, tint: d.tint, background: d.background, font: d.font, flow: d.flow };
 }
 
 /* ============================================================ Derived copy */
@@ -143,17 +165,29 @@ const STOP = new Set([
 ]);
 
 const FALLBACK_HEADLINES: Record<ScreenshotStyle, string[]> = {
-  bold: ["Built to win", "Your edge, daily", "Move faster", "No more guesswork", "Results that compound", "Own your day"],
+  modern: ["Designed for now", "Everything in\none place", "Built for speed", "Your day,\nsimplified", "Smart by default", "Made to move"],
+  editorial: ["A story worth\ntelling", "Where it all\ncomes together", "Read the room", "Curated for you", "The full picture", "Stories that stick"],
+  "ios-native": ["Feels right at home", "Made for iPhone", "Simply native", "Fast, fluid, familiar", "It just works", "Built the Apple way"],
+  premium: ["Crafted for you", "The pro standard", "Every detail\nconsidered", "Worth the upgrade", "Designed to last", "Quietly powerful"],
+  "feature-focused": ["One tap away", "Everything you need", "See it in action", "Built around you", "Power, made simple", "Do more, faster"],
   minimal: ["Just the essentials", "Clarity, by default", "Less app,\nmore done", "Quiet by design", "One clean view", "Calm, on purpose"],
   playful: ["Make it fun", "Tap into\nyour streak", "Little wins,\nbig days", "You've got this", "Progress feels good", "Keep the chain alive"],
-  premium: ["Crafted for you", "The pro standard", "Every detail\nconsidered", "Worth the upgrade", "Designed to last", "Quietly powerful"],
+  professional: ["Work, elevated", "Built for teams", "Decisions, faster", "The serious choice", "Trusted at scale", "Precision, by design"],
+  bold: ["Built to win", "Your edge, daily", "Move faster", "No more guesswork", "Results that compound", "Own your day"],
+  elegant: ["Beautifully simple", "Refined to the detail", "Effortless, by design", "Understated power", "A quieter kind\nof great", "Timeless and clean"],
 };
 
 const FALLBACK_LABELS: Record<ScreenshotStyle, string[]> = {
-  bold: ["Performance", "Momentum", "Focus", "Results", "Edge", "Daily"],
+  modern: ["Modern", "Fast", "Smart", "Clean", "Today", "Flow"],
+  editorial: ["Story", "Feature", "Curated", "Read", "Insight", "Series"],
+  "ios-native": ["Native", "iPhone", "Fluid", "Familiar", "Apple", "Fast"],
+  premium: ["Pro", "Crafted", "Detail", "Premium", "Quality", "Upgrade"],
+  "feature-focused": ["Feature", "Power", "Simple", "Fast", "Built-in", "Daily"],
   minimal: ["Simple", "Clean", "Focus", "Calm", "Clear", "Essential"],
   playful: ["Streaks", "Wins", "Fun", "Habits", "Progress", "Daily"],
-  premium: ["Pro", "Crafted", "Detail", "Premium", "Quality", "Upgrade"],
+  professional: ["Pro", "Teams", "Trusted", "Scale", "Precise", "Work"],
+  bold: ["Performance", "Momentum", "Focus", "Results", "Edge", "Daily"],
+  elegant: ["Elegant", "Refined", "Detail", "Quiet", "Timeless", "Crafted"],
 };
 
 const cap = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
@@ -307,8 +341,8 @@ export const mockAiService: AiService = {
   async generateScreenshots(input) {
     flagMockOnce("generateScreenshots");
 
-    const style = input.style ?? "bold";
-    const count = Math.min(Math.max(input.count ?? 4, 1), 8);
+    const style = input.style ?? "modern";
+    const count = Math.min(Math.max(input.count ?? 6, 1), 10);
     const device: Device = "iphone";
     const d = STYLE_DESIGN[style];
 
@@ -318,6 +352,7 @@ export const mockAiService: AiService = {
       flow: input.flow ?? d.flow,
       accent: input.accent ?? d.accent,
       brand: input.brand ?? d.brand,
+      tint: input.tint ?? d.tint,
     };
 
     const layouts = flowLayouts(design.flow, count);
@@ -355,6 +390,7 @@ export const mockAiService: AiService = {
       id: `gen-${stamp}`,
       appId: input.appId,
       appName: input.appName,
+      appIcon: input.appIcon ?? null,
       style,
       device,
       themeId: d.themeId,

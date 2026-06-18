@@ -1,4 +1,7 @@
-import type { ChangeEvent, ReactNode } from "react";
+import { useRef, type ChangeEvent, type ReactNode } from "react";
+import { fileToDataUrl } from "./util";
+import { IconUpload } from "./icons";
+import { IconClose } from "../../icons";
 
 /** Full App Details intake — feeds the copy engine (headlines/labels). */
 export type AppDetails = {
@@ -11,6 +14,7 @@ export type AppDetails = {
   targetAudience: string;
   appStoreKeywords: string; // raw comma-separated
   brandKeywords: string; // raw comma-separated — the words that go on the screenshots
+  iconUrl: string; // app icon as a data URL (uploaded or imported) — shown on slides
 };
 
 export const EMPTY_DETAILS: AppDetails = {
@@ -23,6 +27,7 @@ export const EMPTY_DETAILS: AppDetails = {
   targetAudience: "",
   appStoreKeywords: "",
   brandKeywords: "",
+  iconUrl: "",
 };
 
 /** Split a raw comma list into trimmed, non-empty terms. */
@@ -53,8 +58,44 @@ export function AppDetailsForm({
     (k: keyof AppDetails) => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
       onChange({ [k]: e.target.value } as Partial<AppDetails>);
 
+  const iconRef = useRef<HTMLInputElement>(null);
+  async function onIcon(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    try {
+      onChange({ iconUrl: await fileToDataUrl(file) });
+    } catch {
+      /* ignore unreadable file */
+    }
+  }
+
   return (
     <div className="studio-details">
+      <div className="studio-field">
+        <label>App icon</label>
+        <div className="app-icon-upload">
+          {details.iconUrl ? (
+            <div className="app-icon-preview">
+              <img src={details.iconUrl} alt="app icon" />
+              <button
+                type="button"
+                className="app-icon-remove"
+                onClick={() => onChange({ iconUrl: "" })}
+                aria-label="Remove icon"
+              >
+                <IconClose />
+              </button>
+            </div>
+          ) : (
+            <button type="button" className="app-icon-add" onClick={() => iconRef.current?.click()}>
+              <IconUpload /> Upload app icon
+            </button>
+          )}
+          <input ref={iconRef} type="file" accept="image/*" hidden onChange={onIcon} />
+        </div>
+      </div>
+
       <div className="studio-grid2">
         <Field label="App name *">
           <input className="studio-input" value={details.name} onChange={set("name")} placeholder="e.g. Streak — Sober Companion" />

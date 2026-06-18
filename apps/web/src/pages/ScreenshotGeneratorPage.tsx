@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import "../styles/aistudio.css";
-import type { AppListItem } from "@kittie/types";
+import type { TrackedAppSummary } from "../lib/translationService";
 import {
   aiService,
   AI_INTEGRATION_POINTS,
@@ -9,10 +9,12 @@ import {
   type ScreenshotStyle,
   type UploadedImage,
 } from "../lib/aiService";
-import { BACKGROUNDS, FLOWS, FONTS, type DesignSpec, type FontId } from "../components/aistudio/screenshot-engine";
+import { BACKGROUNDS, FONTS, type DesignSpec, type FontId, type FlowStrategy } from "../components/aistudio/screenshot-engine";
 import { StudioHeader } from "../components/aistudio/StudioHeader";
 import { AppPicker } from "../components/aistudio/AppPicker";
 import { AppDetailsForm, EMPTY_DETAILS, splitTerms, type AppDetails } from "../components/aistudio/AppDetailsForm";
+import { AppFinder } from "../components/aistudio/AppFinder";
+import { importStoreScreenshots, importStoreIcon, type StoreApp } from "../lib/api/appFinder";
 import { ScreenshotUploader } from "../components/aistudio/ScreenshotUploader";
 import { StepFlow } from "../components/aistudio/StepFlow";
 import { GenerationResult } from "../components/aistudio/GenerationResult";
@@ -22,23 +24,58 @@ import { IconImage, IconInfo } from "../icons";
 import { IconWand, IconPlus } from "../components/aistudio/icons";
 
 const STEPS = ["App details", "Upload screenshots", "Generate"];
+// Mirrors appkittie's Design Style list (same labels, same order).
 const STYLES: { value: ScreenshotStyle; label: string }[] = [
-  { value: "bold", label: "Bold" },
+  { value: "modern", label: "Modern" },
+  { value: "editorial", label: "Editorial" },
+  { value: "ios-native", label: "iOS Native" },
+  { value: "premium", label: "Premium" },
+  { value: "feature-focused", label: "Feature Focused" },
   { value: "minimal", label: "Minimal" },
   { value: "playful", label: "Playful" },
-  { value: "premium", label: "Premium" },
+  { value: "professional", label: "Professional" },
+  { value: "bold", label: "Bold" },
+  { value: "elegant", label: "Elegant" },
 ];
-const FRAME_COUNTS = [3, 4, 5, 6];
+const FRAME_COUNTS = [3, 4, 5, 6, 7, 8, 9, 10];
+const colorInputStyle = {
+  width: 46,
+  height: 36,
+  border: "1px solid var(--border)",
+  borderRadius: 9,
+  background: "transparent",
+  cursor: "pointer",
+  padding: 3,
+} as const;
+
+// Screenshot Flow templates (mirrors appkittie's labels + descriptions). Each
+// `frames` entry is a mini-layout hint for the inline preview.
+type FrameKind = "hero" | "split" | "device" | "none";
+const FLOW_META: { value: FlowStrategy; label: string; desc: string; frames: FrameKind[] }[] = [
+  { value: "default", label: "Default", desc: "Uses the story-driven screenshot planner.", frames: ["hero", "device", "device"] },
+  {
+    value: "hero-split",
+    label: "Character Hero Split",
+    desc: "Starts with a no-phone hero poster, then alternates split layouts.",
+    frames: ["none", "split", "split"],
+  },
+  {
+    value: "alternating-split",
+    label: "Alternating Split",
+    desc: "Skips the standalone hero and alternates split layouts from frame 1.",
+    frames: ["split", "device", "split"],
+  },
+];
 const SHOT_POINT = AI_INTEGRATION_POINTS.find((p) => p.id === "screenshot-art-direction")!;
 
 export function ScreenshotGeneratorPage() {
   const [newMode, setNewMode] = useState(false);
-  const [selectedApp, setSelectedApp] = useState<AppListItem | null>(null);
+  const [selectedApp, setSelectedApp] = useState<TrackedAppSummary | null>(null);
   const [details, setDetails] = useState<AppDetails>(EMPTY_DETAILS);
   const [images, setImages] = useState<UploadedImage[]>([]);
-  const [style, setStyle] = useState<ScreenshotStyle>("bold");
-  const [count, setCount] = useState(4);
-  const [design, setDesign] = useState<DesignSpec>(() => designDefaults("bold"));
+  const [style, setStyle] = useState<ScreenshotStyle>("modern");
+  const [count, setCount] = useState(6);
+  const [design, setDesign] = useState<DesignSpec>(() => designDefaults("modern"));
 
   // Picking a style snaps the design controls to that preset's coherent defaults.
   function chooseStyle(s: ScreenshotStyle) {
@@ -72,7 +109,7 @@ export function ScreenshotGeneratorPage() {
     setActiveId(null);
   }
 
-  function pickApp(app: AppListItem) {
+  function pickApp(app: TrackedAppSummary) {
     setSelectedApp(app);
     setNewMode(false);
     setView("build");
@@ -92,6 +129,34 @@ export function ScreenshotGeneratorPage() {
     setView("build");
   }
 
+  const [importing, setImporting] = useState(false);
+
+  // Search/Paste-URL pulled a real listing — autofill the brief and import its
+  // store screenshots as source frames (mirrors truth's "Find app details").
+  async function onFindApp(app: StoreApp) {
+    setNewMode(true);
+    setSelectedApp(null);
+    setView("build");
+    setDetails((d) => ({
+      ...d,
+      name: app.title,
+      developer: app.developer || d.developer,
+      category: app.category ?? d.category,
+      description: app.description ?? d.description,
+    }));
+    setImporting(true);
+    try {
+      const [frames, icon] = await Promise.all([
+        app.screenshotUrls.length > 0 ? importStoreScreenshots(app, 10) : Promise.resolve([]),
+        importStoreIcon(app),
+      ]);
+      if (frames.length) setImages(frames);
+      if (icon) setDetails((d) => ({ ...d, iconUrl: icon }));
+    } finally {
+      setImporting(false);
+    }
+  }
+
   async function generate() {
     if (!ready) return;
     setGenerating(true);
@@ -99,6 +164,7 @@ export function ScreenshotGeneratorPage() {
       const gen = await aiService.generateScreenshots({
         appId: selectedApp?.id ?? null,
         appName: details.name.trim(),
+        appIcon: details.iconUrl || undefined,
         subtitle: details.subtitle.trim() || undefined,
         developer: details.developer.trim() || undefined,
         category: details.category.trim() || undefined,
@@ -112,6 +178,7 @@ export function ScreenshotGeneratorPage() {
         count,
         accent: design.accent,
         brand: design.brand,
+        tint: design.tint,
         background: design.background,
         font: design.font,
         flow: design.flow,
@@ -141,7 +208,7 @@ export function ScreenshotGeneratorPage() {
         {/* ---------------- left rail ---------------- */}
         <aside className="studio-rail">
           <div className="studio-rail-section">
-            <div className="studio-rail-label">Your apps</div>
+            <div className="studio-rail-label">Your tracked apps</div>
             <AppPicker
               selectedId={selectedApp?.id ?? null}
               newMode={newMode}
@@ -187,8 +254,14 @@ export function ScreenshotGeneratorPage() {
                 <div className="studio-block">
                   <div className="studio-block-head">
                     <div className="studio-block-title">1 · App details</div>
-                    <div className="studio-block-hint">Pick a tracked app on the left, or describe a new one</div>
+                    <div className="studio-block-hint">Search the store, paste a URL, or describe a new app</div>
                   </div>
+                  <AppFinder onPick={onFindApp} busy={importing} />
+                  {importing && (
+                    <div className="app-finder-importing">
+                      <span className="studio-spinner" /> Importing store screenshots…
+                    </div>
+                  )}
                   {started ? (
                     <>
                       {selectedApp && (
@@ -229,34 +302,42 @@ export function ScreenshotGeneratorPage() {
                     <div className="studio-block-title">3 · Generate</div>
                     <div className="studio-block-hint">Direction & frame count</div>
                   </div>
-                  <div className="studio-field">
-                    <label>Style</label>
-                    <div className="studio-chips">
-                      {STYLES.map((s) => (
-                        <button key={s.value} className={`studio-chip${style === s.value ? " on" : ""}`} onClick={() => chooseStyle(s.value)}>
-                          {s.label}
-                        </button>
-                      ))}
+                  <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+                    <div className="studio-field" style={{ flex: "1 1 200px", minWidth: 160 }}>
+                      <label>Design style</label>
+                      <div className="select">
+                        <select value={style} onChange={(e) => chooseStyle(e.target.value as ScreenshotStyle)}>
+                          {STYLES.map((s) => (
+                            <option key={s.value} value={s.value}>{s.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="studio-field" style={{ flex: "1 1 200px", minWidth: 160 }}>
+                      <label>Background style</label>
+                      <div className="select">
+                        <select value={design.background} onChange={(e) => patchDesign({ background: e.target.value as DesignSpec["background"] })}>
+                          {BACKGROUNDS.map((b) => (
+                            <option key={b.value} value={b.value}>{b.label}</option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
                   </div>
 
                   <div className="studio-field">
-                    <label>Background</label>
-                    <div className="studio-chips">
-                      {BACKGROUNDS.map((b) => (
-                        <button key={b.value} className={`studio-chip${design.background === b.value ? " on" : ""}`} onClick={() => patchDesign({ background: b.value })}>
-                          {b.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="studio-field">
-                    <label>Flow</label>
-                    <div className="studio-chips">
-                      {FLOWS.map((f) => (
-                        <button key={f.value} className={`studio-chip${design.flow === f.value ? " on" : ""}`} onClick={() => patchDesign({ flow: f.value })}>
-                          {f.label}
+                    <label>Screenshot flow</label>
+                    <div className="flow-cards">
+                      {FLOW_META.map((f) => (
+                        <button
+                          key={f.value}
+                          type="button"
+                          className={`flow-card${design.flow === f.value ? " on" : ""}`}
+                          onClick={() => patchDesign({ flow: f.value })}
+                        >
+                          <FlowPreview frames={f.frames} />
+                          <div className="flow-card-name">{f.label}</div>
+                          <div className="flow-card-desc">{f.desc}</div>
                         </button>
                       ))}
                     </div>
@@ -274,23 +355,33 @@ export function ScreenshotGeneratorPage() {
                       </div>
                     </div>
                     <div className="studio-field">
-                      <label>Accent</label>
+                      <label>Primary</label>
                       <input
                         type="color"
                         value={design.accent}
                         onChange={(e) => patchDesign({ accent: e.target.value })}
-                        aria-label="Accent colour"
-                        style={{ width: 46, height: 36, border: "1px solid var(--border)", borderRadius: 9, background: "transparent", cursor: "pointer", padding: 3 }}
+                        aria-label="Primary colour"
+                        style={colorInputStyle}
                       />
                     </div>
                     <div className="studio-field">
-                      <label>Brand</label>
+                      <label>Secondary</label>
                       <input
                         type="color"
                         value={design.brand}
                         onChange={(e) => patchDesign({ brand: e.target.value })}
-                        aria-label="Brand colour"
-                        style={{ width: 46, height: 36, border: "1px solid var(--border)", borderRadius: 9, background: "transparent", cursor: "pointer", padding: 3 }}
+                        aria-label="Secondary colour"
+                        style={colorInputStyle}
+                      />
+                    </div>
+                    <div className="studio-field">
+                      <label>Accent</label>
+                      <input
+                        type="color"
+                        value={design.tint}
+                        onChange={(e) => patchDesign({ tint: e.target.value })}
+                        aria-label="Accent colour"
+                        style={colorInputStyle}
                       />
                     </div>
                   </div>
@@ -335,5 +426,79 @@ export function ScreenshotGeneratorPage() {
         </section>
       </div>
     </main>
+  );
+}
+
+/* ---------------- flow preview (inline mini-layout diagram) ---------------- */
+
+function FlowMini({ kind }: { kind: FrameKind }) {
+  // A tiny slide: a text bar and (optionally) a phone shape, positioned to hint
+  // the layout — device-bottom/hero (phone low), split (phone offset), no-phone.
+  const bar = (w: string, top: string, left = "50%") => (
+    <span
+      style={{
+        position: "absolute",
+        top,
+        left,
+        transform: left === "50%" ? "translateX(-50%)" : undefined,
+        width: w,
+        height: 3,
+        borderRadius: 2,
+        background: "var(--text-tertiary)",
+        opacity: 0.7,
+      }}
+    />
+  );
+  const phone = (style: React.CSSProperties) => (
+    <span
+      style={{
+        position: "absolute",
+        borderRadius: 4,
+        background: "var(--surface-3, var(--surface))",
+        border: "1px solid var(--border-strong)",
+        ...style,
+      }}
+    />
+  );
+  return (
+    <span className="flow-mini">
+      {kind === "device" && (
+        <>
+          {bar("56%", "5px")}
+          {phone({ bottom: -6, left: "50%", transform: "translateX(-50%)", width: 18, height: 26 })}
+        </>
+      )}
+      {kind === "hero" && (
+        <>
+          {bar("60%", "6px")}
+          {bar("40%", "12px")}
+          {phone({ bottom: -8, left: "50%", transform: "translateX(-50%)", width: 17, height: 22 })}
+        </>
+      )}
+      {kind === "split" && (
+        <>
+          {bar("44%", "7px", "6px")}
+          {bar("30%", "13px", "6px")}
+          {phone({ top: 16, right: -7, width: 15, height: 24, transform: "rotate(6deg)" })}
+        </>
+      )}
+      {kind === "none" && (
+        <>
+          {bar("58%", "10px")}
+          {bar("46%", "16px")}
+          {bar("30%", "23px")}
+        </>
+      )}
+    </span>
+  );
+}
+
+function FlowPreview({ frames }: { frames: FrameKind[] }) {
+  return (
+    <span className="flow-preview" aria-hidden>
+      {frames.map((k, i) => (
+        <FlowMini key={i} kind={k} />
+      ))}
+    </span>
   );
 }

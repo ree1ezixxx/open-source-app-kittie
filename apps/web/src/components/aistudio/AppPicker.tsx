@@ -1,12 +1,12 @@
-import { useEffect, useState } from "react";
-import type { AppListItem } from "@kittie/types";
-import { listApps } from "../../lib/api";
+import { useState } from "react";
+import { loadTrackedApps, type TrackedAppSummary } from "../../lib/translationService";
 import { IconPlus } from "./icons";
 
 /**
- * "Your apps" picker for the AI-Studio flows. Pulls real tracked Apps from the
- * shared API; degrades gracefully to the describe-new path when the API is down
- * or empty. Selecting an App or "new app" is mutually exclusive.
+ * "Your tracked apps" picker for the AI-Studio flows. Reads the apps tracked on
+ * the App Tracking page (localStorage) — the same source as the Translation
+ * surface and what appkittie shows here. The Search / Paste-URL finder is how
+ * you reach any other app, so this never hits the heavy /apps catalog.
  */
 export function AppPicker({
   selectedId,
@@ -16,21 +16,10 @@ export function AppPicker({
 }: {
   selectedId: string | null;
   newMode: boolean;
-  onSelectApp: (app: AppListItem) => void;
+  onSelectApp: (app: TrackedAppSummary) => void;
   onNewMode: () => void;
 }) {
-  const [apps, setApps] = useState<AppListItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    const ctrl = new AbortController();
-    listApps({ sortBy: "revenue", sortOrder: "desc", limit: 24 }, ctrl.signal)
-      .then((res) => setApps(res.data))
-      .catch(() => setFailed(true))
-      .finally(() => setLoading(false));
-    return () => ctrl.abort();
-  }, []);
+  const [apps] = useState<TrackedAppSummary[]>(() => loadTrackedApps());
 
   return (
     <div>
@@ -39,27 +28,11 @@ export function AppPicker({
         <span>Describe a new / unreleased app</span>
       </button>
 
-      {loading ? (
-        <div className="studio-applist">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div className="studio-appitem" key={i} style={{ pointerEvents: "none" }}>
-              <div className="app-icon skel skel-circ" />
-              <div style={{ flex: 1 }}>
-                <div className="skel" style={{ height: 11, width: "70%", marginBottom: 5 }} />
-                <div className="skel" style={{ height: 9, width: "45%" }} />
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : apps.length === 0 ? (
+      {apps.length === 0 ? (
         <div className="studio-empty bare">
-          <div className="t" style={{ fontSize: 12.5 }}>
-            {failed ? "App list unavailable" : "No tracked apps yet"}
-          </div>
+          <div className="t" style={{ fontSize: 12.5 }}>No tracked apps</div>
           <div className="s" style={{ fontSize: 11.5 }}>
-            {failed
-              ? "Start the API server to pick a tracked app — or describe a new app above."
-              : "Describe a new app above to generate from scratch."}
+            Add apps in App Tracking to quickly generate screenshots — or search the store above.
           </div>
         </div>
       ) : (
@@ -77,7 +50,7 @@ export function AppPicker({
               )}
               <div style={{ minWidth: 0 }}>
                 <div className="name">{a.title}</div>
-                <div className="sub">{a.developer}</div>
+                <div className="sub">{a.developer}{a.category ? ` · ${a.category}` : ""}</div>
               </div>
             </button>
           ))}

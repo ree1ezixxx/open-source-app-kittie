@@ -68,6 +68,7 @@ function buildPalette(theme: Theme, design: DesignSpec, inverted: boolean): Pale
     base2: shade(base, inverted ? 0.05 : -0.03),
     accent: design.accent,
     brand: design.brand,
+    tint: design.tint,
     fg: inverted ? theme.fgAlt : theme.fg,
     muted: theme.muted,
   };
@@ -94,12 +95,14 @@ export function SlideCanvas({
   device,
   design,
   appName,
+  appIcon,
 }: {
   slide: Slide;
   theme: Theme;
   device: Device;
   design: DesignSpec;
   appName: string;
+  appIcon?: string | null;
 }) {
   const { w, h } = CANVAS[device];
   const pal = buildPalette(theme, design, slide.inverted);
@@ -142,7 +145,15 @@ export function SlideCanvas({
             zIndex: 6,
           }}
         >
-          <span style={{ width: w * 0.028, height: w * 0.028, borderRadius: w * 0.008, background: pal.accent, display: "inline-block" }} />
+          {appIcon ? (
+            <img
+              src={appIcon}
+              alt=""
+              style={{ width: w * 0.05, height: w * 0.05, borderRadius: w * 0.012, objectFit: "cover", display: "inline-block" }}
+            />
+          ) : (
+            <span style={{ width: w * 0.028, height: w * 0.028, borderRadius: w * 0.008, background: pal.accent, display: "inline-block" }} />
+          )}
           <span style={{ fontFamily: fontFamily(design.font), fontWeight: 700, fontSize: w * 0.033, color: pal.fg, letterSpacing: -w * 0.0004 }}>
             {appName}
           </span>
@@ -174,8 +185,8 @@ export function SlideCanvas({
               fontWeight: 700,
               letterSpacing: labelSize * 0.12,
               textTransform: "uppercase",
-              color: readableOn(pal.accent),
-              background: pal.accent,
+              color: readableOn(pal.tint),
+              background: pal.tint,
               padding: `${labelSize * 0.46}px ${labelSize * 0.95}px`,
               borderRadius: 999,
               marginBottom: headlineSize * 0.24,

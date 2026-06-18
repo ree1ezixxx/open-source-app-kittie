@@ -11,7 +11,7 @@ import { IconClose } from "../../icons";
 export function ScreenshotUploader({
   images,
   onChange,
-  max = 8,
+  max = 10,
 }: {
   images: UploadedImage[];
   onChange: (next: UploadedImage[]) => void;

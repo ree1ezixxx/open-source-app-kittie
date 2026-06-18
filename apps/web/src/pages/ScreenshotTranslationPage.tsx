@@ -2,6 +2,7 @@ import { useMemo, useState, type CSSProperties } from "react";
 import "../styles/aistudio.css";
 import type { UploadedImage } from "../lib/aiService";
 import {
+  POPULAR_COUNTRY_CODES,
   TRANSLATION_COUNTRIES,
   loadTrackedApps,
   loadTranslationHistory,
@@ -11,11 +12,13 @@ import {
   type TranslationResult,
 } from "../lib/translationService";
 import { StudioHeader } from "../components/aistudio/StudioHeader";
+import { AppFinder } from "../components/aistudio/AppFinder";
+import { importStoreScreenshots, type StoreApp } from "../lib/api/appFinder";
 import { ScreenshotUploader } from "../components/aistudio/ScreenshotUploader";
 import { StepFlow } from "../components/aistudio/StepFlow";
 import { StudioEmptyState } from "../components/aistudio/StudioEmptyState";
 import { timeAgo } from "../components/aistudio/util";
-import { IconGlobe, IconInfo } from "../icons";
+import { IconGlobe, IconInfo, IconSearch } from "../icons";
 import { IconCheck, IconPlus, IconUpload } from "../components/aistudio/icons";
 
 const STEPS = ["Select app", "Upload screenshots", "Select countries"];
@@ -38,6 +41,9 @@ export function ScreenshotTranslationPage() {
   const [manualMode, setManualMode] = useState(false);
   const [images, setImages] = useState<UploadedImage[]>([]);
   const [countries, setCountries] = useState<string[]>([]);
+  const [countrySearch, setCountrySearch] = useState("");
+  const [foundAppName, setFoundAppName] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const [history, setHistory] = useState<TranslationResult[]>(() => loadTranslationHistory());
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -57,6 +63,7 @@ export function ScreenshotTranslationPage() {
     setImages([]);
     setCountries([]);
     setActiveId(null);
+    setFoundAppName(null);
   }
 
   function pickApp(app: TrackedAppSummary) {
@@ -71,8 +78,46 @@ export function ScreenshotTranslationPage() {
     setView("build");
   }
 
+  // Search/Paste-URL pulled a real listing — import its store screenshots as
+  // source frames (mirrors truth's "Find App Screenshots").
+  async function onFindApp(app: StoreApp) {
+    setManualMode(true);
+    setSelectedAppId(null);
+    setView("build");
+    setFoundAppName(app.title);
+    if (app.screenshotUrls.length > 0) {
+      setImporting(true);
+      try {
+        const frames = await importStoreScreenshots(app, 10);
+        if (frames.length) setImages(frames);
+      } finally {
+        setImporting(false);
+      }
+    }
+  }
+
   function toggleCountry(code: string) {
     setCountries((prev) => (prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]));
+  }
+
+  const filteredCountries = useMemo(() => {
+    const q = countrySearch.trim().toLowerCase();
+    if (!q) return TRANSLATION_COUNTRIES;
+    return TRANSLATION_COUNTRIES.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        c.language.toLowerCase().includes(q) ||
+        c.code.toLowerCase().includes(q),
+    );
+  }, [countrySearch]);
+
+  // Mirrors truth's "Select 3" ↔ "Deselect all" toggle on the popular markets.
+  const popularSelected =
+    countries.length > 0 && POPULAR_COUNTRY_CODES.every((c) => countries.includes(c));
+
+  function quickSelect() {
+    if (popularSelected) setCountries([]);
+    else setCountries([...new Set([...countries, ...POPULAR_COUNTRY_CODES])]);
   }
 
   async function translate() {
@@ -81,7 +126,7 @@ export function ScreenshotTranslationPage() {
     try {
       const result = await translationService.translateScreenshots({
         appId: selectedApp?.id ?? null,
-        appName: selectedApp?.title ?? "Manual upload",
+        appName: selectedApp?.title ?? foundAppName ?? "Manual upload",
         images,
         countries,
       });
@@ -292,49 +337,87 @@ export function ScreenshotTranslationPage() {
                       </div>
                     )}
 
-                    {/* Step 2 — upload */}
+                    {/* Step 2 — find or upload source screenshots */}
                     <div className="studio-block">
                       <div className="studio-block-head">
-                        <div className="studio-block-title">2 · Upload screenshots</div>
-                        <div className="studio-block-hint">The frames to localize — PNG or JPG</div>
+                        <div className="studio-block-title">2 · Source screenshots</div>
+                        <div className="studio-block-hint">Search a store listing, paste a URL, or upload — PNG or JPG</div>
                       </div>
+                      <AppFinder onPick={onFindApp} busy={importing} />
+                      {importing && (
+                        <div className="app-finder-importing">
+                          <span className="studio-spinner" /> Importing store screenshots…
+                        </div>
+                      )}
                       <ScreenshotUploader images={images} onChange={setImages} />
                     </div>
 
-                    {/* Step 3 — countries + translate */}
-                    <div className="studio-block" style={{ opacity: images.length ? 1 : 0.5, pointerEvents: images.length ? "auto" : "none" }}>
+                    {/* Step 3 — countries + translate (selectable anytime, like truth) */}
+                    <div className="studio-block">
                       <div className="studio-block-head">
-                        <div className="studio-block-title">3 · Select countries</div>
+                        <div className="studio-block-title">3 · Target countries</div>
                         <div className="studio-block-hint">
-                          {countries.length > 0 ? `${countries.length} selected` : "Choose the markets to localize for"}
+                          {countries.length > 0
+                            ? `${countries.length} selected`
+                            : "Choose the App Store languages to generate translated sets for"}
                         </div>
                       </div>
+
+                      <div className="studio-country-toolbar">
+                        <div className="search" style={{ flex: 1, minWidth: 0 }}>
+                          <IconSearch />
+                          <input
+                            value={countrySearch}
+                            onChange={(e) => setCountrySearch(e.target.value)}
+                            placeholder="Search countries or languages…"
+                            spellCheck={false}
+                          />
+                        </div>
+                        <button className="btn" onClick={quickSelect} style={{ height: 34, whiteSpace: "nowrap" }}>
+                          {popularSelected ? "Deselect all" : `Select ${POPULAR_COUNTRY_CODES.length}`}
+                        </button>
+                      </div>
+
                       <div className="studio-field">
-                        <div className="studio-chips">
-                          {TRANSLATION_COUNTRIES.map((c) => {
-                            const on = countries.includes(c.code);
-                            return (
-                              <button
-                                key={c.code}
-                                className={`studio-chip${on ? " on" : ""}`}
-                                onClick={() => toggleCountry(c.code)}
-                                title={c.language}
-                              >
-                                <span aria-hidden>{c.flag}</span> {c.name}
-                                {on && <IconCheck style={{ width: 12, height: 12 }} />}
-                              </button>
-                            );
-                          })}
+                        <div className="studio-chips studio-country-list">
+                          {filteredCountries.length === 0 ? (
+                            <div className="studio-block-hint" style={{ padding: "6px 2px" }}>
+                              No countries match “{countrySearch}”.
+                            </div>
+                          ) : (
+                            filteredCountries.map((c) => {
+                              const on = countries.includes(c.code);
+                              return (
+                                <button
+                                  key={c.code}
+                                  className={`studio-chip${on ? " on" : ""}`}
+                                  onClick={() => toggleCountry(c.code)}
+                                  title={`${c.name} · ${c.language}`}
+                                >
+                                  <span aria-hidden>{c.flag}</span> {c.name}
+                                  <span className="studio-chip-code">{c.code}</span>
+                                  {on && <IconCheck style={{ width: 12, height: 12 }} />}
+                                </button>
+                              );
+                            })
+                          )}
                         </div>
                       </div>
-                      <button className="btn btn-accent" disabled={!ready} onClick={translate} style={{ height: 38 }}>
-                        <IconGlobe style={{ width: 15, height: 15 }} />
-                        {translating
-                          ? "Translating…"
-                          : countries.length > 0
-                            ? `Translate to ${countries.length} ${countries.length === 1 ? "language" : "languages"}`
-                            : "Translate"}
-                      </button>
+
+                      <div className="studio-ready">
+                        <span className="studio-ready-summary">
+                          {images.length} {images.length === 1 ? "screenshot" : "screenshots"} ·{" "}
+                          {countries.length} {countries.length === 1 ? "country" : "countries"}
+                        </span>
+                        <button className="btn btn-accent" disabled={!ready} onClick={translate} style={{ height: 38 }}>
+                          <IconGlobe style={{ width: 15, height: 15 }} />
+                          {translating
+                            ? "Translating…"
+                            : countries.length > 0
+                              ? `Translate to ${countries.length} ${countries.length === 1 ? "language" : "languages"}`
+                              : "Translate Screenshots"}
+                        </button>
+                      </div>
                     </div>
 
                     {translating && (
@@ -353,8 +436,8 @@ export function ScreenshotTranslationPage() {
                     <div className="notice">
                       <IconInfo />
                       <span>
-                        <strong>Mock translation layer</strong> — results tag your frames per country. A real OCR +
-                        translate backend swaps in behind the translationService contract without touching this page.
+                        <strong>Live translation</strong> — Gemini reads each frame's marketing text and translates it
+                        into every target language, shown under the source frame. Frames stay untouched.
                       </span>
                     </div>
                   </>

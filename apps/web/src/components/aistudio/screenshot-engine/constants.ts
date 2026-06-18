@@ -107,6 +107,26 @@ export const THEMES: Record<string, Theme> = {
     accent: "#B8794A",
     muted: "#65736B",
   },
+  "midnight-pro": {
+    id: "midnight-pro",
+    name: "Midnight Pro",
+    bg: "#0B1220",
+    bgAlt: "#F1F5F9",
+    fg: "#F1F5F9",
+    fgAlt: "#0B1220",
+    accent: "#5B9CFF",
+    muted: "#94A3B8",
+  },
+  "ivory-elegant": {
+    id: "ivory-elegant",
+    name: "Ivory Elegant",
+    bg: "#FAF6EF",
+    bgAlt: "#2A2622",
+    fg: "#2A2622",
+    fgAlt: "#FAF6EF",
+    accent: "#9A7B4F",
+    muted: "#8A7E70",
+  },
 };
 
 export function themeById(themeId: string | undefined): Theme {
@@ -134,13 +154,17 @@ export function displayFamily(id: FontId): string {
   return (FONTS[id] ?? FONTS.grotesk).display;
 }
 
-// ---------- Background styles (for the picker) ----------
+// ---------- Background styles (for the picker) — mirrors appkittie's 9 ----------
 export const BACKGROUNDS: { value: BackgroundStyle; label: string }[] = [
-  { value: "mesh", label: "Mesh" },
+  { value: "minimal", label: "Minimal" },
+  { value: "mesh", label: "Mesh Gradient" },
+  { value: "glass", label: "Glass" },
+  { value: "spotlight", label: "Spotlight" },
+  { value: "layered", label: "Layered" },
+  { value: "solid", label: "Solid Color" },
   { value: "gradient", label: "Gradient" },
-  { value: "duotone", label: "Duotone" },
-  { value: "glow", label: "Glow" },
-  { value: "solid", label: "Solid" },
+  { value: "pattern", label: "Pattern" },
+  { value: "blurred", label: "Blurred" },
 ];
 
 // ---------- Flow strategies (for the picker) ----------
