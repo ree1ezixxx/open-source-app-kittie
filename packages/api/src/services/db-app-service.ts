@@ -4,9 +4,12 @@ import {
   appsWithAppleAds,
   appsWithCreators,
   countApps,
+  countAppIdsByText,
   getAppRowById,
   getSnapshotContext,
   iaps,
+  searchAppIds,
+  toFtsMatch,
   listHistoricals,
   loadAppRelations,
   metaAds,
@@ -477,8 +480,21 @@ export async function searchAppsFromDb(params: AppSearchParams): Promise<Paginat
   const maxDate = await latestSnapshotDate();
   if (!maxDate) return { data: [], pagination: { nextCursor: null, totalCount: 0 } };
 
-  const conds = buildConditions(params, maxDate);
-  const [totalCount, ids] = await Promise.all([countMatches(conds, maxDate), selectCandidateIds(conds, params)]);
+  // Free-text search routes through FTS5 (fast, token-prefix) to resolve the candidate
+  // pool; otherwise the pool comes from the SQL filter/sort. matchesSearch then applies
+  // the authoritative substring check + every other filter on the scored pool either way.
+  const search = params.search?.trim();
+  let totalCount: number;
+  let ids: string[];
+  if (search && toFtsMatch(search)) {
+    [totalCount, ids] = await Promise.all([
+      countAppIdsByText(getDb(), search),
+      searchAppIds(getDb(), search, POOL_CAP),
+    ]);
+  } else {
+    const conds = buildConditions(params, maxDate);
+    [totalCount, ids] = await Promise.all([countMatches(conds, maxDate), selectCandidateIds(conds, params)]);
+  }
 
   // Score only the bounded candidate pool, then filter/sort/paginate it exactly as
   // before — matchesSearch finalises the live-growth filters the SQL pool omits.
