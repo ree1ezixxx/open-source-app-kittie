@@ -194,7 +194,9 @@ export function RisingPage({ theme, onToggleTheme }: { theme: Theme; onToggleThe
     countries: activeCountries.length ? activeCountries.join(",") : undefined,
   });
 
-  const activeFilterCount = countries.length + cats.length;
+  // Count/show only markets that actually narrow the query (activeCountries), so a
+  // selected-but-dataless market can't render a filter chip that does nothing.
+  const activeFilterCount = activeCountries.length + cats.length;
 
   const exploreHref = useMemo(() => {
     const sp = writeFilters({
@@ -292,7 +294,7 @@ export function RisingPage({ theme, onToggleTheme }: { theme: Theme; onToggleThe
 
       {activeFilterCount > 0 && (
         <div className="active-filters" style={{ flexBasis: "100%" }}>
-          {countries.map((code) => {
+          {activeCountries.map((code) => {
             const c = COUNTRIES.find((x) => x.code === code)!;
             return (
               <button key={code} className="achip" onClick={() => toggleIn("countries", code)}>
