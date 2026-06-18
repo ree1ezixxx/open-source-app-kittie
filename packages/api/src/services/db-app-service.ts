@@ -6,17 +6,41 @@ import {
   countApps,
   getAppRowById,
   getSnapshotContext,
+  iaps,
   listHistoricals,
-  listSnapshotContexts,
   loadAppRelations,
+  metaAds,
   parseJsonArray,
   updateAppListingFacts,
+  type App,
+  type AppSnapshot,
   type SnapshotContext,
 } from "@kittie/db";
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gt,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  like,
+  lte,
+  max,
+  ne,
+  or,
+  sql,
+  type AnyColumn,
+  type SQL,
+} from "drizzle-orm";
 import { lookupAppleApp } from "@kittie/ingest";
 import {
   computeGrowthPct,
   computeGrowthScore,
+  GROWTH_PERIOD_DAYS,
   isFirstMover,
   priorEstimates,
   scoreApp,
@@ -99,44 +123,236 @@ function filterMetaFromContext(ctx: SnapshotContext): ScoredAppRow["meta"] {
   };
 }
 
-async function loadScoredRows(period: GrowthPeriod): Promise<ScoredAppRow[]> {
-  const db = getDb();
-  const [contexts, appleAdApps, creatorApps, rankDeltas] = await Promise.all([
-    listSnapshotContexts(db, period),
-    appsWithAppleAds(db),
-    appsWithCreators(db),
-    getRankDeltas(),
-  ]);
-
-  return contexts.map((ctx) => {
-    const meta = filterMetaFromContext(ctx);
-    meta.hasAppleAds = appleAdApps.has(ctx.app.id);
-    meta.hasCreators = creatorApps.has(ctx.app.id);
-    return {
-      item: listItemFromContext(ctx, period, rankDeltas.get(ctx.app.id) ?? null),
-      meta,
-    };
-  });
-}
-
-// Module-level cache of scored rows, keyed by growth period. Resets on process
-// reload (tsx watch) or via invalidateAppReadCaches after snapshots-daily.
-let cachedRows: ScoredAppRow[] | null = null;
-let cachePeriod: GrowthPeriod | null = null;
-
 /** Drop in-memory list/sparkline/rank caches so Explore picks up new snapshot days. */
 export function invalidateAppReadCaches(): void {
-  cachedRows = null;
-  cachePeriod = null;
-  cachedSparklines = null;
-  cachedRankDeltas = null;
+  cachedMaxDate = undefined;
 }
 
-async function getScoredRows(period: GrowthPeriod): Promise<ScoredAppRow[]> {
-  if (cachedRows && cachePeriod === period) return cachedRows;
-  cachedRows = await loadScoredRows(period);
-  cachePeriod = period;
-  return cachedRows;
+// Upper bound on apps materialized + scored per /apps request. Explore, Highlights
+// and Rising only ever read the top slice of a sort, so we narrow to the top-N
+// candidates in SQL (by the requested metric) and score only those. Scoring all
+// ~1.1M apps in memory — what this path used to do — OOMs the heap.
+const POOL_CAP = 5000;
+
+// Latest snapshot day across the catalog; apps are listed from their row on this
+// day (≈99% of apps have one). Refreshed when snapshots-daily invalidates caches.
+let cachedMaxDate: string | null | undefined;
+async function latestSnapshotDate(): Promise<string | null> {
+  if (cachedMaxDate !== undefined) return cachedMaxDate;
+  const [row] = await getDb().select({ d: max(appSnapshots.snapshotDate) }).from(appSnapshots);
+  const d = row?.d ?? null;
+  cachedMaxDate = d;
+  return d;
+}
+
+function chunk<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+
+function daysBefore(date: string, days: number): string {
+  const d = new Date(`${date}T00:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() - days);
+  return d.toISOString().slice(0, 10);
+}
+function dayGap(later: string, earlier: string): number {
+  return Math.round(
+    (Date.parse(`${later}T00:00:00.000Z`) - Date.parse(`${earlier}T00:00:00.000Z`)) / 86_400_000,
+  );
+}
+/** Prior = last snapshot on/before (latest − periodDays); else oldest before latest. */
+function pickPrior(sorted: AppSnapshot[], latestDate: string, periodDays: number): AppSnapshot | null {
+  const target = daysBefore(latestDate, periodDays);
+  let best: AppSnapshot | null = null;
+  for (const row of sorted) {
+    if (row.snapshotDate <= target) best = row;
+    if (row.snapshotDate > target) break;
+  }
+  if (best) return best;
+  const oldest = sorted[0];
+  return oldest && oldest.snapshotDate < latestDate ? oldest : null;
+}
+
+/**
+ * SQL predicates for the apps ⋈ latest-snapshot query. We translate the *selective*
+ * column filters (search / category / source / numeric ranges / dates / price) so the
+ * LIMIT narrows to real matches; the live-growth filters (growthType, min/maxGrowth)
+ * and the empty ad/creator joins stay in matchesSearch on the materialized pool. The
+ * result set is always a SUPERSET of matchesSearch, so the returned rows stay exact.
+ */
+function buildConditions(params: AppSearchParams, maxDate: string): SQL[] {
+  const conds: SQL[] = [eq(appSnapshots.snapshotDate, maxDate)];
+
+  if (params.search) {
+    const q = `%${params.search.toLowerCase()}%`;
+    const fields = params.textSearchFields
+      ? params.textSearchFields.split(",").map((f) => f.trim().toLowerCase())
+      : ["title", "developer", "description"];
+    const ors: SQL[] = [];
+    if (fields.includes("title")) ors.push(like(sql`lower(${apps.title})`, q));
+    if (fields.includes("developer")) ors.push(like(sql`lower(${apps.developer})`, q));
+    if (fields.includes("description")) ors.push(like(sql`lower(${apps.description})`, q));
+    if (ors.length) conds.push(or(...ors)!);
+  }
+  if (params.categories) {
+    const cats = params.categories.split(",").map((c) => c.trim().toLowerCase()).filter(Boolean);
+    if (cats.length) conds.push(inArray(sql`lower(${apps.category})`, cats));
+  }
+  if (params.source) conds.push(eq(apps.store, params.source));
+  if (params.excludedSource) conds.push(ne(apps.store, params.excludedSource));
+  if (params.developer) conds.push(like(sql`lower(${apps.developer})`, `%${params.developer.toLowerCase()}%`));
+
+  if (params.minRating != null) conds.push(gte(sql`coalesce(${appSnapshots.rating}, 0)`, params.minRating));
+  if (params.maxRating != null) conds.push(lte(sql`coalesce(${appSnapshots.rating}, 0)`, params.maxRating));
+  if (params.minReviews != null) conds.push(gte(appSnapshots.reviewCount, params.minReviews));
+  if (params.maxReviews != null) conds.push(lte(appSnapshots.reviewCount, params.maxReviews));
+  if (params.minDownloads != null) conds.push(gte(sql`coalesce(${appSnapshots.downloadsEstimate}, 0)`, params.minDownloads));
+  if (params.maxDownloads != null) conds.push(lte(sql`coalesce(${appSnapshots.downloadsEstimate}, 0)`, params.maxDownloads));
+  if (params.minRevenue != null) conds.push(gte(sql`coalesce(${appSnapshots.revenueEstimate}, 0)`, params.minRevenue));
+  if (params.maxRevenue != null) conds.push(lte(sql`coalesce(${appSnapshots.revenueEstimate}, 0)`, params.maxRevenue));
+
+  if (params.releasedAfter != null) conds.push(gte(apps.releasedAt, new Date(params.releasedAfter * 1000)));
+  if (params.updatedAfter != null) conds.push(gte(apps.updatedAt, new Date(params.updatedAfter * 1000)));
+
+  if (params.priceType === "free") conds.push(or(isNull(apps.price), lte(apps.price, 0))!);
+  if (params.priceType === "paid") conds.push(and(isNotNull(apps.price), gt(apps.price, 0))!);
+
+  if (params.hasEmails === true) conds.push(and(isNotNull(apps.supportEmail), ne(apps.supportEmail, ""))!);
+  if (params.hasWebsite === true) conds.push(and(isNotNull(apps.websiteUrl), ne(apps.websiteUrl, ""))!);
+
+  return conds;
+}
+
+/**
+ * Sort columns whose STORED value is authoritative, so the candidate pool can be the
+ * true top-N in SQL. revenue/downloads/growth/trending/rankDelta are computed live in
+ * scoring (their snapshot columns are unpopulated for ~all apps), so they have no SQL
+ * column — selectCandidateIds proxies them by review count (busiest apps ≈ where the
+ * top earners / movers are) and sortApps re-orders the pool by the exact live value.
+ */
+function sqlSortColumn(sortBy: AppSearchParams["sortBy"]): AnyColumn | null {
+  switch (sortBy) {
+    case "reviews": return appSnapshots.reviewCount;
+    case "rating": return appSnapshots.rating;
+    case "updated": return apps.updatedAt;
+    case "released":
+    case "newest": return apps.releasedAt;
+    default: return null;
+  }
+}
+
+async function countMatches(conds: SQL[]): Promise<number> {
+  const [row] = await getDb()
+    .select({ c: count() })
+    .from(apps)
+    .innerJoin(appSnapshots, eq(appSnapshots.appId, apps.id))
+    .where(and(...conds));
+  return row?.c ?? 0;
+}
+
+/** Top-N candidate app ids, narrowed + ordered in SQL so memory stays bounded. For
+ *  live-growth sorts (no SQL column) we proxy by review count — the busiest apps are
+ *  where the movers are — then re-sort the pool exactly in memory. */
+async function selectCandidateIds(conds: SQL[], params: AppSearchParams): Promise<string[]> {
+  const col = sqlSortColumn(params.sortBy) ?? appSnapshots.reviewCount;
+  const dir = (params.sortOrder ?? "desc") === "asc" ? asc : desc;
+  // No `col IS NULL` term: SQLite already sorts NULLs to the bottom of a DESC scan,
+  // and sortApps applies the authoritative null-sink to the pool afterwards. Keeping
+  // the order a plain column lets a (snapshot_date, col) index serve it without a sort.
+  const rows = await getDb()
+    .select({ id: apps.id })
+    .from(apps)
+    .innerJoin(appSnapshots, eq(appSnapshots.appId, apps.id))
+    .where(and(...conds))
+    .orderBy(dir(col), apps.id)
+    .limit(POOL_CAP);
+  return rows.map((r) => r.id);
+}
+
+/** Build scored rows for a bounded id set — the same assembly the old bulk loader did
+ *  for the whole catalog, but scoped to the page's candidate pool. */
+async function buildScoredRowsForIds(ids: string[], period: GrowthPeriod): Promise<ScoredAppRow[]> {
+  if (!ids.length) return [];
+  const db = getDb();
+  const periodDays = GROWTH_PERIOD_DAYS[period] ?? 7;
+
+  const appRows: App[] = [];
+  const snapRows: AppSnapshot[] = [];
+  const iapRows: { appId: string }[] = [];
+  const metaRows: { appId: string; firstSeenAt: Date | null }[] = [];
+  for (const part of chunk(ids, 400)) {
+    const [a, s, i, m] = await Promise.all([
+      db.select().from(apps).where(inArray(apps.id, part)),
+      db.select().from(appSnapshots).where(inArray(appSnapshots.appId, part)).orderBy(appSnapshots.appId, appSnapshots.snapshotDate),
+      db.select({ appId: iaps.appId }).from(iaps).where(inArray(iaps.appId, part)),
+      db.select({ appId: metaAds.appId, firstSeenAt: metaAds.firstSeenAt }).from(metaAds).where(inArray(metaAds.appId, part)),
+    ]);
+    appRows.push(...a);
+    snapRows.push(...s);
+    iapRows.push(...i);
+    metaRows.push(...m);
+  }
+
+  const snapsByApp = new Map<string, AppSnapshot[]>();
+  for (const snap of snapRows) {
+    const list = snapsByApp.get(snap.appId);
+    if (list) list.push(snap);
+    else snapsByApp.set(snap.appId, [snap]);
+  }
+  const iapCountByApp = new Map<string, number>();
+  for (const { appId } of iapRows) iapCountByApp.set(appId, (iapCountByApp.get(appId) ?? 0) + 1);
+  const metaByApp = new Map<string, typeof metaRows>();
+  for (const ad of metaRows) {
+    const list = metaByApp.get(ad.appId);
+    if (list) list.push(ad);
+    else metaByApp.set(ad.appId, [ad]);
+  }
+
+  // Global per-category app counts for just the categories in the pool (scoring signal).
+  const cats = [...new Set(appRows.map((a) => a.category).filter((c): c is string => !!c))];
+  const categoryCount = new Map<string, number>();
+  for (const part of chunk(cats, 400)) {
+    const grouped = await db
+      .select({ category: apps.category, c: count() })
+      .from(apps)
+      .where(inArray(apps.category, part))
+      .groupBy(apps.category);
+    for (const r of grouped) if (r.category) categoryCount.set(r.category, r.c);
+  }
+
+  const [appleAdApps, creatorApps, rankDeltas] = await Promise.all([
+    appsWithAppleAds(db),
+    appsWithCreators(db),
+    getRankDeltasFor(ids),
+  ]);
+
+  const rows: ScoredAppRow[] = [];
+  for (const app of appRows) {
+    const snaps = snapsByApp.get(app.id);
+    const latest = snaps?.at(-1);
+    if (!latest) continue;
+    const prior = pickPrior(snaps!, latest.snapshotDate, periodDays);
+    const metaAdsForApp = metaByApp.get(app.id) ?? [];
+    const metaAdCountPrior = prior
+      ? metaAdsForApp.filter((ad) => ad.firstSeenAt && ad.firstSeenAt <= prior.createdAt).length
+      : null;
+    const ctx: SnapshotContext = {
+      app,
+      latest,
+      prior,
+      priorDays: prior ? dayGap(latest.snapshotDate, prior.snapshotDate) : null,
+      iapCount: iapCountByApp.get(app.id) ?? 0,
+      metaAdCount: metaAdsForApp.length,
+      metaAdCountPrior,
+      categoryAppCount: app.category ? (categoryCount.get(app.category) ?? 0) : 0,
+    };
+    const meta = filterMetaFromContext(ctx);
+    meta.hasAppleAds = appleAdApps.has(app.id);
+    meta.hasCreators = creatorApps.has(app.id);
+    rows.push({ item: listItemFromContext(ctx, period, rankDeltas.get(app.id) ?? null), meta });
+  }
+  return rows;
 }
 
 export async function dbHasApps(): Promise<boolean> {
@@ -164,77 +380,81 @@ export async function listCategoryFacetsFromDb(): Promise<CategoryFacet[]> {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-// Rank-delta cache — appId → signed chart-rank movement between an app's two
-// most recent *ranked* snapshot days (priorRank − latestRank; positive =
-// climbed). Built from ONE grouped query (same no-N+1 / process-lifetime cache
-// semantics as getSparklines). Apps without two ranked snapshots are absent →
-// the caller defaults them to null. Powers the Highlights "1D" column.
-let cachedRankDeltas: Map<string, number> | null = null;
+// Signed chart-rank movement (priorRank − latestRank; positive = climbed) for the
+// given apps, from their two most recent *ranked* snapshots. Scoped to the id set
+// (the unique (app_id, snapshot_date) index makes WHERE app_id IN (…) a seek) so it
+// never scans the whole 3M-row snapshot table. Apps without two ranked snapshots are
+// absent → the caller defaults them to null. Powers the Highlights "1D" column.
+async function getRankDeltasFor(ids: string[]): Promise<Map<string, number>> {
+  const map = new Map<string, number>();
+  if (!ids.length) return map;
+  const db = getDb();
+  for (const part of chunk(ids, 400)) {
+    const rows = await db
+      .select({ appId: appSnapshots.appId, chartRank: appSnapshots.chartRank })
+      .from(appSnapshots)
+      .where(inArray(appSnapshots.appId, part))
+      .orderBy(appSnapshots.appId, appSnapshots.snapshotDate);
 
-async function getRankDeltas(): Promise<Map<string, number>> {
-  if (cachedRankDeltas) return cachedRankDeltas;
-  const rows = await getDb()
-    .select({ appId: appSnapshots.appId, chartRank: appSnapshots.chartRank })
-    .from(appSnapshots)
-    .orderBy(appSnapshots.appId, appSnapshots.snapshotDate);
-
-  // Keep the last two non-null chart ranks per app (oldest→newest within app).
-  const lastTwo = new Map<string, number[]>();
-  for (const row of rows) {
-    if (row.chartRank == null) continue;
-    const list = lastTwo.get(row.appId);
-    if (!list) {
-      lastTwo.set(row.appId, [row.chartRank]);
-    } else {
-      list.push(row.chartRank);
-      if (list.length > 2) list.shift();
+    // Keep the last two non-null chart ranks per app (oldest→newest within app).
+    const lastTwo = new Map<string, number[]>();
+    for (const row of rows) {
+      if (row.chartRank == null) continue;
+      const list = lastTwo.get(row.appId);
+      if (!list) lastTwo.set(row.appId, [row.chartRank]);
+      else {
+        list.push(row.chartRank);
+        if (list.length > 2) list.shift();
+      }
+    }
+    for (const [appId, ranks] of lastTwo) {
+      if (ranks.length === 2) map.set(appId, ranks[0]! - ranks[1]!); // prior − latest
     }
   }
-
-  const map = new Map<string, number>();
-  for (const [appId, ranks] of lastTwo) {
-    if (ranks.length === 2) map.set(appId, ranks[0]! - ranks[1]!); // prior − latest
-  }
-  cachedRankDeltas = map;
   return map;
 }
 
-// Sparkline cache — appId → last ≤7 daily reviewCount values (oldest→newest).
-// Built from ONE grouped query over app_snapshots (no per-app N+1), with the
-// same process-lifetime cache semantics as cachedRows above: page handlers
-// just pick out the ids they're returning.
-let cachedSparklines: Map<string, number[]> | null = null;
-
-async function getSparklines(): Promise<Map<string, number[]>> {
-  if (cachedSparklines) return cachedSparklines;
-  const rows = await getDb()
-    .select({ appId: appSnapshots.appId, reviewCount: appSnapshots.reviewCount })
-    .from(appSnapshots)
-    .orderBy(appSnapshots.appId, appSnapshots.snapshotDate);
-
+// Last ≤7 daily reviewCount values per app (oldest→newest), scoped to the returned
+// page's ids — the mini review-count trend rendered per row.
+async function getSparklinesFor(ids: string[]): Promise<Map<string, number[]>> {
   const map = new Map<string, number[]>();
-  for (const row of rows) {
-    const list = map.get(row.appId);
-    if (!list) {
-      map.set(row.appId, [row.reviewCount]);
-    } else {
-      list.push(row.reviewCount);
-      if (list.length > 7) list.shift();
+  if (!ids.length) return map;
+  const db = getDb();
+  for (const part of chunk(ids, 400)) {
+    const rows = await db
+      .select({ appId: appSnapshots.appId, reviewCount: appSnapshots.reviewCount })
+      .from(appSnapshots)
+      .where(inArray(appSnapshots.appId, part))
+      .orderBy(appSnapshots.appId, appSnapshots.snapshotDate);
+    for (const row of rows) {
+      const list = map.get(row.appId);
+      if (!list) map.set(row.appId, [row.reviewCount]);
+      else {
+        list.push(row.reviewCount);
+        if (list.length > 7) list.shift();
+      }
     }
   }
-  cachedSparklines = map;
   return map;
 }
 
 export async function searchAppsFromDb(params: AppSearchParams): Promise<PaginatedResponse<AppListItem>> {
   const period = params.growthPeriod ?? "7d";
-  const rows = await getScoredRows(period);
+  const maxDate = await latestSnapshotDate();
+  if (!maxDate) return { data: [], pagination: { nextCursor: null, totalCount: 0 } };
+
+  const conds = buildConditions(params, maxDate);
+  const [totalCount, ids] = await Promise.all([countMatches(conds), selectCandidateIds(conds, params)]);
+
+  // Score only the bounded candidate pool, then filter/sort/paginate it exactly as
+  // before — matchesSearch finalises the live-growth filters the SQL pool omits.
+  const rows = await buildScoredRowsForIds(ids, period);
   const filtered = rows.filter((row) => matchesSearch(row, params));
   const sorted = sortApps(filtered, params);
-  const { data, nextCursor, totalCount } = paginateApps(sorted, params);
+  const { data, nextCursor } = paginateApps(sorted, params);
 
   // Attach mini review-count trend per returned row only.
-  const sparklines = await getSparklines();
+  const sparklines = await getSparklinesFor(data.map((d) => d.id));
   const withSparkline = data.map((item) => ({
     ...item,
     sparkline: sparklines.get(item.id) ?? [],
@@ -342,7 +562,7 @@ export async function getAppByIdFromDb(id: string): Promise<AppDetail | null> {
   const ctx = await getSnapshotContext(db, id, "7d");
   if (!ctx) return null;
 
-  const rankDeltas = await getRankDeltas();
+  const rankDeltas = await getRankDeltasFor([id]);
   const list = listItemFromContext(ctx, "7d", rankDeltas.get(id) ?? null);
   const relations = await loadAppRelations(db, id);
   const mapped = mapRelations(
