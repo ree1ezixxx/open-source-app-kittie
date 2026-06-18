@@ -23,6 +23,15 @@ pnpm ingest:score     # Re-score latest snapshots (revenue, growth)
 pnpm ingest:reviews   # Paginate store reviews into the reviews table
 ```
 
+**Standalone bulk snapshot** (when the API was offline overnight — same job as `snapshots-daily` sweep):
+
+```bash
+DATABASE_URL=file:/path/to/data/kittie.db pnpm --filter @kittie/ingest snapshot:bulk
+pnpm ingest:score   # score pass after snapshot
+```
+
+When the API is running, `snapshots-daily` runs this in-process every 24h and busts read caches automatically.
+
 ### Daily cadence
 
 Run once per calendar day (order matters):
@@ -32,7 +41,7 @@ Run once per calendar day (order matters):
 # or: pnpm ingest:snapshot && pnpm ingest:score
 ```
 
-Same-day reruns overwrite that date's row — they do not add history. Restart the API after scoring if it is running (`db-app-service` caches scored rows in memory).
+Same-day reruns overwrite that date's row — they do not add history. With the API up, `snapshots-daily` invalidates read caches after scoring; standalone runs need a running API restart or the next request rebuilds from DB on cache miss.
 
 ## Sources (P0)
 

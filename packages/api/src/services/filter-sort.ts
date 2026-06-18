@@ -9,6 +9,7 @@ export interface AppFilterMeta {
   price: number | null;
   /** Supported ISO language codes, pre-lowercased ("en", "fr", …). */
   languages: string[];
+  description: string | null;
 }
 
 export interface ScoredAppRow {
@@ -21,8 +22,15 @@ export function matchesSearch(row: ScoredAppRow, params: AppSearchParams): boole
 
   if (params.search) {
     const q = params.search.toLowerCase();
-    const hay = `${item.title} ${item.developer}`.toLowerCase();
-    if (!hay.includes(q)) return false;
+    const fields = params.textSearchFields
+      ? params.textSearchFields.split(",").map((f) => f.trim().toLowerCase()).filter(Boolean)
+      : ["title", "developer", "description"];
+    const hay: Record<string, string> = {
+      title: item.title.toLowerCase(),
+      developer: item.developer.toLowerCase(),
+      description: (row.meta.description ?? "").toLowerCase(),
+    };
+    if (!fields.some((field) => hay[field]?.includes(q))) return false;
   }
 
   if (params.categories) {

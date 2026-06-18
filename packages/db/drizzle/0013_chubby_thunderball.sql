@@ -1,0 +1,1 @@
+CREATE INDEX `snapshots_date_reviews_idx` ON `app_snapshots` (`snapshot_date`,`review_count`);

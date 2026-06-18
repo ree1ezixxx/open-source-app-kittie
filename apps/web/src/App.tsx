@@ -67,6 +67,8 @@ export function App() {
         {/* Reviews & Meta */}
         <Route path="/reviews" element={<Navigate to="/reviews/overview" replace />} />
         <Route path="/dashboard/reviews" element={<Navigate to="/reviews/overview" replace />} />
+        {/* legacy: the feed tab used to be /reviews/reviews — keep old links alive */}
+        <Route path="/reviews/reviews" element={<Navigate to="/reviews/feed" replace />} />
         <Route path="/reviews/:tab" element={<ReviewsPage theme={theme} onToggleTheme={toggleTheme} />} />
         <Route path="/mcp" element={<McpLandingPage theme={theme} onToggleTheme={toggleTheme} />} />
         <Route path="/settings" element={<SettingsPage theme={theme} onToggleTheme={toggleTheme} />} />

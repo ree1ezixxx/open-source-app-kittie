@@ -1,0 +1,45 @@
+---
+description: Cursor-specific agent practices for Open Source App Kittie — stack, runbooks, and conventions live in AGENTS.md
+alwaysApply: true
+---
+
+# Open Source App Kittie (Cursor)
+
+**Canonical project rules:** [`AGENTS.md`](../../AGENTS.md) — mission, stack, package map, ingest runbook, dev guardrails, UI conventions.
+
+**Clone workflow (Claude Code):** [`CLAUDE.md`](../../CLAUDE.md) — AppKittie truth URLs, worktree lanes, coordinator QA.
+
+**Domain glossary:** [`CONTEXT.md`](../../CONTEXT.md) — read once at session start.
+
+## Communication
+
+Ultra compression — say the minimum that conveys the answer.
+
+- **Clear over clever.** Plain language beats jargon, metaphors, and throat-clearing.
+- **No verbosity or filler.** Don't pad to sound smart. No recaps, hedge stacks, or diff narration.
+- **Brevity by default.** Lead with the answer. A few bullets beat an essay. Expand only when asked or the task requires it.
+- **Simplify always.** Refuse unnecessary complexity. Prefer the simplest correct approach; skip theory, option menus, and layers nobody needs.
+
+## Cursor Agent Practices
+
+- **Default model: Composer 2.5.** Do not spawn subagents on Sonnet, Opus, or other models unless the user names one.
+- **Parallel reads.** Batch independent file reads, greps, and shell checks in one turn — don't serialize unnecessarily.
+- **Broad exploration.** Use the explore subagent (or semantic search) for multi-area codebase questions; return summaries, not raw dumps.
+- **Minimal diffs.** Match surrounding code style. Don't refactor unrelated code. Don't add docs or tests the user didn't ask for.
+- **Git hygiene.** Don't commit, push, or amend unless the user asks. Never force-push `main`.
+- **Code references.** When citing existing code, use `startLine:endLine:filepath` fences so the user can jump to the file.
+- **One objective per thread.** If scope creeps, stop and narrow before continuing.
+- **Targeted edits** during iteration — no full-file rewrites unless >60% changes.
+- **No narrating diffs.** State what to verify, then stop.
+
+## Branching (worktrees)
+
+Each Cursor instance works on its own branch + worktree off `main` (e.g. `feat/ingest`, `feat/keywords`, `feat/highlights`). Do not cross-edit another lane's owned paths. Merge via PR when verified.
+
+## Validation before handoff
+
+```bash
+pnpm install && pnpm typecheck
+```
+
+If `data/` is missing: `mkdir -p data && pnpm db:migrate`. Never commit `data/` or `*.db`.

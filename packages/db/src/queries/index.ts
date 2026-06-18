@@ -13,12 +13,14 @@ export {
   appsWithCreators,
   getAppById as getAppRowById,
   listAppIaps,
+  listAppsByIds,
   listFreshSet,
   loadAppRelations,
   updateAppListingFacts,
   reviewCountsByApp,
 } from "./detail.js";
 export { enrichSnapshotScores } from "./scoring.js";
+export { countAppIdsByText, ensureAppsFts, searchAppIds, toFtsMatch } from "./fts.js";
 export {
   findKeyword,
   keywordRowToDifficulty,

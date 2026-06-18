@@ -6,8 +6,22 @@ const boolFromQuery = z
   .optional()
   .transform((v) => (v === "true" || v === true ? true : v === "false" || v === false ? false : undefined));
 
+const textSearchField = z.enum(["title", "developer", "description"]);
+
 const searchParamsSchema = z.object({
   search: z.string().optional(),
+  textSearchFields: z
+    .string()
+    .optional()
+    .transform((raw) => {
+      if (!raw) return undefined;
+      const fields = raw
+        .split(",")
+        .map((f) => f.trim().toLowerCase())
+        .filter(Boolean);
+      const valid = fields.filter((f) => textSearchField.options.includes(f as "title" | "developer" | "description"));
+      return valid.length ? valid.join(",") : undefined;
+    }),
   categories: z.string().optional(),
   excludedCategories: z.string().optional(),
   source: z.enum(["apple", "google"]).optional(),

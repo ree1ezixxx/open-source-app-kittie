@@ -37,6 +37,16 @@ export async function listApps(
   return (await res.json()) as PaginatedResponse<AppListItem>;
 }
 
+/** Category + which stores it appears in — powers the Explore category popover. */
+export type CategoryFacet = { name: string; stores: Store[] };
+
+export async function listCategories(signal?: AbortSignal): Promise<CategoryFacet[]> {
+  const res = await fetch(`${BASE}/apps/categories`, { signal });
+  if (!res.ok) throw new Error(`Failed to load categories (${res.status})`);
+  const body = (await res.json()) as { data: CategoryFacet[] };
+  return body.data;
+}
+
 export async function getApp(id: string, signal?: AbortSignal): Promise<AppDetail> {
   const res = await fetch(`${BASE}/apps/${encodeURIComponent(id)}`, { signal });
   if (!res.ok) throw new Error(`Failed to load app (${res.status})`);

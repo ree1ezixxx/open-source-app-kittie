@@ -15,5 +15,6 @@ pnpm typecheck
 
 ## Docs
 
-- [AGENTS.md](./AGENTS.md) — agent operating rules
+- [AGENTS.md](./AGENTS.md) — canonical agent rules (stack, runbooks, conventions)
+- [.cursor/rules/app-kittie.mdc](./.cursor/rules/app-kittie.mdc) — Cursor-only delta (model, git, exploration)
 - [CONTEXT.md](./CONTEXT.md) — domain glossary

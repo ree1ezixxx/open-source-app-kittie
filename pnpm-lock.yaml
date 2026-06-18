@@ -79,6 +79,9 @@ importers:
       vite:
         specifier: ^6.3.5
         version: 6.4.3(@types/node@22.19.20)(tsx@4.22.4)
+      vitest:
+        specifier: ^4.1.8
+        version: 4.1.8(@types/node@22.19.20)(vite@6.4.3(@types/node@22.19.20)(tsx@4.22.4))
 
   packages/api:
     dependencies:
@@ -106,6 +109,9 @@ importers:
       '@kittie/types':
         specifier: workspace:*
         version: link:../types
+      drizzle-orm:
+        specifier: ^0.44.2
+        version: 0.44.7(@libsql/client@0.17.3)(@types/better-sqlite3@7.6.13)(better-sqlite3@11.10.0)
       fflate:
         specifier: ^0.8.3
         version: 0.8.3
@@ -235,6 +241,9 @@ importers:
       typescript:
         specifier: ^5.8.3
         version: 5.9.3
+      vitest:
+        specifier: ^4.1.8
+        version: 4.1.8(@types/node@22.19.20)(vite@6.4.3(@types/node@22.19.20)(tsx@4.22.4))
 
   packages/types:
     devDependencies:
