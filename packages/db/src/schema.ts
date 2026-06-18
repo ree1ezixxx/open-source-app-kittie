@@ -58,7 +58,10 @@ export const appSnapshots = sqliteTable(
     createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
   },
   (t) => [
-    uniqueIndex("snapshots_app_date_idx").on(t.appId, t.snapshotDate),
+    // One Snapshot per App per day PER MARKET (ADR 0007). chart_country stays
+    // nullable but the upsert always writes a market, so dedup is exact. Existing
+    // rows are all 'US' (one per app/day) → valid under this key, no data rewrite.
+    uniqueIndex("snapshots_app_date_country_idx").on(t.appId, t.snapshotDate, t.chartCountry),
     index("snapshots_growth_idx").on(t.growthScore),
     index("snapshots_date_idx").on(t.snapshotDate),
     // Serves the /apps list: order the latest-day partition by review count
