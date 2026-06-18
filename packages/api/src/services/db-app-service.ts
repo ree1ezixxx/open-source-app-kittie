@@ -181,8 +181,16 @@ function pickPrior(sorted: AppSnapshot[], latestDate: string, periodDays: number
  * and the empty ad/creator joins stay in matchesSearch on the materialized pool. The
  * result set is always a SUPERSET of matchesSearch, so the returned rows stay exact.
  */
-function buildConditions(params: AppSearchParams, maxDate: string): SQL[] {
-  const conds: SQL[] = [eq(appSnapshots.snapshotDate, maxDate)];
+interface AppConditions {
+  /** Predicates on the `apps` table — countable without joining to a snapshot. */
+  appCols: SQL[];
+  /** Predicates on the latest-day snapshot (incl. the date pin) — force the join. */
+  snapCols: SQL[];
+}
+
+function buildConditions(params: AppSearchParams, maxDate: string): AppConditions {
+  const appCols: SQL[] = [];
+  const snapCols: SQL[] = [eq(appSnapshots.snapshotDate, maxDate)];
 
   if (params.search) {
     const q = `%${params.search.toLowerCase()}%`;
@@ -193,35 +201,43 @@ function buildConditions(params: AppSearchParams, maxDate: string): SQL[] {
     if (fields.includes("title")) ors.push(like(sql`lower(${apps.title})`, q));
     if (fields.includes("developer")) ors.push(like(sql`lower(${apps.developer})`, q));
     if (fields.includes("description")) ors.push(like(sql`lower(${apps.description})`, q));
-    if (ors.length) conds.push(or(...ors)!);
+    if (ors.length) appCols.push(or(...ors)!);
   }
   if (params.categories) {
-    const cats = params.categories.split(",").map((c) => c.trim().toLowerCase()).filter(Boolean);
-    if (cats.length) conds.push(inArray(sql`lower(${apps.category})`, cats));
+    // Exact match (not lower()) so apps_category_idx is usable — the UI sources
+    // categories from listCategories (stored casing), so it always sends exact
+    // values. matchesSearch stays case-insensitive as the authoritative pass.
+    const cats = params.categories.split(",").map((c) => c.trim()).filter(Boolean);
+    if (cats.length) appCols.push(inArray(apps.category, cats));
   }
-  if (params.source) conds.push(eq(apps.store, params.source));
-  if (params.excludedSource) conds.push(ne(apps.store, params.excludedSource));
-  if (params.developer) conds.push(like(sql`lower(${apps.developer})`, `%${params.developer.toLowerCase()}%`));
+  if (params.source) appCols.push(eq(apps.store, params.source));
+  if (params.excludedSource) appCols.push(ne(apps.store, params.excludedSource));
+  if (params.developer) appCols.push(like(sql`lower(${apps.developer})`, `%${params.developer.toLowerCase()}%`));
 
-  if (params.minRating != null) conds.push(gte(sql`coalesce(${appSnapshots.rating}, 0)`, params.minRating));
-  if (params.maxRating != null) conds.push(lte(sql`coalesce(${appSnapshots.rating}, 0)`, params.maxRating));
-  if (params.minReviews != null) conds.push(gte(appSnapshots.reviewCount, params.minReviews));
-  if (params.maxReviews != null) conds.push(lte(appSnapshots.reviewCount, params.maxReviews));
-  if (params.minDownloads != null) conds.push(gte(sql`coalesce(${appSnapshots.downloadsEstimate}, 0)`, params.minDownloads));
-  if (params.maxDownloads != null) conds.push(lte(sql`coalesce(${appSnapshots.downloadsEstimate}, 0)`, params.maxDownloads));
-  if (params.minRevenue != null) conds.push(gte(sql`coalesce(${appSnapshots.revenueEstimate}, 0)`, params.minRevenue));
-  if (params.maxRevenue != null) conds.push(lte(sql`coalesce(${appSnapshots.revenueEstimate}, 0)`, params.maxRevenue));
+  if (params.minRating != null) snapCols.push(gte(sql`coalesce(${appSnapshots.rating}, 0)`, params.minRating));
+  if (params.maxRating != null) snapCols.push(lte(sql`coalesce(${appSnapshots.rating}, 0)`, params.maxRating));
+  if (params.minReviews != null) snapCols.push(gte(appSnapshots.reviewCount, params.minReviews));
+  if (params.maxReviews != null) snapCols.push(lte(appSnapshots.reviewCount, params.maxReviews));
+  if (params.minDownloads != null) snapCols.push(gte(sql`coalesce(${appSnapshots.downloadsEstimate}, 0)`, params.minDownloads));
+  if (params.maxDownloads != null) snapCols.push(lte(sql`coalesce(${appSnapshots.downloadsEstimate}, 0)`, params.maxDownloads));
+  if (params.minRevenue != null) snapCols.push(gte(sql`coalesce(${appSnapshots.revenueEstimate}, 0)`, params.minRevenue));
+  if (params.maxRevenue != null) snapCols.push(lte(sql`coalesce(${appSnapshots.revenueEstimate}, 0)`, params.maxRevenue));
 
-  if (params.releasedAfter != null) conds.push(gte(apps.releasedAt, new Date(params.releasedAfter * 1000)));
-  if (params.updatedAfter != null) conds.push(gte(apps.updatedAt, new Date(params.updatedAfter * 1000)));
+  if (params.releasedAfter != null) appCols.push(gte(apps.releasedAt, new Date(params.releasedAfter * 1000)));
+  if (params.updatedAfter != null) appCols.push(gte(apps.updatedAt, new Date(params.updatedAfter * 1000)));
 
-  if (params.priceType === "free") conds.push(or(isNull(apps.price), lte(apps.price, 0))!);
-  if (params.priceType === "paid") conds.push(and(isNotNull(apps.price), gt(apps.price, 0))!);
+  if (params.priceType === "free") appCols.push(or(isNull(apps.price), lte(apps.price, 0))!);
+  if (params.priceType === "paid") appCols.push(and(isNotNull(apps.price), gt(apps.price, 0))!);
 
-  if (params.hasEmails === true) conds.push(and(isNotNull(apps.supportEmail), ne(apps.supportEmail, ""))!);
-  if (params.hasWebsite === true) conds.push(and(isNotNull(apps.websiteUrl), ne(apps.websiteUrl, ""))!);
+  if (params.hasEmails === true) appCols.push(and(isNotNull(apps.supportEmail), ne(apps.supportEmail, ""))!);
+  if (params.hasWebsite === true) appCols.push(and(isNotNull(apps.websiteUrl), ne(apps.websiteUrl, ""))!);
 
-  return conds;
+  return { appCols, snapCols };
+}
+
+/** Flattened predicate list for the joined candidate query. */
+function allConditions(c: AppConditions): SQL[] {
+  return [...c.snapCols, ...c.appCols];
 }
 
 /**
@@ -242,38 +258,47 @@ function sqlSortColumn(sortBy: AppSearchParams["sortBy"]): AnyColumn | null {
   }
 }
 
-async function countMatches(conds: SQL[], maxDate: string): Promise<number> {
-  // Unfiltered (only the latest-day pin) → count off the snapshot_date index and
-  // skip the 1.1M-row join to apps. This is the common Explore/Highlights/Rising load.
-  if (conds.length === 1) {
-    const [row] = await getDb()
-      .select({ c: count() })
-      .from(appSnapshots)
-      .where(eq(appSnapshots.snapshotDate, maxDate));
+async function countMatches(c: AppConditions, maxDate: string): Promise<number> {
+  const db = getDb();
+  // Only snapshot-side filter is the date pin → the count is decided entirely by
+  // the apps table. Skip the join entirely (it was the 4s cost on filtered loads).
+  if (c.snapCols.length === 1) {
+    if (c.appCols.length === 0) {
+      // Unfiltered → count the latest-day partition straight off its index.
+      const [row] = await db.select({ c: count() }).from(appSnapshots).where(eq(appSnapshots.snapshotDate, maxDate));
+      return row?.c ?? 0;
+    }
+    // apps-column filters only (category/source/developer/price/…) → count off the
+    // apps indexes. Ignores the <1% of matches lacking a latest-day snapshot, which
+    // is within display tolerance for a "X of Y" total.
+    const [row] = await db.select({ c: count() }).from(apps).where(and(...c.appCols));
     return row?.c ?? 0;
   }
-  const [row] = await getDb()
+  // A snapshot-metric filter (rating/reviews/downloads/revenue range) is present →
+  // the join is unavoidable.
+  const [row] = await db
     .select({ c: count() })
     .from(apps)
     .innerJoin(appSnapshots, eq(appSnapshots.appId, apps.id))
-    .where(and(...conds));
+    .where(and(...allConditions(c)));
   return row?.c ?? 0;
 }
 
 /** Top-N candidate app ids, narrowed + ordered in SQL so memory stays bounded. For
  *  live-growth sorts (no SQL column) we proxy by review count — the busiest apps are
  *  where the movers are — then re-sort the pool exactly in memory. */
-async function selectCandidateIds(conds: SQL[], params: AppSearchParams): Promise<string[]> {
+async function selectCandidateIds(c: AppConditions, params: AppSearchParams): Promise<string[]> {
   const col = sqlSortColumn(params.sortBy) ?? appSnapshots.reviewCount;
   const dir = (params.sortOrder ?? "desc") === "asc" ? asc : desc;
   // No `col IS NULL` term: SQLite already sorts NULLs to the bottom of a DESC scan,
   // and sortApps applies the authoritative null-sink to the pool afterwards. Keeping
-  // the order a plain column lets a (snapshot_date, col) index serve it without a sort.
+  // the order a plain column lets the (snapshot_date, review_count) index serve it
+  // without a sort.
   const rows = await getDb()
     .select({ id: apps.id })
     .from(apps)
     .innerJoin(appSnapshots, eq(appSnapshots.appId, apps.id))
-    .where(and(...conds))
+    .where(and(...allConditions(c)))
     .orderBy(dir(col), apps.id)
     .limit(POOL_CAP);
   return rows.map((r) => r.id);
