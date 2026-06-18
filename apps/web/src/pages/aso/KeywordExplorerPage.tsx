@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import type { Store } from "@kittie/types";
 import { IconApple, IconChevron, IconClose, IconGooglePlay, IconInfo, IconMoon, IconSearch, IconSun } from "../../icons";
 import { IconKey, IconLayers } from "../../components/aso/icons";
-import { KeywordCard, KeywordDetail, PendingCard } from "../../components/aso/KeywordBits";
+import { KeywordDetail, PendingCard } from "../../components/aso/KeywordBits";
 import { IdeasTable } from "../../components/aso/IdeasTable";
 import { GenerateModal, type GenState } from "../../components/aso/GenerateModal";
 import { MarketsModal } from "../../components/aso/MarketsModal";
@@ -497,70 +497,78 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
           )}
         </div>
       ) : (
-        <div className="aso-split">
-          <div className="aso-list">
-            {showPending && pending.map((kw) => <PendingCard key={`p-${kw}`} keyword={kw} />)}
-            {visible.map((kd) => (
-              <KeywordCard
-                key={keyOf(kd)}
-                kd={kd}
-                active={keyOf(kd) === selectedKey}
-                onSelect={() => setSelectedKey(keyOf(kd))}
-              />
-            ))}
-            {visible.length === 0 && !showPending && (
-              <div className="aso-empty" style={{ marginTop: 12 }}>
-                <IconKey />
-                <div className="t">Nothing in this view</div>
-                <div className="s">No looked-up keywords match this filter yet.</div>
+        <div className="aso-workspace">
+          {(visible.length > 1 || showPending) && (
+            <div className="kw-strip">
+              {visible.map((kd) => (
+                <button
+                  key={keyOf(kd)}
+                  className={`kw-strip-chip ${keyOf(kd) === selectedKey ? "active" : ""}`}
+                  onClick={() => setSelectedKey(keyOf(kd))}
+                >
+                  {kd.keyword}
+                  <span className="kw-strip-opp">{kd.opportunityScore}</span>
+                </button>
+              ))}
+              {showPending && pending.map((kw) => (
+                <span key={`p-${kw}`} className="kw-strip-chip pending"><span className="aso-spin" />{kw}</span>
+              ))}
+            </div>
+          )}
+          {tab === "pending" ? (
+            pending.length > 0 ? (
+              <div className="aso-pending-list">
+                {pending.map((kw) => <PendingCard key={`p-${kw}`} keyword={kw} />)}
               </div>
-            )}
-            {tab === "pending" && pending.length === 0 && (
-              <div className="aso-empty" style={{ marginTop: 12 }}>
+            ) : (
+              <div className="aso-placeholder">
                 <IconKey />
                 <div className="t">No lookups in progress</div>
                 <div className="s">Pending lookups appear here while they resolve.</div>
               </div>
-            )}
-          </div>
-          <div className="aso-detail">
-            {selected ? (
-              <KeywordDetail
-                kd={selected}
-                onRefresh={() => void refreshKeyword(selected)}
-                refreshing={refreshing}
-                tracked={trackedKeys.has(keyOf(selected))}
-                onToggleTrack={() =>
-                  trackedKeys.has(keyOf(selected)) ? untrackIdea(selected) : trackIdea(selected)
-                }
-              >
-                {liveMarkets[keyOf(selected)] && (
-                  <LiveMarketsCard
-                    markets={liveMarkets[keyOf(selected)]!}
-                    progress={marketsProgress[keyOf(selected)] ?? "done"}
-                  />
-                )}
-                {selectedIdeas && (
-                  <IdeasTable
-                    seed={selected.keyword}
-                    store={store}
-                    country={country}
-                    ideas={selectedIdeas}
-                    trackedKeys={trackedKeys}
-                    onTrack={trackIdea}
-                    onUntrack={untrackIdea}
-                    onClear={() => clearIdeas(keyOf(selected))}
-                  />
-                )}
-              </KeywordDetail>
-            ) : (
-              <div className="aso-placeholder">
-                <IconKey />
-                <div className="t">Select a keyword</div>
-                <div className="s">Pick a result on the left to see its insights and the apps that rank for it.</div>
+            )
+          ) : selected ? (
+            <KeywordDetail
+              kd={selected}
+              onRefresh={() => void refreshKeyword(selected)}
+              refreshing={refreshing}
+              tracked={trackedKeys.has(keyOf(selected))}
+              onToggleTrack={() =>
+                trackedKeys.has(keyOf(selected)) ? untrackIdea(selected) : trackIdea(selected)
+              }
+            >
+              {liveMarkets[keyOf(selected)] && (
+                <LiveMarketsCard
+                  markets={liveMarkets[keyOf(selected)]!}
+                  progress={marketsProgress[keyOf(selected)] ?? "done"}
+                />
+              )}
+              {selectedIdeas && (
+                <IdeasTable
+                  seed={selected.keyword}
+                  store={store}
+                  country={country}
+                  ideas={selectedIdeas}
+                  trackedKeys={trackedKeys}
+                  onTrack={trackIdea}
+                  onUntrack={untrackIdea}
+                  onClear={() => clearIdeas(keyOf(selected))}
+                />
+              )}
+            </KeywordDetail>
+          ) : pending.length > 0 ? (
+            <PendingCard keyword={pending[0]!} />
+          ) : (
+            <div className="aso-placeholder">
+              <IconKey />
+              <div className="t">{results.length > 0 ? "Nothing in this view" : "Select a keyword"}</div>
+              <div className="s">
+                {results.length > 0
+                  ? "No keywords match this filter yet."
+                  : "Pick a keyword above to see its insights and the apps that rank for it."}
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       )}
 

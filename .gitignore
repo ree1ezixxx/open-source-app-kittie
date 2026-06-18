@@ -2,6 +2,10 @@ node_modules/
 .pnpm-store/
 dist/
 .env
+.env.*
+!.env.example
+.mcp.json
+logs/
 data/
 /data
 *.db

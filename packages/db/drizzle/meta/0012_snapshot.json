@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "2d7e1b69-7eaa-4c53-939e-3d8ef3a33a7e",
+  "id": "3a1dd07d-eff1-41c2-b30e-d195142a8d50",
   "prevId": "57f4382b-5c99-4d05-9873-2660d1b989a1",
   "tables": {
     "ai_generations": {
@@ -371,14 +371,6 @@
           "name": "snapshots_date_idx",
           "columns": [
             "snapshot_date"
-          ],
-          "isUnique": false
-        },
-        "snapshots_date_reviews_idx": {
-          "name": "snapshots_date_reviews_idx",
-          "columns": [
-            "snapshot_date",
-            "review_count"
           ],
           "isUnique": false
         }
@@ -1520,6 +1512,98 @@
       },
       "indexes": {},
       "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "tracked_apps": {
+      "name": "tracked_apps",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "app_id": {
+          "name": "app_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "store": {
+          "name": "store",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "country": {
+          "name": "country",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'US'"
+        },
+        "added_at": {
+          "name": "added_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "generated_keyword_count": {
+          "name": "generated_keyword_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "last_analyzed_at": {
+          "name": "last_analyzed_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "tracked_apps_unique_idx": {
+          "name": "tracked_apps_unique_idx",
+          "columns": [
+            "app_id",
+            "store",
+            "country"
+          ],
+          "isUnique": true
+        },
+        "tracked_apps_added_idx": {
+          "name": "tracked_apps_added_idx",
+          "columns": [
+            "added_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "tracked_apps_app_id_apps_id_fk": {
+          "name": "tracked_apps_app_id_apps_id_fk",
+          "tableFrom": "tracked_apps",
+          "tableTo": "apps",
+          "columnsFrom": [
+            "app_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}

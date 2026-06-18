@@ -5,6 +5,7 @@ import { searchAppleKeywordField } from "../apple/search.js";
 import { countGoogleResults, searchGoogleKeyword } from "../google/search.js";
 import { searchPopularity } from "../keyword-popularity.js";
 import { makeKeywordId } from "../util/ids.js";
+import { retryBusy } from "../util/retry-busy.js";
 
 const SEARCH_LIMIT = 10;
 
@@ -73,18 +74,22 @@ export async function syncKeyword(
   scored.competingAppCount = fieldDepth;
 
   const id = makeKeywordId(store, country, keyword);
-  await upsertKeywordRow(db, {
-    id,
-    keyword: keyword.trim(),
-    country: country.toUpperCase(),
-    store,
-    popularity: scored.popularity,
-    difficulty: scored.difficulty,
-    trafficScore: scored.trafficScore,
-    competingAppCount: scored.competingAppCount,
-    topResults: scored.topApps,
-    computedAt: new Date(),
-  });
+  // Retry on SQLITE_BUSY: this write contends with the catalog drainers / snapshot
+  // backfill / API on the shared local file, and libsql ignores busy_timeout.
+  await retryBusy(() =>
+    upsertKeywordRow(db, {
+      id,
+      keyword: keyword.trim(),
+      country: country.toUpperCase(),
+      store,
+      popularity: scored.popularity,
+      difficulty: scored.difficulty,
+      trafficScore: scored.trafficScore,
+      competingAppCount: scored.competingAppCount,
+      topResults: scored.topApps,
+      computedAt: new Date(),
+    }),
+  );
 
   return scored;
 }

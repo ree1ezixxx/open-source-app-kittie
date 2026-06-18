@@ -13,8 +13,42 @@ import {
   removeTrackedKeyword,
   SUPPORTED_MARKETS,
 } from "../services/keyword-service.js";
+import {
+  addTrackedApp,
+  listTracked as listTrackedApps,
+  removeTrackedApp,
+} from "../services/tracked-app-service.js";
 
 export const keywordsRouter = new Hono();
+
+// The durable tracked-apps list for App Tracking (survives reload). PRD #20.
+// Persist-only: adding an app records it; keyword generation + rank ingestion
+// land in later slices (#23/#24).
+keywordsRouter.get("/tracked-apps", async (c) => {
+  const data = await listTrackedApps();
+  return c.json({ data, meta: { source: "tracked-apps", count: data.length } });
+});
+
+keywordsRouter.post("/tracked-apps", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const appId = typeof body.appId === "string" ? body.appId.trim() : "";
+  const country = (typeof body.country === "string" && body.country.trim()) || "US";
+  if (!appId) return c.json({ error: "appId is required" }, 400);
+
+  const data = await addTrackedApp(appId, country.toUpperCase());
+  if (!data) return c.json({ error: "app not found" }, 404);
+  return c.json({ data, meta: { source: "tracked-apps" } });
+});
+
+keywordsRouter.delete("/tracked-apps", async (c) => {
+  const appId = c.req.query("appId");
+  const country = (c.req.query("country") ?? "US").toUpperCase();
+  const store = (c.req.query("store") === "google" ? "google" : "apple") as Store;
+  if (!appId) return c.json({ error: "appId is required" }, 400);
+
+  await removeTrackedApp(appId, store, country);
+  return c.json({ data: { removed: true }, meta: { source: "tracked-apps" } });
+});
 
 // The durable tracked-keyword shortlist (survives reload). See ADR 0003.
 keywordsRouter.get("/tracked", async (c) => {

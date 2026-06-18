@@ -60,6 +60,19 @@ export function registerAllSweeps(): void {
     },
   });
 
+  // Catalog-wide keyword freshness: re-sync the oldest stale keywords each day
+  // (capped/paced) so even un-viewed, un-tracked keywords stay current — the
+  // seeded catalog never silently rots. Rides the same scheduler as the rest.
+  registerSweep({
+    name: "keyword-catalog-refresh",
+    cadenceHours: 24,
+    async run() {
+      const { sweepStaleCatalogKeywords } = await import("./services/keyword-rescore-service.js");
+      const r = await sweepStaleCatalogKeywords();
+      return `re-synced ${r.rescored}/${r.stale} stale catalog keywords`;
+    },
+  });
+
   registerSweep({
     name: "hot-ideas",
     cadenceHours: 6,

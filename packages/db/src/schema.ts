@@ -210,6 +210,34 @@ export const trackedKeywords = sqliteTable(
 );
 
 /**
+ * The user's durable tracked-apps list for ASO App Tracking (PRD #20, slice
+ * #22). One row per (appId, store, country) — adding the same app twice is a
+ * no-op (unique index). References the apps table for metadata. The
+ * keyword-count / last-analyzed columns are placeholders for the later AI
+ * keyword-generation and rank-ingestion slices (#23/#24): zero/null until then.
+ */
+export const trackedApps = sqliteTable(
+  "tracked_apps",
+  {
+    id: text("id").primaryKey(),
+    appId: text("app_id")
+      .notNull()
+      .references(() => apps.id),
+    store: text("store", { enum: ["apple", "google"] }).notNull(),
+    country: text("country").notNull().default("US"),
+    addedAt: integer("added_at", { mode: "timestamp" }).notNull(),
+    /** Count of AI-generated keywords (slice #23). Zero until generation runs. */
+    generatedKeywordCount: integer("generated_keyword_count").notNull().default(0),
+    /** When rank analysis last ran (slice #24). Null until the first analyze. */
+    lastAnalyzedAt: integer("last_analyzed_at", { mode: "timestamp" }),
+  },
+  (t) => [
+    uniqueIndex("tracked_apps_unique_idx").on(t.appId, t.store, t.country),
+    index("tracked_apps_added_idx").on(t.addedAt),
+  ],
+);
+
+/**
  * Cache of AI-generated artifacts (Gemini). One row per generated output, keyed
  * by kind + subject + a hash of the generation input. Generated once, read
  * forever — per-view regeneration is never allowed (ADR 0005); user-triggered
@@ -335,6 +363,7 @@ export const cloneableApps = sqliteTable(
 export type App = typeof apps.$inferSelect;
 export type AppSnapshot = typeof appSnapshots.$inferSelect;
 export type TrackedKeyword = typeof trackedKeywords.$inferSelect;
+export type TrackedApp = typeof trackedApps.$inferSelect;
 export type AiGeneration = typeof aiGenerations.$inferSelect;
 export type SweepState = typeof sweepState.$inferSelect;
 export type AppIdea = typeof appIdeas.$inferSelect;

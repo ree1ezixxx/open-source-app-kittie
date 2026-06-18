@@ -12,6 +12,7 @@ export {
   appsWithAppleAds,
   appsWithCreators,
   getAppById as getAppRowById,
+  listAppIaps,
   listAppsByIds,
   listFreshSet,
   loadAppRelations,
@@ -23,7 +24,9 @@ export { countAppIdsByText, ensureAppsFts, searchAppIds, toFtsMatch } from "./ft
 export {
   findKeyword,
   keywordRowToDifficulty,
+  listStaleCatalogKeywords,
   makeKeywordLookupId,
+  touchKeywordChecked,
   upsertKeywordRow,
   type KeywordRow,
 } from "./keywords.js";
@@ -40,6 +43,12 @@ export {
   untrackKeyword,
   type TrackedKeywordEntry,
 } from "./tracked-keywords.js";
+export {
+  listTrackedApps,
+  trackApp,
+  untrackApp,
+  type TrackedAppEntry,
+} from "./tracked-apps.js";
 export { getAiGeneration, saveAiGeneration } from "./ai-generations.js";
 export { getSweepState, listSweepStates, recordSweepRun } from "./sweep-state.js";
 export { normalizeChartType, assembleTopCharts, type ChartRow, type TopChartsParams } from "./charts.js";
@@ -54,9 +63,12 @@ export {
   listIdeaFacets,
   listIdeas,
   listSimilarIdeas,
+  listStaleIdeaCandidates,
+  updateIdeaBlueprint,
   type IdeaCandidate,
   type IdeaListQuery,
   type IdeaSort,
+  type StaleIdeaCandidate,
 } from "./ideas.js";
 export {
   addBuilderMessage,

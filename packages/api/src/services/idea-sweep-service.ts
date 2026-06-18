@@ -4,7 +4,11 @@ import {
   insertIdea,
   listComplaintSnippets,
   listIdeaCandidates,
+  listStaleIdeaCandidates,
+  updateIdeaBlueprint,
+  type Db,
   type IdeaCandidate,
+  type StaleIdeaCandidate,
 } from "@kittie/db";
 
 import { getDb } from "../lib/db.js";
@@ -14,6 +18,15 @@ import {
   generateJson,
   isGeminiConfigured,
 } from "../lib/gemini.js";
+import {
+  BLUEPRINT_SCHEMA_VERSION,
+  isBlueprintFresh,
+  normalizeBlueprint,
+  parseMarketing,
+  parseOpportunity,
+  type IdeaMarketing,
+  type IdeaOpportunity,
+} from "./idea-blueprint.js";
 import { selectIdeaSources } from "./idea-gate.js";
 
 /* ============================================================
@@ -58,6 +71,8 @@ interface GeneratedIdea {
     mvpScope: string;
     thirdPartyServices: string[];
   };
+  opportunity: IdeaOpportunity;
+  marketing: IdeaMarketing;
 }
 
 const IDEA_CATEGORIES = [
@@ -117,6 +132,54 @@ const IDEA_SCHEMA = {
         "thirdPartyServices",
       ],
     },
+    opportunity: {
+      type: "object",
+      properties: {
+        summary: { type: "string", description: "2-3 sentence opportunity thesis for the new idea" },
+        whyThisApp: { type: "string", description: "Why this specific source app is worth deriving from" },
+        marketSizeInsight: { type: "string", description: "Qualitative read on how big the demand is" },
+        painPoints: { type: "array", items: { type: "string" }, description: "Real user pain points (from the complaints)" },
+        featureGaps: { type: "array", items: { type: "string" }, description: "Gaps in the incumbent a new app can win on" },
+        targetAudience: { type: "string" },
+        monetizationStrategy: { type: "string" },
+        competitiveAdvantages: { type: "array", items: { type: "string" } },
+      },
+      required: [
+        "summary",
+        "whyThisApp",
+        "marketSizeInsight",
+        "painPoints",
+        "featureGaps",
+        "targetAudience",
+        "monetizationStrategy",
+        "competitiveAdvantages",
+      ],
+    },
+    marketing: {
+      type: "object",
+      properties: {
+        marketingStrategy: { type: "string", description: "Overall go-to-market / growth approach" },
+        marketingPlatforms: { type: "array", items: { type: "string" } },
+        contentHooks: { type: "array", items: { type: "string" }, description: "Concrete post/ad angles" },
+        ugcFormats: { type: "array", items: { type: "string" } },
+        campaignIdeas: { type: "array", items: { type: "string" } },
+        creatorTypes: { type: "array", items: { type: "string" } },
+        keySellingPoints: { type: "array", items: { type: "string" } },
+        asoKeywords: { type: "array", items: { type: "string" }, description: "Seed ASO keywords for the listing" },
+        goToMarket: { type: "string", description: "Sequenced launch plan" },
+      },
+      required: [
+        "marketingStrategy",
+        "marketingPlatforms",
+        "contentHooks",
+        "ugcFormats",
+        "campaignIdeas",
+        "creatorTypes",
+        "keySellingPoints",
+        "asoKeywords",
+        "goToMarket",
+      ],
+    },
   },
   required: [
     "sourceIndex",
@@ -127,6 +190,8 @@ const IDEA_SCHEMA = {
     "needsDatabase",
     "needsAi",
     "blueprint",
+    "opportunity",
+    "marketing",
   ],
 };
 
@@ -172,77 +237,84 @@ function buildBatchPrompt(sources: Array<{ c: IdeaCandidate; complaints: string[
     "",
     `Return JSON: { "ideas": [...] } with EXACTLY ${sources.length} entries, one per source app,`,
     "each with its sourceIndex (0-based, matching the numbering above), a concise title, a 2-3",
-    "sentence summary, an ideaCategory from the allowed list, the three blueprint need flags, and a",
-    "full blueprint (difficulty + reasoning, timelineWeeks, requirements, MVP/key/V2 features,",
-    "architecture, techStack, mvpScope, thirdPartyServices). Keep features concrete and buildable by a solo dev.",
+    "sentence summary, an ideaCategory from the allowed list, the three blueprint need flags, and:",
+    "1. blueprint — difficulty + reasoning, timelineWeeks, requirements, MVP/key/V2 features,",
+    "   architecture, techStack, mvpScope, thirdPartyServices. Concrete and buildable by a solo dev.",
+    "2. opportunity — summary, whyThisApp, marketSizeInsight, painPoints (ground these in the source",
+    "   app's complaints above), featureGaps, targetAudience, monetizationStrategy, competitiveAdvantages.",
+    "3. marketing — marketingStrategy, marketingPlatforms, contentHooks, ugcFormats, campaignIdeas,",
+    "   creatorTypes, keySellingPoints, asoKeywords, goToMarket. Specific and actionable, not generic.",
   );
   return lines.join("\n");
 }
 
-/** One paced slice of idea generation. Safe to re-run; one failure never aborts the slice. */
-export async function sweepHotIdeas(
-  maxIdeas = IDEAS_PER_RUN,
-  model = GEMINI_BATCH_MODEL,
-): Promise<IdeaSweepResult> {
-  const db = getDb();
-  const existing = await countIdeas(db);
-  if (!isGeminiConfigured() || existing >= IDEAS_TARGET) {
-    return { existing, generated: 0, failed: 0, target: IDEAS_TARGET };
-  }
+/** v2 blueprint JSON: building plan (flat) + validated opportunity + marketing,
+ *  version-stamped so the catalog-upgrade sweep can spot legacy rows. */
+function buildBlueprintJson(idea: GeneratedIdea): string {
+  return JSON.stringify({
+    ...idea.blueprint,
+    schemaVersion: BLUEPRINT_SCHEMA_VERSION,
+    opportunity: parseOpportunity(idea.opportunity),
+    marketing: parseMarketing(idea.marketing),
+  });
+}
 
-  const [candidates, snapshotDays] = await Promise.all([
-    listIdeaCandidates(db),
-    countSnapshotDays(db),
-  ]);
-  const slice = Math.min(maxIdeas, IDEAS_TARGET - existing);
-  const sources = selectIdeaSources(candidates, snapshotDays, slice, Date.now());
+/** Regenerated content shared by insert (new idea) and update (legacy upgrade). */
+function ideaContentFields(idea: GeneratedIdea) {
+  return {
+    title: idea.title,
+    summary: idea.summary,
+    ideaCategory: idea.ideaCategory,
+    needsBackend: idea.needsBackend,
+    needsDatabase: idea.needsDatabase,
+    needsAi: idea.needsAi,
+    blueprint: buildBlueprintJson(idea),
+  };
+}
 
-  let generated = 0;
+/**
+ * Generate ideas for a list of source apps in Gemini-batched calls, persisting
+ * each via `persist`. Shared by new-idea generation (insert) and the catalog
+ * upgrade (update). One bad idea never aborts the slice; a daily-quota error or
+ * persistent model trouble stops cleanly so the next run resumes.
+ */
+async function runIdeaBatches<T extends IdeaCandidate>(
+  db: Db,
+  sources: T[],
+  model: string,
+  persist: (idea: GeneratedIdea, source: T) => Promise<void>,
+): Promise<{ done: number; failed: number; quotaExhausted: boolean }> {
+  let done = 0;
   let failed = 0;
+  let quotaExhausted = false;
   for (let at = 0; at < sources.length; at += SOURCES_PER_CALL) {
     const chunk = sources.slice(at, at + SOURCES_PER_CALL);
     try {
       const withComplaints = await Promise.all(
         chunk.map(async (c) => ({ c, complaints: await listComplaintSnippets(db, c.appId) })),
       );
-      const result = await generateJson<{ ideas: GeneratedIdea[] }>(
-        buildBatchPrompt(withComplaints),
-        {
-          responseSchema: BATCH_RESPONSE_SCHEMA,
-          priority: "batch", // never make a person wait behind this sweep
-          model, // default: separate daily quota bucket
-        },
-      );
+      const result = await generateJson<{ ideas: GeneratedIdea[] }>(buildBatchPrompt(withComplaints), {
+        responseSchema: BATCH_RESPONSE_SCHEMA,
+        priority: "batch", // never make a person wait behind this sweep
+        model, // default: separate daily quota bucket
+      });
+      const usedSources = new Set<number>();
       for (const idea of result.ideas ?? []) {
         const source = chunk[idea.sourceIndex];
-        if (!source || !idea.title) {
+        // Skip a bad/duplicate sourceIndex: persisting two ideas to one source would
+        // double-write (clobber) in update mode and leave the other source untouched.
+        if (!source || !idea.title || usedSources.has(idea.sourceIndex)) {
           failed++;
           continue;
         }
-        await insertIdea(db, {
-          sourceAppId: source.appId,
-          slug: slugify(idea.title) || `idea-${source.storeAppId}`,
-          title: idea.title,
-          summary: idea.summary,
-          sourceCategory: source.category ?? "Other",
-          ideaCategory: idea.ideaCategory,
-          needsBackend: idea.needsBackend,
-          needsDatabase: idea.needsDatabase,
-          needsAi: idea.needsAi,
-          blueprint: JSON.stringify(idea.blueprint),
-          reviewCount: source.reviewCount,
-          rating: source.rating,
-          downloadsEstimate: source.downloadsEstimate,
-          revenueEstimate: source.revenueEstimate,
-          price: source.price,
-          releasedAt: source.releasedAt,
-        });
-        generated++;
+        usedSources.add(idea.sourceIndex);
+        await persist(idea, source);
+        done++;
       }
     } catch (e) {
       if (e instanceof GeminiDailyQuotaError) {
-        // Today's budget is spent — stop immediately, the next due run resumes.
-        console.warn(`[hot-ideas] ${e.message}; pausing slice at ${generated} generated`);
+        console.warn(`[hot-ideas] ${e.message}; pausing at ${done}`);
+        quotaExhausted = true;
         break;
       }
       failed += chunk.length;
@@ -250,12 +322,103 @@ export async function sweepHotIdeas(
         `[hot-ideas] batch of ${chunk.length} (from ${chunk[0]?.title}) failed:`,
         e instanceof Error ? e.message : e,
       );
-      // Persistent model trouble: stop the slice, next run retries.
-      if (failed >= SOURCES_PER_CALL * 3 && generated === 0) break;
+      if (failed >= SOURCES_PER_CALL * 3 && done === 0) break;
     }
   }
+  return { done, failed, quotaExhausted };
+}
 
-  return { existing: existing + generated, generated, failed, target: IDEAS_TARGET };
+/**
+ * Upgrade legacy ideas (blueprint predates the current schema — missing
+ * opportunity/marketing) in place, capped at `maxIdeas`. Rewrites the content
+ * but keeps the row id/slug/sourceAppId, so the storeAppId-keyed detail URL holds.
+ */
+/** Pure selection: of the idea candidates, the ones whose stored blueprint is
+ *  NOT yet at the current schema (missing opportunity/marketing), capped. Pure
+ *  + exported so the upgrade-selection logic is unit-testable without a DB/LLM. */
+export function selectStaleForUpgrade(
+  candidates: StaleIdeaCandidate[],
+  maxIdeas: number,
+): StaleIdeaCandidate[] {
+  return candidates
+    .filter((c) => !isBlueprintFresh(normalizeBlueprint(c.blueprint)))
+    .slice(0, Math.max(0, maxIdeas));
+}
+
+export async function upgradeStaleIdeas(
+  db: Db,
+  maxIdeas: number,
+  model = GEMINI_BATCH_MODEL,
+): Promise<{ upgraded: number; failed: number }> {
+  const stale = selectStaleForUpgrade(await listStaleIdeaCandidates(db), maxIdeas);
+  if (stale.length === 0) return { upgraded: 0, failed: 0 };
+  const r = await runIdeaBatches<StaleIdeaCandidate>(db, stale, model, async (idea, source) => {
+    await updateIdeaBlueprint(db, source.ideaId, ideaContentFields(idea));
+  });
+  return { upgraded: r.done, failed: r.failed };
+}
+
+/** One paced slice: generate ideas for new sources up to target, then spend any
+ *  leftover budget upgrading legacy ideas in place. Safe to re-run. */
+export async function sweepHotIdeas(
+  maxIdeas = IDEAS_PER_RUN,
+  model = GEMINI_BATCH_MODEL,
+): Promise<IdeaSweepResult> {
+  const db = getDb();
+  const existing = await countIdeas(db);
+  if (!isGeminiConfigured()) {
+    return { existing, generated: 0, failed: 0, target: IDEAS_TARGET };
+  }
+
+  let newCount = 0;
+  let upgraded = 0;
+  let failed = 0;
+  let quotaHit = false;
+
+  // Phase A — generate for new sources until the catalog target is met.
+  const remaining = IDEAS_TARGET - existing;
+  if (remaining > 0) {
+    const [candidates, snapshotDays] = await Promise.all([
+      listIdeaCandidates(db),
+      countSnapshotDays(db),
+    ]);
+    const slice = Math.min(maxIdeas, remaining);
+    const sources = selectIdeaSources(candidates, snapshotDays, slice, Date.now());
+    const r = await runIdeaBatches<IdeaCandidate>(db, sources, model, async (idea, source) => {
+      await insertIdea(db, {
+        sourceAppId: source.appId,
+        slug: slugify(idea.title) || `idea-${source.storeAppId}`,
+        sourceCategory: source.category ?? "Other",
+        ...ideaContentFields(idea),
+        reviewCount: source.reviewCount,
+        rating: source.rating,
+        downloadsEstimate: source.downloadsEstimate,
+        revenueEstimate: source.revenueEstimate,
+        price: source.price,
+        releasedAt: source.releasedAt,
+      });
+    });
+    newCount = r.done;
+    failed += r.failed;
+    quotaHit = r.quotaExhausted;
+  }
+
+  // Phase B — upgrade legacy (pre-v2) ideas in place with any leftover budget.
+  // Skip if Phase A already hit the daily quota: the bucket is shared, so a Phase B
+  // call would just waste another scarce request hitting the same wall.
+  const budgetLeft = maxIdeas - newCount;
+  if (budgetLeft > 0 && !quotaHit) {
+    const up = await upgradeStaleIdeas(db, budgetLeft, model);
+    upgraded = up.upgraded;
+    failed += up.failed;
+  }
+
+  return {
+    existing: existing + newCount,
+    generated: newCount + upgraded,
+    failed,
+    target: IDEAS_TARGET,
+  };
 }
 
 export const HOT_IDEAS_MODEL = GEMINI_BATCH_MODEL;
