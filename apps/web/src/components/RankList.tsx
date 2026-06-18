@@ -1,7 +1,8 @@
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import type { CSSProperties } from "react";
 import type { AppListItem } from "@kittie/types";
 import { AppIcon } from "./AppIcon";
+import { appHref } from "../lib/slug";
 import { formatCompact, formatMoney } from "../lib/format";
 import { EmptyState } from "./EmptyState";
 import { IconChart } from "../icons";
@@ -49,8 +50,6 @@ export function RankList({
   emptyTitle?: string;
   emptySub?: string;
 }) {
-  const nav = useNavigate();
-
   if (loading) {
     return (
       <>
@@ -85,7 +84,7 @@ export function RankList({
       {apps.slice(0, limit).map((a, i) => {
         const d = deltaOf(a);
         return (
-          <div className="rank-row" key={a.id} onClick={() => nav(`/apps/${a.id}`)}>
+          <Link className="rank-row" key={a.id} to={appHref(a)}>
             <span className="rk">{i + 1}</span>
             {delta && (
               <span style={{ width: DELTA_W, flexShrink: 0 }}>
@@ -105,7 +104,7 @@ export function RankList({
             </div>
             <div className="rr-num" style={{ width: DL_W, flexShrink: 0 }}>{formatDl(a.downloadsEstimate30d)}</div>
             <div className="rr-num num-strong" style={{ width: MRR_W, flexShrink: 0 }}>{formatMoney(a.revenueEstimate30d)}</div>
-          </div>
+          </Link>
         );
       })}
     </>

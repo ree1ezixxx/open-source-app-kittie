@@ -60,21 +60,23 @@ export function HighlightsPage({ theme, onToggleTheme }: { theme: Theme; onToggl
     </Link>
   );
 
-  // "View all" → Explore with the params our Explore page actually reads
-  // (sort/order/rel/source — see exploreFilters), reproducing each widget's
-  // query so the expanded list matches the card. Truth routes these to
-  // /rising and /movers, but those don't exist (or sort differently) on the
-  // clone, so we land on Explore with the equivalent sort instead.
+  // "View all" targets mirror truth's information architecture:
+  //   • Top Gainers → /dashboard/rising (truth's risers surface — exists here).
+  //   • New Big Hits / Top Losers → Explore with the params our Explore page
+  //     reads (sort/order/rel/source), reproducing each widget's query so the
+  //     expanded list matches the card. Truth sends Losers to /dashboard/movers,
+  //     which we haven't built — Explore with the equivalent loser sort is the
+  //     honest stand-in (same data, no fabricated route).
   const srcSuffix = source ? `&source=${source}` : "";
   const bigHitsViewAll = `/dashboard/explore?sort=reviews&order=desc&rel=7${srcSuffix}`;
-  const gainersViewAll = `/dashboard/explore?sort=rankDelta&order=desc${srcSuffix}`;
+  const gainersViewAll = `/dashboard/rising${source ? `?source=${source}` : ""}`;
   const losersViewAll = `/dashboard/explore?sort=rankDelta&order=asc${srcSuffix}`;
 
   return (
     <PageShell
       icon={<IconSpark />}
       title="Dashboard Highlights"
-      sub="Filter all widgets by store source."
+      sub="Filter apps by store source."
       theme={theme}
       onToggleTheme={onToggleTheme}
       toolbar={storeToolbar}

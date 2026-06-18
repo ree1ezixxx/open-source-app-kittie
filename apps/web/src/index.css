@@ -827,7 +827,7 @@ thead .col-app { z-index: 6; }
 .widget-body { padding: 6px 6px 8px; display: flex; flex-direction: column; }
 
 /* compact ranked row (widgets, charts, rankings) */
-.rank-row { display: flex; align-items: center; gap: 11px; padding: 8px 9px; border-radius: 8px; cursor: pointer; transition: background 0.1s; }
+.rank-row { display: flex; align-items: center; gap: 11px; padding: 8px 9px; border-radius: 8px; cursor: pointer; transition: background 0.1s; color: inherit; text-decoration: none; }
 .rank-row:hover { background: var(--row-hover); }
 .rank-row .rk { font-size: 11.5px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; min-width: 28px; }
 .rank-row .app-icon { width: 30px; height: 30px; border-radius: 8px; }
