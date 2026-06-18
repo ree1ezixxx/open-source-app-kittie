@@ -1,9 +1,11 @@
 import {
   apps,
   appSnapshots,
+  appleSearchAds,
   appsWithAppleAds,
   appsWithCreators,
   countApps,
+  creators,
   getAppRowById,
   getSnapshotContext,
   iaps,
@@ -32,6 +34,7 @@ import {
   lte,
   max,
   ne,
+  notInArray,
   or,
   sql,
   type AnyColumn,
@@ -179,11 +182,14 @@ function pickPrior(sorted: AppSnapshot[], latestDate: string, periodDays: number
 }
 
 /**
- * SQL predicates for the apps ⋈ latest-snapshot query. We translate the *selective*
- * column filters (search / category / source / numeric ranges / dates / price) so the
- * LIMIT narrows to real matches; the live-growth filters (growthType, min/maxGrowth)
- * and the empty ad/creator joins stay in matchesSearch on the materialized pool. The
- * result set is always a SUPERSET of matchesSearch, so the returned rows stay exact.
+ * SQL predicates for the apps ⋈ latest-snapshot query. We translate every *selective*
+ * column filter — search / category (incl. exclude) / source / numeric ranges / dates /
+ * price / languages / contact + ad/creator presence — so BOTH the count and the LIMITed
+ * candidate pool reflect them (a pool-only filter would make the "X of Y" total lie and
+ * silently drop low-review matches past POOL_CAP). Only the live-growth filters
+ * (growthType, min/maxGrowth) — computed from in-memory scoring with no SQL column — stay
+ * in matchesSearch. Every predicate here is a SUPERSET of its matchesSearch counterpart
+ * (case-insensitive substring/JSON match), so matchesSearch remains the exact final pass.
  */
 interface AppConditions {
   /** Predicates on the `apps` table — countable without joining to a snapshot. */
@@ -214,6 +220,12 @@ function buildConditions(params: AppSearchParams, maxDate: string): AppCondition
     const cats = params.categories.split(",").map((c) => c.trim()).filter(Boolean);
     if (cats.length) appCols.push(inArray(apps.category, cats));
   }
+  if (params.excludedCategories) {
+    const ex = params.excludedCategories.split(",").map((c) => c.trim()).filter(Boolean);
+    // Keep null-category apps (matchesSearch only excludes when item.category is set),
+    // so the SQL stays a superset of the authoritative pass.
+    if (ex.length) appCols.push(or(isNull(apps.category), notInArray(apps.category, ex))!);
+  }
   if (params.source) appCols.push(eq(apps.store, params.source));
   if (params.excludedSource) appCols.push(ne(apps.store, params.excludedSource));
   if (params.developer) appCols.push(like(sql`lower(${apps.developer})`, `%${params.developer.toLowerCase()}%`));
@@ -235,6 +247,25 @@ function buildConditions(params: AppSearchParams, maxDate: string): AppCondition
 
   if (params.hasEmails === true) appCols.push(and(isNotNull(apps.supportEmail), ne(apps.supportEmail, ""))!);
   if (params.hasWebsite === true) appCols.push(and(isNotNull(apps.websiteUrl), ne(apps.websiteUrl, ""))!);
+
+  // App language — languages is a JSON array of uppercase ISO codes (`["EN","FR"]`).
+  // Match if the app supports ANY requested code; quote-wrap so "en" can't match a
+  // longer token. Superset of matchesSearch's exact parseJsonArray().includes() pass.
+  if (params.languages) {
+    const want = params.languages.split(",").map((l) => l.trim().toLowerCase()).filter(Boolean);
+    const ors = want.map((l) => like(sql`lower(${apps.languages})`, `%"${l}"%`));
+    if (ors.length) appCols.push(or(...ors)!);
+  }
+
+  // Ad / creator presence — EXISTS against the source tables so the count + pool reflect
+  // them (these tables are un-ingested today → `true` honestly yields 0; both predicates
+  // light up automatically once ingest lands, with no further change here).
+  if (params.hasMetaAds === true) appCols.push(sql`exists (select 1 from ${metaAds} where ${metaAds.appId} = ${apps.id})`);
+  if (params.hasMetaAds === false) appCols.push(sql`not exists (select 1 from ${metaAds} where ${metaAds.appId} = ${apps.id})`);
+  if (params.hasAppleAds === true) appCols.push(sql`exists (select 1 from ${appleSearchAds} where ${appleSearchAds.appId} = ${apps.id})`);
+  if (params.hasAppleAds === false) appCols.push(sql`not exists (select 1 from ${appleSearchAds} where ${appleSearchAds.appId} = ${apps.id})`);
+  if (params.hasCreators === true) appCols.push(sql`exists (select 1 from ${creators} where ${creators.appId} = ${apps.id})`);
+  if (params.hasCreators === false) appCols.push(sql`not exists (select 1 from ${creators} where ${creators.appId} = ${apps.id})`);
 
   return { appCols, snapCols };
 }
