@@ -336,7 +336,7 @@ async function ftsCandidateIds(match: string, filter: SQL): Promise<string[]> {
     JOIN apps ON apps.id = apps_fts.app_id
     JOIN app_snapshots ON app_snapshots.app_id = apps.id
     WHERE apps_fts MATCH ${match} AND ${filter}
-    ORDER BY apps_fts.rank
+    ORDER BY apps_fts.rank, apps.id
     LIMIT ${POOL_CAP}
   `);
   return rows.map((r) => r.id);

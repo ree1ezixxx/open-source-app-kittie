@@ -33,14 +33,20 @@ export async function ensureAppsFts(db: Db): Promise<void> {
   await db.run(sql`CREATE TRIGGER IF NOT EXISTS apps_fts_ad AFTER DELETE ON apps BEGIN
     DELETE FROM apps_fts WHERE app_id = old.id;
   END`);
-  // Backfill once, atomically. BEGIN IMMEDIATE serialises concurrent boots: if two API
-  // instances run against the same DB, the second blocks until the first commits, then
-  // sees a non-empty table and skips. Without it both could see count==0 and insert every
-  // app — FTS5 has no unique key, so search would then return every result twice.
+  // Cheap unlocked read first — the common already-populated boot does NO write, so it
+  // never takes a write lock that would contend with the ingest fleet. Number() guards
+  // against a bigint count (libsql intMode) making `=== 0` silently false on an empty table.
+  const existing = await db.get<{ c: number }>(sql`SELECT count(*) AS c FROM apps_fts`);
+  if (Number(existing?.c ?? 0) > 0) return;
+
+  // Empty → backfill once, atomically. The re-check inside an IMMEDIATE transaction
+  // serialises concurrent first-boots; and even if the driver downgrades it to deferred,
+  // the loser's INSERT hits SQLITE_BUSY and aborts rather than double-inserting every app
+  // (FTS5 has no unique key, so a double-insert would return every result twice).
   await db.transaction(
     async (tx) => {
       const row = await tx.get<{ c: number }>(sql`SELECT count(*) AS c FROM apps_fts`);
-      if ((row?.c ?? 0) === 0) {
+      if (Number(row?.c ?? 0) === 0) {
         await tx.run(sql`INSERT INTO apps_fts(app_id, title, developer) SELECT id, title, developer FROM apps`);
       }
     },

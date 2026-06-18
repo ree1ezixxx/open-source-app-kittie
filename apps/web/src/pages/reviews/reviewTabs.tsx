@@ -500,7 +500,7 @@ export function ReviewsTab({ tagged }: { tagged: TaggedReview[] }) {
                         <button
                           key={`${tg.kind}:${tg.label}`}
                           className="rv-rev-topic"
-                          onClick={() => update(tg.kind === "topic" ? { topic: tg.label } : { improvementArea: tg.label })}
+                          onClick={() => update(tg.kind === "topic" ? { topic: tg.label, improvementArea: null } : { improvementArea: tg.label, topic: null })}
                         >
                           {tg.label}
                         </button>
@@ -682,9 +682,12 @@ export function ImprovementsTab({ tagged, onRefresh, refreshing }: { tagged: Tag
                   className="rv-area"
                   key={a.id}
                   onClick={() => {
-                    const qs = new URLSearchParams({ improvementArea: a.category });
-                    const app = sp.get("app");
-                    if (app) qs.set("app", app); // keep the selected app — don't reset to monitored[0]
+                    // copy current params so ?app= AND ?period= survive; switch the filter
+                    // to this area and drop any stale topic so they don't AND to an empty feed
+                    const qs = new URLSearchParams(sp);
+                    qs.set("improvementArea", a.category);
+                    qs.delete("topic");
+                    qs.delete("page");
                     navigate(`/reviews/feed?${qs.toString()}`);
                   }}
                   title={`See the ${a.mentionCount} review${a.mentionCount === 1 ? "" : "s"} about ${a.category}`}
