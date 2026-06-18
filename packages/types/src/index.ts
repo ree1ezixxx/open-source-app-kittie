@@ -72,6 +72,10 @@ export interface AppSearchParams {
   excludedCategories?: string;
   source?: Store;
   excludedSource?: Store;
+  /** Comma-separated ISO alpha-2 markets to include (e.g. "US,JP"). Absent = US-only default view. Mirrors AppKittie `countries`. */
+  countries?: string;
+  /** Comma-separated ISO alpha-2 markets to exclude. Mirrors AppKittie `excludedCountries`. */
+  excludedCountries?: string;
   minDownloads?: number;
   maxDownloads?: number;
   minRevenue?: number;

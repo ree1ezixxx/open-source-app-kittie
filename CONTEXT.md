@@ -13,7 +13,7 @@ Either `apple` or `google`. Every App belongs to exactly one Store.
 _Avoid_: Platform, source (in user-facing copy)
 
 **Chart country**:
-Which storefront's charts and Observed metrics we track (ISO market, e.g. `US`). v1 is US-only; other markets use the same free Store sources with a different country parameter — not a paid tier.
+A storefront market (ISO alpha-2, e.g. `US`, `JP`) that an App's charts AND Observed/Estimated metrics are scoped to. A first-class **include/exclude query dimension** (surfaced as "Country" in the UI/API, mirroring truth's `countries`/`excludedCountries`) — the same App can hold a different rank, review count, rating and Revenue estimate per market. `US` is the default view. Sourced from the same free Store endpoints with a different country parameter — not a paid tier. The full per-market set is tracked for the **market-visible** App set (apps charting in that market); the long-tail catalog keeps a `US`-only Snapshot. See [[per-country-app-snapshots]] (ADR 0007).
 _Avoid_: Region (ambiguous), locale
 
 **Observed metric**:
@@ -25,7 +25,7 @@ A value computed by our models from Observed metrics and other public signals. I
 _Avoid_: Revenue (unqualified), real growth, false precision ($54,231)
 
 **Snapshot**:
-A point-in-time record of an App's Observed metrics (review count, rating, chart rank) plus Estimated metrics (revenue, downloads, growth score) on a specific date. Trend detection compares Snapshots across dates.
+A point-in-time record of an App's Observed metrics (review count, rating, chart rank) plus Estimated metrics (revenue, downloads, growth score) for one App, on a specific date, **in one Chart country**. Identity is `(App, date, Chart country)` — a market-visible App has one Snapshot per tracked market per day; long-tail apps have just a `US` Snapshot. Trend detection compares Snapshots across dates *within the same market*.
 _Avoid_: Reading, data point
 
 **Revenue estimate**:

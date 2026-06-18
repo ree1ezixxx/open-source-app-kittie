@@ -26,6 +26,8 @@ const searchParamsSchema = z.object({
   excludedCategories: z.string().optional(),
   source: z.enum(["apple", "google"]).optional(),
   excludedSource: z.enum(["apple", "google"]).optional(),
+  countries: z.string().optional(),
+  excludedCountries: z.string().optional(),
   minDownloads: z.coerce.number().optional(),
   maxDownloads: z.coerce.number().optional(),
   minRevenue: z.coerce.number().optional(),

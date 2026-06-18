@@ -239,6 +239,21 @@ function buildConditions(params: AppSearchParams, maxDate: string): AppCondition
   if (params.minRevenue != null) snapCols.push(gte(sql`coalesce(${appSnapshots.revenueEstimate}, 0)`, params.minRevenue));
   if (params.maxRevenue != null) snapCols.push(lte(sql`coalesce(${appSnapshots.revenueEstimate}, 0)`, params.maxRevenue));
 
+  // Per-country market filter — chart_country lives on the snapshot (ADR 0007).
+  // Applied ONLY when a market is explicitly requested: the catalog is 100% US
+  // today, so the default (no param) needs no pin and keeps the fast apps-only
+  // count path. ⚠️ When non-US snapshots land (E-aso ingest), the DEFAULT must
+  // pin chart_country='US' here (+ a (chart_country, snapshot_date) index) or
+  // global views will double-count apps holding rows in several markets.
+  if (params.countries) {
+    const cc = params.countries.split(",").map((c) => c.trim().toUpperCase()).filter(Boolean);
+    if (cc.length) snapCols.push(inArray(appSnapshots.chartCountry, cc));
+  }
+  if (params.excludedCountries) {
+    const ex = params.excludedCountries.split(",").map((c) => c.trim().toUpperCase()).filter(Boolean);
+    if (ex.length) snapCols.push(or(isNull(appSnapshots.chartCountry), notInArray(appSnapshots.chartCountry, ex))!);
+  }
+
   if (params.releasedAfter != null) appCols.push(gte(apps.releasedAt, new Date(params.releasedAfter * 1000)));
   if (params.updatedAfter != null) appCols.push(gte(apps.updatedAt, new Date(params.updatedAfter * 1000)));
 
