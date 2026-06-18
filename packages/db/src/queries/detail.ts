@@ -14,6 +14,24 @@ export async function getAppById(db: Db, id: string) {
   return app ?? null;
 }
 
+/**
+ * Hydrate a known set of apps by id — chunked so the SQLite variable limit is
+ * never hit. The bounded counterpart to a full-catalog scan: callers that
+ * already hold the ids they need (ads join, similar-apps, favourites) load only
+ * those rows instead of pulling ~1.1M into memory.
+ */
+export async function listAppsByIds(
+  db: Db,
+  ids: string[],
+): Promise<(typeof apps.$inferSelect)[]> {
+  if (ids.length === 0) return [];
+  const out: (typeof apps.$inferSelect)[] = [];
+  for (let i = 0; i < ids.length; i += 500) {
+    out.push(...(await db.select().from(apps).where(inArray(apps.id, ids.slice(i, i + 500)))));
+  }
+  return out;
+}
+
 /** Persist lazily-fetched listing facts (size, min OS, seller). */
 export async function updateAppListingFacts(
   db: Db,

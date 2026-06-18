@@ -128,6 +128,8 @@ export interface AppListItem {
    * app lacks two ranked snapshots. Powers the Highlights "1D" column.
    */
   rankDelta: number | null;
+  /** Last ≤7 daily review counts (oldest→newest); drives the row sparkline. */
+  sparkline?: number[];
   isFirstMover: boolean;
   releasedAt: string | null;
   updatedAt: string | null;

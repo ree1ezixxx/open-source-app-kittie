@@ -12,6 +12,7 @@ export {
   appsWithAppleAds,
   appsWithCreators,
   getAppById as getAppRowById,
+  listAppsByIds,
   listFreshSet,
   loadAppRelations,
   updateAppListingFacts,
