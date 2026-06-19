@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import "../styles/aistudio.css";
 import { aiService } from "../lib/aiService";
 import {
@@ -12,7 +13,7 @@ import { StudioHeader } from "../components/aistudio/StudioHeader";
 import { StudioEmptyState } from "../components/aistudio/StudioEmptyState";
 import { IdeaCard } from "../components/aistudio/IdeaCard";
 import { FavoriteToggle } from "../components/FavoriteToggle";
-import { IconSearch, IconChevron, IconArrowDown, IconArrowUp } from "../icons";
+import { IconSearch, IconChevron, IconArrowDown, IconArrowUp, IconClose } from "../icons";
 import { IconBulb } from "../components/aistudio/icons";
 
 /** Live-parity sort metrics — all absolute, never growth (ADR 0005). */
@@ -26,16 +27,47 @@ const SORTS: { value: IdeaSort; label: string }[] = [
   { value: "price", label: "Price" },
 ];
 const BLUEPRINTS: BlueprintTag[] = ["backend", "database", "ai"];
-const PAGE_SIZE = 12;
+const PAGE_SIZE = 9; // truth: 9 ideas/page
 
 export function HotIdeasPage() {
-  const [search, setSearch] = useState("");
-  const [sourceCategory, setSourceCategory] = useState("");
-  const [ideaCategory, setIdeaCategory] = useState("");
-  const [blueprint, setBlueprint] = useState<BlueprintTag[]>([]);
-  const [sort, setSort] = useState<IdeaSort>("created");
-  const [order, setOrder] = useState<"asc" | "desc">("desc");
-  const [page, setPage] = useState(1);
+  const [sp, setSp] = useSearchParams();
+
+  // All filter/sort/page state lives in the URL — deep-linkable + back-aware (truth parity).
+  const q = sp.get("q") ?? "";
+  const sourceCategory = sp.get("cat") ?? "";
+  const ideaCategory = sp.get("type") ?? "";
+  const blueprint = useMemo(
+    () => ((sp.get("bp")?.split(",").filter(Boolean) ?? []) as BlueprintTag[]),
+    [sp],
+  );
+  const sort = (sp.get("sort") ?? "created") as IdeaSort;
+  const order: "asc" | "desc" = sp.get("order") === "asc" ? "asc" : "desc";
+  const page = Math.max(1, Number(sp.get("page") || "1"));
+
+  // Single URL writer; any filter change resets pagination unless keepPage.
+  const update = useCallback(
+    (patch: Record<string, string | string[] | null>, keepPage = false) => {
+      const next = new URLSearchParams(window.location.search);
+      for (const [k, v] of Object.entries(patch)) {
+        if (v == null || v === "" || (Array.isArray(v) && v.length === 0)) next.delete(k);
+        else next.set(k, Array.isArray(v) ? v.join(",") : String(v));
+      }
+      if (!keepPage && !("page" in patch)) next.delete("page");
+      setSp(next, { replace: true });
+    },
+    [setSp],
+  );
+
+  // Search box: local state for responsiveness, debounced into the URL (truth debounces too).
+  const [searchInput, setSearchInput] = useState(q);
+  useEffect(() => { setSearchInput(q); }, [q]); // reflect external resets (Clear all) in the box
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const cur = new URLSearchParams(window.location.search).get("q") ?? "";
+      if (searchInput !== cur) update({ q: searchInput || null });
+    }, 300);
+    return () => clearTimeout(t);
+  }, [searchInput, update]);
 
   const [result, setResult] = useState<IdeasPage | null>(null);
   const [loading, setLoading] = useState(true);
@@ -54,38 +86,37 @@ export function HotIdeasPage() {
     };
   }, []);
 
-  // reset to page 1 whenever a filter (not the page itself) changes
-  useEffect(() => {
-    setPage(1);
-  }, [search, sourceCategory, ideaCategory, blueprint, sort, order]);
-
+  const bpKey = blueprint.join(",");
   useEffect(() => {
     let alive = true;
     setLoading(true);
     aiService
-      .listIdeas({ search, sourceCategory, ideaCategory, blueprint, sort, order, page, pageSize: PAGE_SIZE })
+      .listIdeas({ search: q, sourceCategory, ideaCategory, blueprint, sort, order, page, pageSize: PAGE_SIZE })
       .then((r) => alive && setResult(r))
       .finally(() => alive && setLoading(false));
     return () => {
       alive = false;
     };
-  }, [search, sourceCategory, ideaCategory, blueprint, sort, order, page]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q, sourceCategory, ideaCategory, bpKey, sort, order, page]);
 
   function toggleBlueprint(tag: BlueprintTag) {
-    setBlueprint((b) => (b.includes(tag) ? b.filter((t) => t !== tag) : [...b, tag]));
+    update({ bp: blueprint.includes(tag) ? blueprint.filter((t) => t !== tag) : [...blueprint, tag] });
   }
 
   const total = result?.total ?? 0;
   const pageCount = result?.pageCount ?? 1;
   const ideas = result?.ideas ?? [];
-  const filtered = !!(search || sourceCategory || ideaCategory || blueprint.length);
+  const activeCount =
+    (q ? 1 : 0) + (sourceCategory ? 1 : 0) + (ideaCategory ? 1 : 0) + blueprint.length;
+  const filtered = activeCount > 0;
 
   return (
     <main className="main">
       <StudioHeader
         icon={<IconBulb style={{ width: 18, height: 18 }} />}
         title="Hot app ideas"
-        subtitle="AI concepts mined from fast-growing apps"
+        subtitle="AI mockups and concepts from fast-growing apps"
         count={total}
       />
 
@@ -93,11 +124,16 @@ export function HotIdeasPage() {
       <div className="studio-filterbar">
         <div className="search" style={{ flex: "0 1 280px" }}>
           <IconSearch />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search ideas…" spellCheck={false} />
+          <input
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search ideas…"
+            spellCheck={false}
+          />
         </div>
 
         <div className="select">
-          <select value={sourceCategory} onChange={(e) => setSourceCategory(e.target.value)}>
+          <select value={sourceCategory} onChange={(e) => update({ cat: e.target.value || null })}>
             <option value="">All app categories</option>
             {facets.sourceCategories.map((c) => (
               <option key={c} value={c}>{c}</option>
@@ -107,7 +143,7 @@ export function HotIdeasPage() {
         </div>
 
         <div className="select">
-          <select value={ideaCategory} onChange={(e) => setIdeaCategory(e.target.value)}>
+          <select value={ideaCategory} onChange={(e) => update({ type: e.target.value || null })}>
             <option value="">All idea types</option>
             {facets.ideaCategories.map((c) => (
               <option key={c} value={c}>{c}</option>
@@ -119,7 +155,7 @@ export function HotIdeasPage() {
         <div className="toolbar-divider" />
 
         <div className="select">
-          <select value={sort} onChange={(e) => setSort(e.target.value as typeof sort)}>
+          <select value={sort} onChange={(e) => update({ sort: e.target.value })}>
             {SORTS.map((s) => (
               <option key={s.value} value={s.value}>Sort: {s.label}</option>
             ))}
@@ -128,8 +164,8 @@ export function HotIdeasPage() {
         </div>
         <button
           className="icon-btn"
-          title={order === "desc" ? "Descending" : "Ascending"}
-          onClick={() => setOrder((o) => (o === "desc" ? "asc" : "desc"))}
+          title={order === "desc" ? "High → low" : "Low → high"}
+          onClick={() => update({ order: order === "desc" ? "asc" : "desc" })}
         >
           {order === "desc" ? <IconArrowDown /> : <IconArrowUp />}
         </button>
@@ -144,6 +180,14 @@ export function HotIdeasPage() {
             </button>
           ))}
         </div>
+
+        {filtered && (
+          <button className="studio-clear" onClick={() => setSp(new URLSearchParams(), { replace: true })}>
+            <IconClose style={{ width: 12, height: 12 }} />
+            Clear all
+            <span className="studio-clear-badge">{activeCount}</span>
+          </button>
+        )}
       </div>
 
       {/* ---------------- grid ---------------- */}
@@ -201,11 +245,11 @@ export function HotIdeasPage() {
               {total.toLocaleString()} idea{total === 1 ? "" : "s"} · Page {result?.page ?? 1} of {pageCount}
             </div>
             <div className="nav">
-              <button className="btn" disabled={(result?.page ?? 1) <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+              <button className="btn" disabled={(result?.page ?? 1) <= 1} onClick={() => update({ page: String(Math.max(1, page - 1)) }, true)}>
                 Prev
               </button>
               <span className="pager-page">{result?.page ?? 1} / {pageCount}</span>
-              <button className="btn" disabled={(result?.page ?? 1) >= pageCount} onClick={() => setPage((p) => Math.min(pageCount, p + 1))}>
+              <button className="btn" disabled={(result?.page ?? 1) >= pageCount} onClick={() => update({ page: String(Math.min(pageCount, page + 1)) }, true)}>
                 Next
               </button>
             </div>
