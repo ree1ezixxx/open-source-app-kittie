@@ -1,4 +1,4 @@
-import { count, eq } from "drizzle-orm";
+import { and, count, eq } from "drizzle-orm";
 import type { GrowthPeriod } from "@kittie/types";
 import { GROWTH_PERIOD_DAYS } from "@kittie/intelligence";
 import type { Db } from "../client.js";
@@ -7,21 +7,10 @@ import {
   appSnapshots,
   iaps,
   metaAds,
-  type App,
   type AppSnapshot,
 } from "../schema.js";
-
-export interface SnapshotContext {
-  app: App;
-  latest: AppSnapshot;
-  prior: AppSnapshot | null;
-  /** Actual day gap latest→prior — shorter than the period when history is thin. */
-  priorDays: number | null;
-  iapCount: number;
-  metaAdCount: number;
-  metaAdCountPrior: number | null;
-  categoryAppCount: number;
-}
+import { assembleSnapshotContext, type SnapshotContext } from "./snapshot-assembly.js";
+export type { SnapshotContext } from "./snapshot-assembly.js";
 
 export function parseJsonArray(value: string | null): string[] {
   if (!value) return [];
@@ -31,39 +20,6 @@ export function parseJsonArray(value: string | null): string[] {
   } catch {
     return [];
   }
-}
-
-function daysBefore(date: string, days: number): string {
-  const d = new Date(`${date}T00:00:00.000Z`);
-  d.setUTCDate(d.getUTCDate() - days);
-  return d.toISOString().slice(0, 10);
-}
-
-function dayGap(later: string, earlier: string): number {
-  return Math.round(
-    (Date.parse(`${later}T00:00:00.000Z`) - Date.parse(`${earlier}T00:00:00.000Z`)) / 86_400_000,
-  );
-}
-
-/**
- * Prior = last snapshot on/before (latest − periodDays). When history is
- * thinner than the period, fall back to the OLDEST snapshot before the latest
- * — consumers scale the observed delta to the period via `priorDays`.
- */
-function pickPrior(
-  sortedSnaps: AppSnapshot[],
-  latestDate: string,
-  periodDays: number,
-): AppSnapshot | null {
-  const targetDate = daysBefore(latestDate, periodDays);
-  let best: AppSnapshot | null = null;
-  for (const row of sortedSnaps) {
-    if (row.snapshotDate <= targetDate) best = row;
-    if (row.snapshotDate > targetDate) break;
-  }
-  if (best) return best;
-  const oldest = sortedSnaps[0];
-  return oldest && oldest.snapshotDate < latestDate ? oldest : null;
 }
 
 export async function countApps(db: Db): Promise<number> {
@@ -100,6 +56,7 @@ export async function getSnapshotContext(
   db: Db,
   appId: string,
   period: GrowthPeriod = "7d",
+  chartCountry = "US",
 ): Promise<SnapshotContext | null> {
   const [app] = await db.select().from(apps).where(eq(apps.id, appId)).limit(1);
   if (!app) return null;
@@ -107,13 +64,10 @@ export async function getSnapshotContext(
   const allSnaps = await db
     .select()
     .from(appSnapshots)
-    .where(eq(appSnapshots.appId, appId))
+    .where(and(eq(appSnapshots.appId, appId), eq(appSnapshots.chartCountry, chartCountry)))
     .orderBy(appSnapshots.snapshotDate);
-  const latest = allSnaps.at(-1) ?? null;
-  if (!latest) return null;
 
   const periodDays = GROWTH_PERIOD_DAYS[period] ?? 7;
-  const prior = pickPrior(allSnaps, latest.snapshotDate, periodDays);
 
   const [iapRow] = await db
     .select({ value: count() })
@@ -122,28 +76,24 @@ export async function getSnapshotContext(
 
   const metaRows = await db.select().from(metaAds).where(eq(metaAds.appId, appId));
 
-  let metaAdCountPrior: number | null = null;
-  if (prior) {
-    metaAdCountPrior = metaRows.filter(
-      (ad) => ad.firstSeenAt && ad.firstSeenAt <= prior.createdAt,
-    ).length;
-  }
-
-  return {
+  return assembleSnapshotContext({
     app,
-    latest,
-    prior,
-    priorDays: prior ? dayGap(latest.snapshotDate, prior.snapshotDate) : null,
+    sortedSnaps: allSnaps,
+    periodDays,
     iapCount: iapRow?.value ?? 0,
-    metaAdCount: metaRows.length,
-    metaAdCountPrior,
+    metaRows,
     categoryAppCount: await countAppsInCategory(db, app.category),
-  };
+  });
 }
 
+/**
+ * Load Snapshot contexts for the entire catalog — OOM risk at scale.
+ * Prefer {@link buildSnapshotContextsForApps} for bounded id sets.
+ */
 export async function listSnapshotContexts(
   db: Db,
   period: GrowthPeriod = "7d",
+  chartCountry = "US",
 ): Promise<SnapshotContext[]> {
   // Bulk-load everything in a handful of queries, then assemble in memory.
   // The per-app version (getSnapshotContext) fires ~6 queries each — at 100K
@@ -151,7 +101,11 @@ export async function listSnapshotContexts(
   const periodDays = GROWTH_PERIOD_DAYS[period] ?? 7;
   const [allApps, allSnapshots, allIaps, allMetaAds] = await Promise.all([
     db.select().from(apps),
-    db.select().from(appSnapshots).orderBy(appSnapshots.appId, appSnapshots.snapshotDate),
+    db
+      .select()
+      .from(appSnapshots)
+      .where(eq(appSnapshots.chartCountry, chartCountry))
+      .orderBy(appSnapshots.appId, appSnapshots.snapshotDate),
     db.select({ appId: iaps.appId }).from(iaps),
     db.select().from(metaAds),
   ]);
@@ -183,26 +137,17 @@ export async function listSnapshotContexts(
   const contexts: SnapshotContext[] = [];
   for (const app of allApps) {
     const snaps = snapshotsByApp.get(app.id);
-    const latest = snaps?.at(-1);
-    if (!latest) continue; // mirrors getSnapshotContext: no snapshot → skip
+    if (!snaps?.length) continue;
 
-    const prior = pickPrior(snaps!, latest.snapshotDate, periodDays);
-
-    const metaRows = metaAdsByApp.get(app.id) ?? [];
-    const metaAdCountPrior = prior
-      ? metaRows.filter((ad) => ad.firstSeenAt && ad.firstSeenAt <= prior.createdAt).length
-      : null;
-
-    contexts.push({
+    const ctx = assembleSnapshotContext({
       app,
-      latest,
-      prior,
-      priorDays: prior ? dayGap(latest.snapshotDate, prior.snapshotDate) : null,
+      sortedSnaps: snaps,
+      periodDays,
       iapCount: iapCountByApp.get(app.id) ?? 0,
-      metaAdCount: metaRows.length,
-      metaAdCountPrior,
+      metaRows: metaAdsByApp.get(app.id) ?? [],
       categoryAppCount: app.category ? (categoryCount.get(app.category) ?? 0) : 0,
     });
+    if (ctx) contexts.push(ctx);
   }
 
   return contexts;

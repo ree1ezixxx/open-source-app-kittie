@@ -101,6 +101,16 @@ export function matchesSearch(row: ScoredAppRow, params: AppSearchParams): boole
   return true;
 }
 
+/** Growth score filters run in-memory only — SQL total must not include them. */
+export function hasLiveGrowthFilter(params: AppSearchParams): boolean {
+  return (
+    params.growthType === "positive" ||
+    params.growthType === "negative" ||
+    params.minGrowth != null ||
+    params.maxGrowth != null
+  );
+}
+
 function sortValue(item: AppListItem, sortBy: AppSearchParams["sortBy"]): number | string | null {
   switch (sortBy) {
     case "growth":
@@ -111,9 +121,9 @@ function sortValue(item: AppListItem, sortBy: AppSearchParams["sortBy"]): number
     case "reviews":
       return item.reviewCount;
     case "downloads":
-      return item.downloadsEstimate30d ?? 0;
+      return item.downloadsEstimate30d;
     case "revenue":
-      return item.revenueEstimate30d ?? 0;
+      return item.revenueEstimate30d;
     case "updated":
       return item.updatedAt ? new Date(item.updatedAt).getTime() : 0;
     case "released":

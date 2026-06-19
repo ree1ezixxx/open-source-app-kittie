@@ -75,3 +75,11 @@ const searchParamsSchema = z.object({
 export function parseAppSearchParams(query: Record<string, string>): AppSearchParams {
   return searchParamsSchema.parse(query);
 }
+
+export function tryParseAppSearchParams(
+  query: Record<string, string>,
+): { ok: true; data: AppSearchParams } | { ok: false; error: z.ZodError } {
+  const result = searchParamsSchema.safeParse(query);
+  if (!result.success) return { ok: false, error: result.error };
+  return { ok: true, data: result.data };
+}
