@@ -1,0 +1,31 @@
+# Kittie — App Intelligence
+
+> Kittie is a mobile app-intelligence platform for AI agents: it returns modelled revenue and download estimates, per-country App Store / Google Play chart rankings with day-over-day movement and first-mover trend detection, ASO keyword difficulty across markets, and review sentiment — all as a machine-readable JSON API and an MCP server.
+
+Revenue and download figures are **modelled estimates, labelled as such — not ground truth**. Blocked sources (e.g. Meta ad data) return honest empty-states, never fabricated rows. URLs below are relative to this site's origin; the API is served same-origin under `/api/v1`.
+
+## Start here (machine-readable)
+
+- [OpenAPI 3.1 specification](/api/v1/openapi.json): the full contract for every read endpoint — params, types, responses.
+- [Discovery index (JSON)](/api/v1): capabilities, links, data-honesty and pricing notes.
+
+## Capabilities (read API)
+
+- [Search & rank apps](/api/v1/apps): filter the catalog by text, category, store, market, modelled metrics (downloads/revenue/rating/reviews), live growth, price and presence signals; sort by growth, revenue, downloads, rating, rank movement and more. Cursor-paginated.
+- [App detail](/api/v1/apps/{id}): full profile for one app (id form e.g. `apple:123456789`).
+- [App history](/api/v1/apps/{id}/historicals): daily reviews / rating / chart-rank series.
+- [Top charts (Trending)](/api/v1/charts): latest store rankings per store/type/market with day-over-day rank movement; empty (never fabricated) when there is no clean source.
+- [Keyword difficulty](/api/v1/keywords/difficulty): ASO difficulty for one keyword (GET) or many (POST).
+- [Keyword markets](/api/v1/keywords/markets): cross-market difficulty for one keyword.
+- [Reviews](/api/v1/reviews): reviews with sentiment/topics for one app (POST `{appId, country, limit}`).
+- [Supported markets](/api/v1/countries): the ISO markets covered.
+
+## MCP
+
+- An [`@kittie/mcp`](https://github.com/) Model Context Protocol server exposes the same capabilities as agent tools (`search_apps`, `get_app_detail`, `get_keyword_difficulty`, `batch_keyword_difficulty`, `get_app_reviews`, `get_supported_countries`, `clone_ios_app`). Transport is currently **stdio**; a remote (HTTP) MCP endpoint is planned.
+
+## Notes
+
+- Trust & data honesty: [/.well-known/ai-policy.txt](/.well-known/ai-policy.txt) — identity, source provenance, and the modelled-estimate disclosure.
+- Pricing: free during early access; usage-based pricing for agents is planned.
+- Data shapes and freshness are described in the OpenAPI spec and each response's `meta`.
