@@ -183,8 +183,12 @@ export function RisingPage({ theme, onToggleTheme }: { theme: Theme; onToggleThe
   // Country now narrows the query (ADR 0007: chart_country dimension). Only send
   // markets we actually hold data for, so a stale persisted pick can't blank the list.
   const activeCountries = countries.filter((c) => MARKETS_WITH_DATA.has(c));
+  // Sort by REVENUE (MRR), not growth — truth's Rising is "top 100 apps by monthly
+  // recurring revenue" within the recent-launch + positive-growth set, so #1 is the
+  // highest-MRR rising app, not the highest-growth one. growthType="positive" is what
+  // makes the set "rising"; the sort orders that set by money. (Parity fix.)
   const { apps, total, loading, refresh } = useApps({
-    sortBy: "growth",
+    sortBy: "revenue",
     growthType: "positive",
     sortOrder: "desc",
     growthPeriod: SIGNAL_PERIOD[signal],
@@ -201,7 +205,7 @@ export function RisingPage({ theme, onToggleTheme }: { theme: Theme; onToggleThe
   const exploreHref = useMemo(() => {
     const sp = writeFilters({
       ...EMPTY_FILTERS,
-      sort: "growth",
+      sort: "revenue",
       gtype: "positive",
       period: SIGNAL_PERIOD[signal],
       source: store,
@@ -361,7 +365,8 @@ export function RisingPage({ theme, onToggleTheme }: { theme: Theme; onToggleThe
                 const d = a.growthPct;
                 return (
                   <tr key={a.id} onClick={() => nav(`/apps/${a.id}`)}>
-                    <td className="num num-strong">{i + 1}</td>
+                    {/* Truth prefixes ranks 4+ with "#"; 1–3 stay plain. */}
+                    <td className="num num-strong">{i < 3 ? i + 1 : `#${i + 1}`}</td>
                     <td className="col-app">
                       <div className="app-cell">
                         <AppIcon url={a.iconUrl} title={a.title} />
