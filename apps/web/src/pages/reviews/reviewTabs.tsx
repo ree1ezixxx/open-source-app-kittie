@@ -375,7 +375,11 @@ export function ReviewsTab({ tagged, history = [] }: { tagged: TaggedReview[]; h
         ? pts.map((p) => ({ date: p.date, value: p.count }))
         : pts.slice(1).map((p, i) => ({ date: p.date, value: Math.max(0, p.count - pts[i]!.count) }));
     if (days == null) return series;
-    const cutoff = Date.now() - days * 86_400_000;
+    // Anchor the window to the latest snapshot we actually hold (not wall-clock),
+    // so a lagging worker still shows the last N days of real history rather than
+    // emptying the chart when "now" has drifted past the freshest snapshot.
+    const anchor = new Date(pts[pts.length - 1]!.date + "T00:00:00").getTime();
+    const cutoff = anchor - days * 86_400_000;
     return series.filter((p) => new Date(p.date + "T00:00:00").getTime() >= cutoff);
   }, [history, growthMetric, days]);
 
@@ -428,7 +432,9 @@ export function ReviewsTab({ tagged, history = [] }: { tagged: TaggedReview[]; h
         </div>
         {growthPoints.length >= 2 ? (
           <div className="rv-growth-chart">
-            <HistoryChart points={growthPoints} fmt={formatCompact} zeroBased watermark="Atlas" />
+            {/* Total is a large cumulative base — zoom to its range so the slope reads;
+                New is a delta from 0, so keep it zero-based. */}
+            <HistoryChart points={growthPoints} fmt={formatCompact} zeroBased={growthMetric === "new"} watermark="Atlas" />
           </div>
         ) : (
           <div className="rv-growth-empty">No historical review metrics yet</div>

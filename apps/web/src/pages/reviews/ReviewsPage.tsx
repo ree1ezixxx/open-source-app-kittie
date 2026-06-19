@@ -83,7 +83,8 @@ export function ReviewsPage({ theme, onToggleTheme }: { theme: Theme; onToggleTh
   // Growth chart (New = day-over-day delta, Total = cumulative count). Rollup
   // has no single app, so the chart is feed-tab/single-app only.
   useEffect(() => {
-    if (isAll || !selected) { setHistory([]); return; }
+    setHistory([]); // clear immediately on app switch so the chart never shows the prior app's line
+    if (isAll || !selected) return;
     const ac = new AbortController();
     getAppHistoricals(selected.id, ac.signal)
       .then((h) => !ac.signal.aborted && setHistory(h))
