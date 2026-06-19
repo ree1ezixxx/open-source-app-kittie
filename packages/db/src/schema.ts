@@ -86,6 +86,39 @@ export const appSnapshots = sqliteTable(
   ],
 );
 
+/**
+ * Store-chart positions — ONE row per (app, chart, day, market). An app sits on
+ * many charts at once (e.g. #5 overall Free AND #1 in Games), which a single
+ * chart slot on `app_snapshots` could not represent — the second write clobbered
+ * the first, so overall charts came back half-empty. This dedicated table holds
+ * each membership independently. `chart_category` is the leaderboard identity
+ * (`top-free` overall, `top-free:Games` genre, `top-grossing` …); the daily chart
+ * capture set-replaces each leaderboard so ranks stay unique → Trending's 24h
+ * rank-delta resolves cleanly. Reads join to the app's metric snapshot for
+ * review/rating/estimates. (Trending fix; pairs with ADR 0008's metric/chart split.)
+ */
+export const chartRankings = sqliteTable(
+  "chart_rankings",
+  {
+    id: text("id").primaryKey(),
+    appId: text("app_id")
+      .notNull()
+      .references(() => apps.id),
+    store: text("store", { enum: ["apple", "google"] }).notNull(),
+    snapshotDate: text("snapshot_date").notNull(), // YYYY-MM-DD
+    country: text("country").notNull().default("US"),
+    chartCategory: text("chart_category").notNull(), // leaderboard id, e.g. "top-free" | "top-free:Games"
+    rank: integer("rank").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  },
+  (t) => [
+    // One position per app per leaderboard per day/market — the set-replace key.
+    uniqueIndex("chart_rankings_unique_idx").on(t.snapshotDate, t.country, t.chartCategory, t.appId),
+    // Serves the read: a leaderboard's latest day, ordered by rank.
+    index("chart_rankings_read_idx").on(t.store, t.country, t.chartCategory, t.snapshotDate, t.rank),
+  ],
+);
+
 export const reviews = sqliteTable(
   "reviews",
   {
@@ -382,6 +415,7 @@ export const cloneableApps = sqliteTable(
 
 export type App = typeof apps.$inferSelect;
 export type AppSnapshot = typeof appSnapshots.$inferSelect;
+export type ChartRanking = typeof chartRankings.$inferSelect;
 export type TrackedKeyword = typeof trackedKeywords.$inferSelect;
 export type TrackedApp = typeof trackedApps.$inferSelect;
 export type AiGeneration = typeof aiGenerations.$inferSelect;

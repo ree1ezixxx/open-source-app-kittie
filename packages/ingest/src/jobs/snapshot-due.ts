@@ -17,19 +17,18 @@
 import { loadEnv } from "@kittie/core";
 import {
   apps,
-  appSnapshots,
+  chartRankings,
   createDb,
   enrichSnapshotScores,
   recordSweepRun,
   trackedApps,
   type Db,
 } from "@kittie/db";
-import { and, asc, inArray, isNull, lt, or } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lt, or } from "drizzle-orm";
 
 import { lookupAppleApps } from "../apple/lookup.js";
-import { upsertSnapshot } from "../db/apps.js";
+import { upsertMetricSnapshot } from "../db/apps.js";
 import { fetchGoogleAppMetadata } from "../google/metadata.js";
-import { chartRankForApp, fetchChartRankLookup, type ChartRankEntry } from "../util/chart-lookup.js";
 import { todaySnapshotDate } from "../util/dates.js";
 import { sleep } from "../util/rate-limit.js";
 
@@ -128,14 +127,16 @@ async function bumpLastSnapshot(db: Db, ids: string[], snapshotDate: string): Pr
 }
 
 /**
- * Snapshot a bounded list of apps: Apple via batched iTunes lookups (throttled,
- * backing off on rate-limit), Google per-app. Scores each written snapshot and
- * advances `lastSnapshotDate`. Returns written/skipped counts. Bounded memory.
+ * Refresh a bounded list of apps' METRICS (review count + rating) and scores:
+ * Apple via batched iTunes lookups (throttled, backing off on rate-limit), Google
+ * per-app. Uses `upsertMetricSnapshot`, which NEVER touches chart columns — those
+ * are owned by the once-daily coherent chart capture (`chart-capture.ts`), so this
+ * frequent pass can't re-pollute the day's ranking. Advances `lastSnapshotDate`.
+ * Returns written/skipped counts. Bounded memory.
  */
 async function snapshotApps(
   db: Db,
   list: DueApp[],
-  chartLookup: Map<string, ChartRankEntry>,
   snapshotDate: string,
 ): Promise<{ written: number; skipped: number }> {
   let written = 0;
@@ -157,15 +158,11 @@ async function snapshotApps(
         const appId = appIdByStoreAppId.get(meta.storeAppId);
         if (!appId) continue;
         seen.add(meta.storeAppId);
-        const chart = chartRankForApp(chartLookup, "apple", meta.storeAppId);
-        await upsertSnapshot(db, {
+        await upsertMetricSnapshot(db, {
           appId,
           snapshotDate,
           reviewCount: meta.reviewCount,
           rating: meta.rating,
-          chartRank: chart?.chartRank ?? null,
-          chartCategory: chart?.chartCategory ?? null,
-          chartCountry: chart?.chartCountry ?? "US",
         });
         await enrichSnapshotScores(db, appId, snapshotDate);
         done.push(appId);
@@ -190,15 +187,11 @@ async function snapshotApps(
   for (const app of googleApps) {
     try {
       const meta = await fetchGoogleAppMetadata(app.storeAppId);
-      const chart = chartRankForApp(chartLookup, "google", app.storeAppId);
-      await upsertSnapshot(db, {
+      await upsertMetricSnapshot(db, {
         appId: app.id,
         snapshotDate,
         reviewCount: meta.reviewCount,
         rating: meta.rating,
-        chartRank: chart?.chartRank ?? null,
-        chartCategory: chart?.chartCategory ?? null,
-        chartCountry: chart?.chartCountry ?? "US",
       });
       await enrichSnapshotScores(db, app.id, snapshotDate);
       await bumpLastSnapshot(db, [app.id], snapshotDate);
@@ -227,22 +220,25 @@ export async function runSnapshotDue(opts: SnapshotDueOptions = {}): Promise<Sna
   const hotCap = opts.hotCap ?? 20_000;
   const started = Date.now();
 
-  // 1) Live chart ranks (US for this slice; multi-country is an ADR 0008 follow-up).
-  const chartLookup = await fetchChartRankLookup("us");
-
-  // 2) HOT set: chart lookup keys are `${store}:${storeAppId}` === apps.id, so the
-  //    charting app ids need no parsing. Union with tracked apps, resolve to real
-  //    rows, keep only those still missing today's snapshot.
-  const chartingIds = [...chartLookup.keys()];
+  // 1) HOT set = currently-charting ∪ tracked. Charting apps come from TODAY's
+  //    captured leaderboards (chart_rankings owns chart positions); here we only
+  //    keep the visible set's METRICS fresh. Union with tracked apps, resolve to
+  //    real rows, keep only those still missing today's metric snapshot.
+  const chartingRows = await db
+    .selectDistinct({ appId: chartRankings.appId })
+    .from(chartRankings)
+    .where(eq(chartRankings.snapshotDate, snapshotDate));
   const trackedRows = await db.select({ appId: trackedApps.appId }).from(trackedApps);
-  const candidateHotIds = [...new Set([...chartingIds, ...trackedRows.map((r) => r.appId)])];
+  const candidateHotIds = [
+    ...new Set([...chartingRows.map((r) => r.appId), ...trackedRows.map((r) => r.appId)]),
+  ];
   const hotApps = await loadHotDue(db, candidateHotIds, snapshotDate, hotCap);
-  const hot = await snapshotApps(db, hotApps, chartLookup, snapshotDate);
+  const hot = await snapshotApps(db, hotApps, snapshotDate);
 
-  // 3) COLD slice: long tail older than the window. Hot apps just bumped to today
+  // 2) COLD slice: long tail older than the window. Hot apps just bumped to today
   //    fall outside the cutoff, so they're never double-processed.
   const coldApps = await loadColdDue(db, cutoffDate(coldWindowDays), coldBatch);
-  const cold = await snapshotApps(db, coldApps, chartLookup, snapshotDate);
+  const cold = await snapshotApps(db, coldApps, snapshotDate);
 
   const written = hot.written + cold.written;
   const skipped = hot.skipped + cold.skipped;

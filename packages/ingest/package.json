@@ -19,6 +19,7 @@
     "snapshot": "tsx src/jobs/snapshot.ts",
     "snapshot:bulk": "tsx src/jobs/snapshot-bulk.ts",
     "snapshot:due": "tsx src/jobs/snapshot-due.ts",
+    "chart:capture": "tsx src/jobs/chart-capture.ts",
     "worker": "tsx src/jobs/snapshot-worker.ts",
     "discover:apple": "tsx src/jobs/apple-discover.ts",
     "score": "tsx src/jobs/score.ts",
