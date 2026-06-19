@@ -24,6 +24,12 @@ export const apps = sqliteTable(
     updatedAt: integer("updated_at", { mode: "timestamp" }),
     firstSeenAt: integer("first_seen_at", { mode: "timestamp" }).notNull(),
     lastIngestedAt: integer("last_ingested_at", { mode: "timestamp" }),
+    // Denormalized max(app_snapshots.snapshot_date) for this app (YYYY-MM-DD).
+    // The due-driven snapshot worker (ADR 0008) selects "apps whose latest
+    // snapshot is older than their tier cadence" in O(batch) off this column +
+    // index, instead of materializing the catalog. Bumped on every snapshot
+    // write; backfilled once from the snapshots table.
+    lastSnapshotDate: text("last_snapshot_date"),
     // Listing facts (App Detail parity) — lazily backfilled from Apple lookup
     // on first detail view; null until then and always null for Google apps.
     fileSizeBytes: integer("file_size_bytes"),
@@ -34,6 +40,9 @@ export const apps = sqliteTable(
     uniqueIndex("apps_store_app_id_idx").on(t.store, t.storeAppId),
     index("apps_category_idx").on(t.category),
     index("apps_developer_idx").on(t.developer),
+    // Due-selection for the snapshot worker (ADR 0008): "oldest snapshot first".
+    // NULLs sort first in SQLite ASC → never-snapshotted apps are most due.
+    index("apps_last_snapshot_idx").on(t.lastSnapshotDate),
   ],
 );
 

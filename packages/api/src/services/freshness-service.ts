@@ -22,6 +22,13 @@ export interface SweepDef {
   cadenceHours: number;
   /** One pass. Returns a short human summary for the status surface. */
   run(): Promise<string | void>;
+  /**
+   * Owned by a separate process (ADR 0008): the API lists it in `/freshness`
+   * (reading the `sweep_state` row that process writes) but never runs it
+   * in-process. Keeps the heavy catalog snapshot out of the API event loop so an
+   * OOM can't crash the serving layer or crash-loop boot catch-up.
+   */
+  external?: boolean;
 }
 
 export interface SweepStatus {
@@ -54,6 +61,7 @@ export function selectDueSweeps(
   nowMs: number,
 ): SweepDef[] {
   return defs.filter((def) => {
+    if (def.external) return false; // owned by a separate process; the API never runs it
     const last = lastRuns.get(def.name);
     if (last === undefined) return true;
     return nowMs - last >= def.cadenceHours * 3_600_000;

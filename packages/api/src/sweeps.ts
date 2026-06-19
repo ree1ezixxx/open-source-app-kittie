@@ -44,10 +44,15 @@ export function registerAllSweeps(): void {
     },
   });
 
+  // Owned by the out-of-process snapshot worker (ADR 0008): `pnpm dev:worker`.
+  // The API must NOT run the catalog snapshot in-process — it materialised the
+  // 1.1M-app catalog → ~4 GB heap → OOM → boot-catch-up crash-loop. The worker
+  // writes this sweep's `sweep_state`; the API only surfaces it in `/freshness`.
   registerSweep({
     name: "snapshots-daily",
     cadenceHours: 24,
-    run: runSnapshotsDailySweep,
+    external: true,
+    run: async () => "managed by snapshot worker (pnpm dev:worker)",
   });
 
   registerSweep({

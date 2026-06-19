@@ -6,6 +6,7 @@ export { syncAppleReviews, type SyncOpts } from "./apple/reviews.js";
 export { runSeed } from "./jobs/seed.js";
 export { runSnapshot } from "./jobs/snapshot.js";
 export { runSnapshotBulk } from "./jobs/snapshot-bulk.js";
+export { runSnapshotDue, type SnapshotDueOptions, type SnapshotDueResult } from "./jobs/snapshot-due.js";
 export { runMarketSnapshots } from "./jobs/snapshot-markets.js";
 export { runAppleDiscover, type AppleDiscoverResult } from "./jobs/apple-discover.js";
 export { enrichAndPersistAppleApps, type EnrichResult } from "./apple/ingest-apps.js";
