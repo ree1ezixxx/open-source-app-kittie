@@ -61,4 +61,12 @@ describe("selectDueSweeps", () => {
     const lastRuns = new Map([["snapshots-daily", NOW - 23 * HOUR]]);
     expect(selectDueSweeps([sweep("snapshots-daily", 24)], lastRuns, NOW)).toEqual([]);
   });
+
+  it("never selects an external sweep, even when never run (ADR 0008)", () => {
+    // Owned by the out-of-process worker — the API lists it but must not run it,
+    // or it would re-introduce the in-process catalog snapshot that OOMs.
+    const external: SweepDef = { name: "snapshots-daily", cadenceHours: 24, external: true, run: async () => undefined };
+    expect(selectDueSweeps([external], new Map(), NOW)).toEqual([]);
+    expect(selectDueSweeps([external], new Map([["snapshots-daily", NOW - 99 * HOUR]]), NOW)).toEqual([]);
+  });
 });

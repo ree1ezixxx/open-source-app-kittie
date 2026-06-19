@@ -44,18 +44,25 @@ const POOL_CAP = 5000;
 
 // Latest snapshot day PER MARKET; apps are listed from their row on this day for
 // the requested market (≈99% have one). Per-country so a market that ingests on a
-// later day than US can't blank the US-pinned view (and vice-versa). Refreshed when
-// snapshots-daily invalidates caches.
-const cachedMaxDate = new Map<string, string | null>();
+// later day than US can't blank the US-pinned view (and vice-versa).
+//
+// TTL-bounded (ADR 0008): the snapshot writer is now a SEPARATE process, so this
+// API process can't be signalled to invalidate when a new day lands. A short TTL
+// makes the API pick up the worker's new snapshot day on its own within the window —
+// without it, Explore would pin yesterday's day until an API restart, silently
+// re-introducing staleness. `invalidateAppReadCaches()` still force-clears it for
+// the in-process manual/CLI path.
+const MAX_DATE_TTL_MS = 5 * 60_000;
+const cachedMaxDate = new Map<string, { value: string | null; at: number }>();
 async function latestSnapshotDate(country = "US"): Promise<string | null> {
   const hit = cachedMaxDate.get(country);
-  if (hit !== undefined) return hit;
+  if (hit && Date.now() - hit.at < MAX_DATE_TTL_MS) return hit.value;
   const [row] = await getDb()
     .select({ d: max(appSnapshots.snapshotDate) })
     .from(appSnapshots)
     .where(eq(appSnapshots.chartCountry, country));
   const d = row?.d ?? null;
-  cachedMaxDate.set(country, d);
+  cachedMaxDate.set(country, { value: d, at: Date.now() });
   return d;
 }
 

@@ -1,14 +1,17 @@
-import { and, eq, isNotNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { TopChartsResult } from "@kittie/types";
 import type { Db } from "../client.js";
-import { apps, appSnapshots } from "../schema.js";
+import { apps, appSnapshots, chartRankings } from "../schema.js";
 import { assembleTopCharts, type ChartRow, type TopChartsParams } from "./charts.js";
 
 /**
- * Database shell for {@link assembleTopCharts}. Loads the chart-bearing
- * snapshots for the store+country (a small set — only chart-ranked rows across
- * a handful of dates) and hands them to the pure assembler. Kept separate from
- * `charts.ts` so the ranking/delta logic stays DB-free and unit-testable.
+ * Database shell for {@link assembleTopCharts}. Loads the store+country
+ * leaderboards from the dedicated `chart_rankings` table (one row per
+ * app/chart/day, so an app on several charts is held without collision) and
+ * joins each app's same-day metric snapshot for review/rating/estimates. A small
+ * set — only chart rows across a handful of recent dates — handed to the pure
+ * assembler, which picks the requested (type, genre) chart and its clean prior
+ * day. Kept separate from `charts.ts` so the ranking/delta logic stays DB-free.
  */
 export async function getTopCharts(
   db: Db,
@@ -17,10 +20,10 @@ export async function getTopCharts(
   const country = params.country ?? "US";
   const rows = await db
     .select({
-      appId: appSnapshots.appId,
-      snapshotDate: appSnapshots.snapshotDate,
-      chartRank: appSnapshots.chartRank,
-      chartCategory: appSnapshots.chartCategory,
+      appId: chartRankings.appId,
+      snapshotDate: chartRankings.snapshotDate,
+      chartRank: chartRankings.rank,
+      chartCategory: chartRankings.chartCategory,
       rating: appSnapshots.rating,
       reviewCount: appSnapshots.reviewCount,
       downloadsEstimate: appSnapshots.downloadsEstimate,
@@ -35,28 +38,28 @@ export async function getTopCharts(
         category: apps.category,
       },
     })
-    .from(appSnapshots)
-    .innerJoin(apps, eq(appSnapshots.appId, apps.id))
-    .where(
-      // No `apps.category` filter: the chart's genre lives in `chart_category`
-      // (resolved by the assembler), not the app's listed category. We load every
-      // chart-ranked row for the store+country (a small set) and let assembleTopCharts
-      // pick the requested (type, genre) chart and its clean prior day.
+    .from(chartRankings)
+    .innerJoin(apps, eq(chartRankings.appId, apps.id))
+    // Metric values live on the per-day snapshot for the same market; LEFT so a
+    // freshly-charted app with no metric snapshot yet still shows (estimates are
+    // recomputed live downstream).
+    .leftJoin(
+      appSnapshots,
       and(
-        eq(apps.store, params.store),
+        eq(appSnapshots.appId, chartRankings.appId),
+        eq(appSnapshots.snapshotDate, chartRankings.snapshotDate),
         eq(appSnapshots.chartCountry, country),
-        isNotNull(appSnapshots.chartRank),
       ),
-    );
+    )
+    .where(and(eq(apps.store, params.store), eq(chartRankings.country, country)));
 
-  // chartRank is non-null here (filtered above); narrow for the pure assembler.
   const chartRows: ChartRow[] = rows.map((r) => ({
     appId: r.appId,
     snapshotDate: r.snapshotDate,
-    chartRank: r.chartRank as number,
+    chartRank: r.chartRank,
     chartCategory: r.chartCategory,
     rating: r.rating,
-    reviewCount: r.reviewCount,
+    reviewCount: r.reviewCount ?? 0,
     downloadsEstimate: r.downloadsEstimate,
     revenueEstimate: r.revenueEstimate,
     app: r.app,

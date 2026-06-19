@@ -37,6 +37,11 @@ export function createDb(databaseUrl?: string) {
   // Remote Turso manages its own durability settings and rejects pragmas.
   if (url.startsWith("file:")) {
     void client.execute("PRAGMA foreign_keys = ON").catch(() => {});
+    // The out-of-process snapshot worker (ADR 0008) writes the same file while the
+    // API reads/writes — including the once-daily carry-forward's large bulk insert.
+    // Without a busy timeout a contended connection throws SQLITE_BUSY immediately
+    // (it crashed the API). Wait-and-retry for up to 15s instead.
+    void client.execute("PRAGMA busy_timeout = 15000").catch(() => {});
   }
 
   return drizzle(client, { schema });
