@@ -27,9 +27,14 @@ export const apps = sqliteTable(
     // Denormalized max(app_snapshots.snapshot_date) for this app (YYYY-MM-DD).
     // The due-driven snapshot worker (ADR 0008) selects "apps whose latest
     // snapshot is older than their tier cadence" in O(batch) off this column +
-    // index, instead of materializing the catalog. Bumped on every snapshot
-    // write; backfilled once from the snapshots table.
+    // index, instead of materializing the catalog. Bumped only on a SUCCESSFUL
+    // snapshot write; backfilled once from the snapshots table.
     lastSnapshotDate: text("last_snapshot_date"),
+    // When the worker last ATTEMPTED this app (success OR skip). The cold tier
+    // orders by this so a permanently-unresolvable app (delisted/region-locked,
+    // never bumps last_snapshot_date) rotates to the back instead of re-filling
+    // the bounded batch every cycle and starving the genuinely-stale long tail.
+    lastAttemptedAt: integer("last_attempted_at", { mode: "timestamp" }),
     // Listing facts (App Detail parity) — lazily backfilled from Apple lookup
     // on first detail view; null until then and always null for Google apps.
     fileSizeBytes: integer("file_size_bytes"),
@@ -43,6 +48,8 @@ export const apps = sqliteTable(
     // Due-selection for the snapshot worker (ADR 0008): "oldest snapshot first".
     // NULLs sort first in SQLite ASC → never-snapshotted apps are most due.
     index("apps_last_snapshot_idx").on(t.lastSnapshotDate),
+    // Cold-tier fairness order: least-recently-attempted first (NULLs first).
+    index("apps_last_attempted_idx").on(t.lastAttemptedAt),
   ],
 );
 

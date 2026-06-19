@@ -108,14 +108,20 @@ async function loadHotDue(
   return due.slice(0, cap);
 }
 
-/** Long-tail apps whose newest snapshot predates the rolling window, oldest first. */
+/**
+ * Long-tail apps whose newest snapshot predates the rolling window. Ordered by
+ * least-recently-ATTEMPTED (not by snapshot date): a permanently-unresolvable app
+ * (delisted/region-locked) never advances last_snapshot_date, so ordering by that
+ * would keep it pinned to the front every cycle and starve the real long tail.
+ * Ordering by last_attempted_at rotates a just-tried dead app to the back.
+ */
 async function loadColdDue(db: Db, cutoff: string, limit: number): Promise<DueApp[]> {
   if (limit <= 0) return [];
   return db
     .select({ id: apps.id, store: apps.store, storeAppId: apps.storeAppId })
     .from(apps)
     .where(or(isNull(apps.lastSnapshotDate), lt(apps.lastSnapshotDate, cutoff)))
-    .orderBy(asc(apps.lastSnapshotDate)) // NULLs first in SQLite → most-due first
+    .orderBy(asc(apps.lastAttemptedAt)) // NULLs (never-attempted) first → fair rotation
     .limit(limit);
 }
 
@@ -126,13 +132,21 @@ async function bumpLastSnapshot(db: Db, ids: string[], snapshotDate: string): Pr
   }
 }
 
+/** Record an attempt (success OR skip) so the cold tier rotates fairly (anti-starvation). */
+async function bumpAttempted(db: Db, ids: string[], when: Date): Promise<void> {
+  for (const part of chunk(ids, ID_CHUNK)) {
+    await db.update(apps).set({ lastAttemptedAt: when }).where(inArray(apps.id, part));
+  }
+}
+
 /**
  * Refresh a bounded list of apps' METRICS (review count + rating) and scores:
  * Apple via batched iTunes lookups (throttled, backing off on rate-limit), Google
  * per-app. Uses `upsertMetricSnapshot`, which NEVER touches chart columns — those
  * are owned by the once-daily coherent chart capture (`chart-capture.ts`), so this
- * frequent pass can't re-pollute the day's ranking. Advances `lastSnapshotDate`.
- * Returns written/skipped counts. Bounded memory.
+ * frequent pass can't re-pollute the day's ranking. Advances `lastSnapshotDate`
+ * on success and `lastAttemptedAt` on every attempt. Returns written/skipped
+ * counts. Bounded memory.
  */
 async function snapshotApps(
   db: Db,
@@ -141,6 +155,7 @@ async function snapshotApps(
 ): Promise<{ written: number; skipped: number }> {
   let written = 0;
   let skipped = 0;
+  const attemptedAt = new Date();
 
   const appleApps = list.filter((a) => a.store === "apple");
   const googleApps = list.filter((a) => a.store === "google");
@@ -177,6 +192,7 @@ async function snapshotApps(
       }
     }
     if (done.length) await bumpLastSnapshot(db, done, snapshotDate);
+    await bumpAttempted(db, slice.map((a) => a.id), attemptedAt); // success OR skip
 
     const minBatchMs = (REQUESTS_PER_BATCH / reqsPerSec) * 1000;
     const elapsed = Date.now() - batchStartedAt;
@@ -200,6 +216,7 @@ async function snapshotApps(
       console.warn(`[snapshot-due] skip ${app.id}: ${(error as Error).message}`);
       skipped++;
     }
+    await bumpAttempted(db, [app.id], attemptedAt); // success OR skip
     await sleep(GOOGLE_GAP_MS);
   }
 

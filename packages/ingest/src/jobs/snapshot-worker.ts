@@ -18,14 +18,21 @@ import { loadEnv } from "@kittie/core";
 import { createDb } from "@kittie/db";
 
 import { captureChartRanks } from "./chart-capture.js";
+import { carryForwardSnapshots } from "./carry-forward.js";
 import { runSnapshotDue } from "./snapshot-due.js";
 import { todaySnapshotDate } from "../util/dates.js";
 import { sleep } from "../util/rate-limit.js";
 
-const COLD_BATCH = Number(process.env.WORKER_COLD_BATCH ?? 2000);
-const COLD_WINDOW_DAYS = Number(process.env.WORKER_COLD_WINDOW_DAYS ?? 7);
-const CYCLE_GAP_MS = Number(process.env.WORKER_CYCLE_GAP_MS ?? 60_000);
-const HOT_CAP = Number(process.env.WORKER_HOT_CAP ?? 20_000);
+/** Parse a numeric env tunable, falling back to the default on NaN/non-numeric. */
+function num(v: string | undefined, fallback: number): number {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+const COLD_BATCH = num(process.env.WORKER_COLD_BATCH, 2000);
+const COLD_WINDOW_DAYS = num(process.env.WORKER_COLD_WINDOW_DAYS, 7);
+const CYCLE_GAP_MS = num(process.env.WORKER_CYCLE_GAP_MS, 60_000);
+const HOT_CAP = num(process.env.WORKER_HOT_CAP, 20_000);
 const CHART_COUNTRIES = (process.env.WORKER_CHART_COUNTRIES ?? "US")
   .split(",")
   .map((s) => s.trim())
@@ -40,20 +47,34 @@ async function main(): Promise<void> {
       `gap=${CYCLE_GAP_MS}ms charts=[${CHART_COUNTRIES.join(",")}]${ONCE ? " once=1" : ""}`,
   );
 
-  let lastCaptureDay = "";
+  let lastDailyDay = "";
   for (;;) {
     const today = todaySnapshotDate();
 
-    // (1) Coherent chart capture — once per UTC day (matches truth's periodic
-    // snapshot). Idempotent, so a restart re-running it is harmless.
-    if (today !== lastCaptureDay) {
+    // (1) Once-per-UTC-day setup. Both steps are idempotent, so a restart re-running
+    // them is harmless.
+    if (today !== lastDailyDay) {
+      // (1a) Carry-forward FIRST: make today's snapshot day FULL (copy each app's
+      // latest metrics in-DB) so Explore's global-max-date pin shows the whole
+      // catalog, not just the few-k apps refreshed since midnight.
+      try {
+        const cf = await carryForwardSnapshots(db, { snapshotDate: today, countries: CHART_COUNTRIES });
+        console.log(`[snapshot-worker] carry-forward ${today}: ${cf.carried} rows (${(cf.ms / 1000).toFixed(0)}s)`);
+      } catch (e) {
+        console.error("[snapshot-worker] carry-forward failed:", e instanceof Error ? e.message : e);
+      }
+
+      // (1b) Coherent chart capture (matches truth's periodic snapshot).
       try {
         const cap = await captureChartRanks(db, { countries: CHART_COUNTRIES, snapshotDate: today });
         console.log(
-          `[snapshot-worker] chart capture ${today}: ${cap.leaderboards} leaderboards, ` +
-            `${cap.written} ranks, ${cap.cleared} stale cleared (${(cap.ms / 1000).toFixed(0)}s)`,
+          `[snapshot-worker] chart capture ${today}: ${cap.written} ranks across ` +
+            `[${cap.countries.join(",")}]${cap.failed.length ? ` (failed: ${cap.failed.join(",")})` : ""}, ` +
+            `${cap.denormalized} denormalized (${(cap.ms / 1000).toFixed(0)}s)`,
         );
-        lastCaptureDay = today;
+        // Only mark the day done if a country succeeded, so a total feed outage
+        // retries next cycle instead of leaving the day half-set-up.
+        if (cap.countries.length > 0) lastDailyDay = today;
       } catch (e) {
         console.error("[snapshot-worker] chart capture failed:", e instanceof Error ? e.message : e);
       }

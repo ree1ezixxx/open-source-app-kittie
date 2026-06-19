@@ -181,6 +181,41 @@ export async function upsertMetricSnapshot(
     });
 }
 
+/**
+ * Denormalize an app's PRIMARY chart position onto its `app_snapshots` row.
+ *
+ * Chart positions live in `chart_rankings` (ADR 0009), but several legacy readers
+ * still source rank from `app_snapshots.chart_rank`: the scoring signals
+ * (revenue/growth/downloads), the Hot-Ideas gate, and Highlights Gainers/Losers
+ * + the rankDelta sort. The daily chart capture calls this ONCE per day with each
+ * charting app's single best rank (overall chart preferred) so those readers keep
+ * working — coherently, never per-metric-cycle, so it can't repollute. Chart-only:
+ * on conflict it sets chart_rank/chart_category and preserves review/rating.
+ */
+export async function upsertChartRankOnSnapshot(
+  db: Db,
+  input: { appId: string; snapshotDate: string; chartRank: number; chartCategory: string; chartCountry?: string },
+): Promise<void> {
+  const now = new Date();
+  const chartCountry = input.chartCountry ?? "US";
+  await db
+    .insert(appSnapshots)
+    .values({
+      id: makeSnapshotId(input.appId, input.snapshotDate, chartCountry),
+      appId: input.appId,
+      snapshotDate: input.snapshotDate,
+      reviewCount: 0,
+      chartRank: input.chartRank,
+      chartCategory: input.chartCategory,
+      chartCountry,
+      createdAt: now,
+    })
+    .onConflictDoUpdate({
+      target: [appSnapshots.appId, appSnapshots.snapshotDate, appSnapshots.chartCountry],
+      set: { chartRank: input.chartRank, chartCategory: input.chartCategory },
+    });
+}
+
 export async function listTrackedApps(db: Db) {
   return db.select().from(apps);
 }

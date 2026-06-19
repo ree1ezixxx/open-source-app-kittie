@@ -8,6 +8,7 @@ export { runSnapshot } from "./jobs/snapshot.js";
 export { runSnapshotBulk } from "./jobs/snapshot-bulk.js";
 export { runSnapshotDue, type SnapshotDueOptions, type SnapshotDueResult } from "./jobs/snapshot-due.js";
 export { captureChartRanks, type ChartCaptureResult } from "./jobs/chart-capture.js";
+export { carryForwardSnapshots, type CarryForwardResult } from "./jobs/carry-forward.js";
 export { upsertMetricSnapshot } from "./db/apps.js";
 export { runMarketSnapshots } from "./jobs/snapshot-markets.js";
 export { runAppleDiscover, type AppleDiscoverResult } from "./jobs/apple-discover.js";

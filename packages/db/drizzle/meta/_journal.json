@@ -127,6 +127,13 @@
       "when": 1781869705356,
       "tag": "0017_aspiring_oracle",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1781872827743,
+      "tag": "0018_wakeful_plazm",
+      "breakpoints": true
     }
   ]
 }
