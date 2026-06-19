@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
-import { parseAppSearchParams } from "../lib/params.js";
+import { tryParseAppSearchParams } from "../lib/params.js";
 import { getAppAbout } from "../services/app-about-service.js";
 import { getAppById, getAppHistoricals, listCategories, searchApps } from "../services/app-service.js";
 import { syncAppReviews } from "../services/review-sync-service.js";
@@ -8,8 +8,11 @@ import { syncAppReviews } from "../services/review-sync-service.js";
 export const appsRouter = new Hono();
 
 appsRouter.get("/", async (c) => {
-  const params = parseAppSearchParams(c.req.query());
-  const result = await searchApps(params);
+  const parsed = tryParseAppSearchParams(c.req.query());
+  if (!parsed.ok) {
+    return c.json({ error: "Invalid query parameters", issues: parsed.error.issues }, 400);
+  }
+  const result = await searchApps(parsed.data);
   return c.json(result);
 });
 

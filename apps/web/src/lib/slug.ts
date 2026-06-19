@@ -31,7 +31,8 @@ export function parseAppSlug(slug: string): string | null {
   // Greedy prefix forces the LAST "-id" to be the separator: a title can contain
   // its own "-id" once slugified (e.g. "Aprenda idiomas" → …-idiomas-, "Idle …"),
   // and only the trailing "-id<storeAppId>" the builder appended is the real id.
-  const storeAppId = decodeURIComponent(slug).match(/^.*-id([^/]+)$/)?.[1];
+  // No decodeURIComponent: useParams() already decoded, and a double-decode throws on a stray '%'.
+  const storeAppId = slug.match(/^.*-id([^/]+)$/)?.[1];
   if (!storeAppId) return null;
   if (/^\d+$/.test(storeAppId)) return `apple:${storeAppId}`;
   return `google:${storeAppId}`;
