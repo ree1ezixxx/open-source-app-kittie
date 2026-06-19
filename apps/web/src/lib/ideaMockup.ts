@@ -56,7 +56,8 @@ function feats(idea: AppIdea, n: number): string[] {
 
 /** A small deterministic integer in [lo, hi] from a seed + salt. */
 function pseudo(seed: number, salt: number, lo: number, hi: number): number {
-  const v = (Math.imul(seed ^ (salt * 0x9e3779b1), 0x85ebca6b) >>> 0) / 0xffffffff;
+  // /2^32 keeps v in [0,1) so floor never reaches hi+1 (a '3:60' / >100% glitch).
+  const v = (Math.imul(seed ^ (salt * 0x9e3779b1), 0x85ebca6b) >>> 0) / 0x100000000;
   return lo + Math.floor(v * (hi - lo + 1));
 }
 
@@ -109,7 +110,7 @@ function feedScreen(idea: AppIdea, seed: number): Screen {
       (x, i) =>
         `<article class="post">
         <div class="ph"><span class="av">${esc(initials(idea.title + i))}</span><div class="pn"><b>${esc(
-          idea.title.split(/\s+/)[0] ?? "App",
+          idea.title.split(/\s+/)[0] || "App",
         )} ${["Daily", "Labs", "HQ"][i % 3]}</b><small>${pseudo(seed, i, 1, 9)}h ago</small></div></div>
         <p class="pt">${esc(x)}</p>
         <div class="pimg"></div>

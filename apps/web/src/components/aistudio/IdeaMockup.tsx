@@ -15,7 +15,9 @@ const DISPLAY_W = 240; // on-screen px width of the phone
 const SCALE = DISPLAY_W / DEVICE_W;
 
 export function IdeaMockup({ idea, height = 252 }: { idea: AppIdea; height?: number }) {
-  const html = useMemo(() => buildMockupHtml(idea), [idea.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Key on the whole idea: it reads title/category/blueprint, which can be
+  // backfilled under the same id — narrowing to [idea.id] would stick stale HTML.
+  const html = useMemo(() => buildMockupHtml(idea), [idea]);
 
   return (
     <div className="idea-mockup" style={{ height }} aria-hidden>

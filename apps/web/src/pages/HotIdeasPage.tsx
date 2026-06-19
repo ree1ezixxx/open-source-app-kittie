@@ -27,6 +27,7 @@ const SORTS: { value: IdeaSort; label: string }[] = [
   { value: "price", label: "Price" },
 ];
 const BLUEPRINTS: BlueprintTag[] = ["backend", "database", "ai"];
+const SORT_VALUES = new Set<string>(SORTS.map((s) => s.value));
 const PAGE_SIZE = 9; // truth: 9 ideas/page
 
 export function HotIdeasPage() {
@@ -36,11 +37,14 @@ export function HotIdeasPage() {
   const q = sp.get("q") ?? "";
   const sourceCategory = sp.get("cat") ?? "";
   const ideaCategory = sp.get("type") ?? "";
+  // Validate against the known sets so a hand-edited / stale URL can't blank the
+  // select or push a garbage value to the API — fall back to the defaults.
   const blueprint = useMemo(
-    () => ((sp.get("bp")?.split(",").filter(Boolean) ?? []) as BlueprintTag[]),
+    () => ((sp.get("bp")?.split(",").filter((t) => BLUEPRINTS.includes(t as BlueprintTag)) ?? []) as BlueprintTag[]),
     [sp],
   );
-  const sort = (sp.get("sort") ?? "created") as IdeaSort;
+  const sortRaw = sp.get("sort") ?? "created";
+  const sort = (SORT_VALUES.has(sortRaw) ? sortRaw : "created") as IdeaSort;
   const order: "asc" | "desc" = sp.get("order") === "asc" ? "asc" : "desc";
   const page = Math.max(1, Number(sp.get("page") || "1"));
 
