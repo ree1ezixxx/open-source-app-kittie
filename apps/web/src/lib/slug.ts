@@ -28,7 +28,11 @@ export function appHref(app: { id: string; title: string }): string {
 
 /** Resolve a live-format slug back to a canonical "store:storeAppId" id. */
 export function parseAppSlug(slug: string): string | null {
-  const storeAppId = decodeURIComponent(slug).match(/-id([^/]+)$/)?.[1];
+  // Greedy prefix forces the LAST "-id" to be the separator: a title can contain
+  // its own "-id" once slugified (e.g. "Aprenda idiomas" → …-idiomas-, "Idle …"),
+  // and only the trailing "-id<storeAppId>" the builder appended is the real id.
+  // No decodeURIComponent: useParams() already decoded, and a double-decode throws on a stray '%'.
+  const storeAppId = slug.match(/^.*-id([^/]+)$/)?.[1];
   if (!storeAppId) return null;
   if (/^\d+$/.test(storeAppId)) return `apple:${storeAppId}`;
   return `google:${storeAppId}`;

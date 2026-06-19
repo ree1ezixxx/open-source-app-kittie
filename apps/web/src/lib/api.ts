@@ -1,5 +1,6 @@
 import type {
   AppDetail,
+  AppHistoricalPoint,
   AppListItem,
   AppSearchParams,
   ChartType,
@@ -51,6 +52,14 @@ export async function getApp(id: string, signal?: AbortSignal): Promise<AppDetai
   const res = await fetch(`${BASE}/apps/${encodeURIComponent(id)}`, { signal });
   if (!res.ok) throw new Error(`Failed to load app (${res.status})`);
   const body = (await res.json()) as { data: AppDetail };
+  return body.data;
+}
+
+/** Real per-day snapshot history (reviewCount/rating/etc.) — backs the Review Growth chart. */
+export async function getAppHistoricals(id: string, signal?: AbortSignal): Promise<AppHistoricalPoint[]> {
+  const res = await fetch(`${BASE}/apps/${encodeURIComponent(id)}/historicals`, { signal });
+  if (!res.ok) throw new Error(`Failed to load history (${res.status})`);
+  const body = (await res.json()) as { data: AppHistoricalPoint[] };
   return body.data;
 }
 

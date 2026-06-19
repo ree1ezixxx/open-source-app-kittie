@@ -6,8 +6,18 @@ export {
   listHistoricals,
   listSnapshotContexts,
   parseJsonArray,
-  type SnapshotContext,
 } from "./signals.js";
+export {
+  assembleSnapshotContext,
+  buildSnapshotContextsForApps,
+  dayGap,
+  daysBefore,
+  pickPrior,
+  reviewCountPriorForApps,
+  type AssembleSnapshotContextInput,
+  type BuildSnapshotContextsOptions,
+  type SnapshotContext,
+} from "./snapshot-assembly.js";
 export {
   appsWithAppleAds,
   appsWithCreators,

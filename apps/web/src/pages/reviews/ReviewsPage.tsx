@@ -7,8 +7,9 @@
    ============================================================ */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import type { Review } from "@kittie/types";
+import type { Review, AppHistoricalPoint } from "@kittie/types";
 import type { Theme } from "../../lib/theme";
+import { getAppHistoricals } from "../../lib/api";
 import {
   fetchReviews,
   fetchReviewCounts,
@@ -65,6 +66,7 @@ export function ReviewsPage({ theme, onToggleTheme }: { theme: Theme; onToggleTh
   const [syncing, setSyncing] = useState(false);   // live pull in flight
   const [busyId, setBusyId] = useState<string | null>(null); // per-app refresh in the selector
   const [indexed, setIndexed] = useState<Record<string, number>>({}); // real indexed counts per app
+  const [history, setHistory] = useState<AppHistoricalPoint[]>([]); // selected app's review-count history → Growth chart
 
   // Indexed review counts for the rail — what we actually hold, not the store's
   // listing total. Refreshes when the monitored set or data changes.
@@ -76,6 +78,19 @@ export function ReviewsPage({ theme, onToggleTheme }: { theme: Theme; onToggleTh
       .catch(() => { /* non-fatal — rail just falls back to a dash */ });
     return () => ac.abort();
   }, [monitoredKey, reloadTick]);
+
+  // Review-count history for the selected app — real daily snapshots back the
+  // Growth chart (New = day-over-day delta, Total = cumulative count). Rollup
+  // has no single app, so the chart is feed-tab/single-app only.
+  useEffect(() => {
+    setHistory([]); // clear immediately on app switch so the chart never shows the prior app's line
+    if (isAll || !selected) return;
+    const ac = new AbortController();
+    getAppHistoricals(selected.id, ac.signal)
+      .then((h) => !ac.signal.aborted && setHistory(h))
+      .catch(() => { /* non-fatal — chart falls back to its empty state */ });
+    return () => ac.abort();
+  }, [isAll, selected?.id, reloadTick]);
 
   // load reviews — one app, or the union of all monitored apps (rollup)
   useEffect(() => {
@@ -258,7 +273,7 @@ export function ReviewsPage({ theme, onToggleTheme }: { theme: Theme; onToggleTh
             onViewReviews={() => setTab("feed")}
           />
         ) : activeTab === "feed" ? (
-          <ReviewsTab tagged={tagged} />
+          <ReviewsTab tagged={tagged} history={history} />
         ) : activeTab === "semantics" ? (
           <SemanticsTab tagged={tagged} onRefresh={refresh} refreshing={syncing || loading} />
         ) : (
