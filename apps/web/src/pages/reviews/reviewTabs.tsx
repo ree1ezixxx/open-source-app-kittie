@@ -426,7 +426,8 @@ export function ReviewsTab({ tagged, history = [] }: { tagged: TaggedReview[]; h
           </div>
         </div>
         <div className="rv-growth-periods">
-          <span className="rv-period-label">Period:</span>
+          {/* Scopes only the chart (local chartDays); the feed has its own PeriodChips below. */}
+          <span className="rv-period-label">Chart range:</span>
           {PERIODS.map((p) => (
             <button key={p.label} className={`rv-chip ${chartDays === p.days ? "on" : ""}`} onClick={() => setChartDays(p.days)}>{p.label}</button>
           ))}

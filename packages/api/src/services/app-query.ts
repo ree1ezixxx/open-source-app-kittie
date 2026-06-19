@@ -207,19 +207,16 @@ function sqlSortColumn(sortBy: AppSearchParams["sortBy"]): AnyColumn | null {
       return appSnapshots.reviewCount;
     case "rating":
       return appSnapshots.rating;
-    case "downloads":
-      return appSnapshots.downloadsEstimate;
-    case "revenue":
-      return appSnapshots.revenueEstimate;
-    // Stored growth score proxies the pool; live growth re-sorts in memory.
-    case "growth":
-    case "trending":
-      return appSnapshots.growthScore;
     case "updated":
       return apps.updatedAt;
     case "released":
     case "newest":
       return apps.releasedAt;
+    // downloads/revenue/growth/trending are MODELLED live at read time — the stored
+    // estimate columns are null for ~99.7% of snapshots, so ordering the pool by them
+    // yields an arbitrary (rowid) slice. Fall through to the reviewCount proxy (a real
+    // popularity correlate); sortApps then applies the true live order in memory.
+    // Proper fix would require persisting the estimates at snapshot time.
     default:
       return null;
   }

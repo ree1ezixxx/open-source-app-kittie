@@ -10,7 +10,10 @@ export const appsRouter = new Hono();
 appsRouter.get("/", async (c) => {
   const parsed = tryParseAppSearchParams(c.req.query());
   if (!parsed.ok) {
-    return c.json({ error: "Invalid query parameters", issues: parsed.error.issues }, 400);
+    // Name the offending params without echoing the raw Zod issue tree (internal
+    // schema detail) — keeps the error contract flat like the rest of the router.
+    const invalid = [...new Set(parsed.error.issues.map((i) => i.path.join(".")).filter(Boolean))];
+    return c.json({ error: "Invalid query parameters", invalid }, 400);
   }
   const result = await searchApps(parsed.data);
   return c.json(result);
