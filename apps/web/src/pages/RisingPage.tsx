@@ -8,7 +8,7 @@ import { useApps } from "../hooks/useApps";
 import { EMPTY_FILTERS, writeFilters } from "../lib/exploreFilters";
 import { AppIcon } from "../components/AppIcon";
 import { formatCompact, formatMoney } from "../lib/format";
-import { IconRising, IconChart, IconCheck, IconClose, IconFilter } from "../icons";
+import { IconRising, IconChart, IconCheck, IconClose, IconFilter, IconRefresh } from "../icons";
 import type { Theme } from "../lib/theme";
 
 type Launched = "3M" | "6M" | "1Y";
@@ -16,6 +16,13 @@ type Signal = "2W" | "1M" | "3M";
 
 const LAUNCH_DAYS: Record<Launched, number> = { "3M": 90, "6M": 180, "1Y": 365 };
 const SIGNAL_PERIOD: Record<Signal, GrowthPeriod> = { "2W": "14d", "1M": "30d", "3M": "90d" };
+
+// Markets we actually hold per-country snapshots for (ADR 0007). Today the
+// catalog is 100% US; add codes here as E-aso's per-country ingest lands and the
+// picker enables them automatically. Other markets stay selectable-but-disabled
+// (honest: don't offer a market filter that has no data to return).
+const MARKETS_WITH_DATA = new Set<string>(["US"]);
+const NO_MARKET_DATA_TIP = "Not available yet — this market hasn't been ingested.";
 
 /** Live parity — country picker entries shown as "🇨🇳 China (Chinese (Simplified))". */
 const COUNTRIES: { code: string; flag: string; name: string; language: string }[] = [
@@ -76,7 +83,7 @@ function loadState(): RisingState {
       launched: p.launched === "3M" || p.launched === "1Y" ? p.launched : "6M",
       signal: p.signal === "2W" || p.signal === "3M" ? p.signal : "1M",
       store: p.store === "google" ? "google" : "apple",
-      countries: Array.isArray(p.countries) ? p.countries.filter((c) => COUNTRIES.some((x) => x.code === c)) : [],
+      countries: Array.isArray(p.countries) ? p.countries.filter((c) => COUNTRIES.some((x) => x.code === c) && MARKETS_WITH_DATA.has(c)) : [],
       cats: Array.isArray(p.cats) ? p.cats.filter((c) => CATEGORIES.some((x) => x.name === c)) : [],
     };
   } catch {
@@ -107,11 +114,16 @@ function FilterList({
   items,
   selected,
   onToggle,
+  disabledIds,
+  disabledTitle,
 }: {
   label: string;
   items: { id: string; label: string }[];
   selected: string[];
   onToggle: (id: string) => void;
+  /** Items rendered greyed + un-clickable (e.g. markets with no ingested data). */
+  disabledIds?: Set<string>;
+  disabledTitle?: string;
 }) {
   return (
     <div style={{ minWidth: 0 }}>
@@ -119,8 +131,15 @@ function FilterList({
       <div style={{ maxHeight: 240, overflowY: "auto", display: "flex", flexDirection: "column", gap: 1 }}>
         {items.map((it) => {
           const on = selected.includes(it.id);
+          const disabled = disabledIds?.has(it.id) ?? false;
           return (
-            <button key={it.id} style={popItemStyle(on)} onClick={() => onToggle(it.id)}>
+            <button
+              key={it.id}
+              style={{ ...popItemStyle(on), ...(disabled ? { opacity: 0.4, cursor: "not-allowed" } : null) }}
+              onClick={() => !disabled && onToggle(it.id)}
+              disabled={disabled}
+              title={disabled ? disabledTitle : undefined}
+            >
               <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {it.label}
               </span>
@@ -161,24 +180,32 @@ export function RisingPage({ theme, onToggleTheme }: { theme: Theme; onToggleThe
     [launched],
   );
 
-  // Country selection is UI/persistence parity with live; the REST API has no
-  // country dimension yet, so it doesn't narrow the query.
-  const { apps, total, loading } = useApps({
-    sortBy: "growth",
+  // Country now narrows the query (ADR 0007: chart_country dimension). Only send
+  // markets we actually hold data for, so a stale persisted pick can't blank the list.
+  const activeCountries = countries.filter((c) => MARKETS_WITH_DATA.has(c));
+  // Sort by REVENUE (MRR), not growth — truth's Rising is "top 100 apps by monthly
+  // recurring revenue" within the recent-launch + positive-growth set, so #1 is the
+  // highest-MRR rising app, not the highest-growth one. growthType="positive" is what
+  // makes the set "rising"; the sort orders that set by money. (Parity fix.)
+  const { apps, total, loading, refresh } = useApps({
+    sortBy: "revenue",
     growthType: "positive",
     sortOrder: "desc",
     growthPeriod: SIGNAL_PERIOD[signal],
     source: store,
     releasedAfter,
     categories: cats.length ? cats.join(",") : undefined,
+    countries: activeCountries.length ? activeCountries.join(",") : undefined,
   });
 
-  const activeFilterCount = countries.length + cats.length;
+  // Count/show only markets that actually narrow the query (activeCountries), so a
+  // selected-but-dataless market can't render a filter chip that does nothing.
+  const activeFilterCount = activeCountries.length + cats.length;
 
   const exploreHref = useMemo(() => {
     const sp = writeFilters({
       ...EMPTY_FILTERS,
-      sort: "growth",
+      sort: "revenue",
       gtype: "positive",
       period: SIGNAL_PERIOD[signal],
       source: store,
@@ -195,7 +222,7 @@ export function RisingPage({ theme, onToggleTheme }: { theme: Theme; onToggleThe
       <span className="filter-label" style={{ alignSelf: "center" }}>Growth signal</span>
       <Segmented<Signal> value={signal} onChange={(v) => patch({ signal: v })} options={[{ id: "2W", label: "2W" }, { id: "1M", label: "1M" }, { id: "3M", label: "3M" }]} />
       <div className="toolbar-divider" />
-      <Segmented<Store> value={store} onChange={(v) => patch({ store: v })} options={[{ id: "apple", label: "App Store" }, { id: "google", label: "Google Play" }]} />
+      <Segmented<Store> value={store} onChange={(v) => patch({ store: v })} options={[{ id: "apple", label: "Apple Store" }, { id: "google", label: "Google Play" }]} />
 
       <div style={{ position: "relative" }}>
         <button className="btn" onClick={() => setFiltersOpen((o) => !o)} aria-expanded={filtersOpen}>
@@ -246,6 +273,8 @@ export function RisingPage({ theme, onToggleTheme }: { theme: Theme; onToggleThe
                 items={COUNTRIES.map((c) => ({ id: c.code, label: `${c.flag} ${c.name} (${c.language})` }))}
                 selected={countries}
                 onToggle={(id) => toggleIn("countries", id)}
+                disabledIds={new Set(COUNTRIES.filter((c) => !MARKETS_WITH_DATA.has(c.code)).map((c) => c.code))}
+                disabledTitle={NO_MARKET_DATA_TIP}
               />
               <FilterList
                 label="Category"
@@ -263,10 +292,13 @@ export function RisingPage({ theme, onToggleTheme }: { theme: Theme; onToggleThe
       <div style={{ flexBasis: "100%", fontSize: 11, color: "var(--text-tertiary)" }}>
         Filters apply to all data and persist across sessions
       </div>
+      <div style={{ flexBasis: "100%", fontSize: 11, color: "var(--text-tertiary)" }}>
+        Growth-signal windows re-rank as daily snapshot history deepens.
+      </div>
 
       {activeFilterCount > 0 && (
         <div className="active-filters" style={{ flexBasis: "100%" }}>
-          {countries.map((code) => {
+          {activeCountries.map((code) => {
             const c = COUNTRIES.find((x) => x.code === code)!;
             return (
               <button key={code} className="achip" onClick={() => toggleIn("countries", code)}>
@@ -298,6 +330,11 @@ export function RisingPage({ theme, onToggleTheme }: { theme: Theme; onToggleThe
       title="Rising Apps"
       sub="Discover apps with accelerating monthly recurring revenue"
       count={<span className="count-chip">Top {Math.min(total || apps.length, 100)} apps</span>}
+      actions={
+        <button className="icon-btn" onClick={refresh} aria-label="Refresh" title="Refresh">
+          <IconRefresh style={loading ? { animation: "spin 0.8s linear infinite" } : undefined} />
+        </button>
+      }
       theme={theme}
       onToggleTheme={onToggleTheme}
       toolbar={toolbar}
@@ -319,7 +356,7 @@ export function RisingPage({ theme, onToggleTheme }: { theme: Theme; onToggleThe
                 <th className="num" style={{ width: 56 }}>Rank</th>
                 <th className="col-app">App</th>
                 <th className="num">MRR</th>
-                <th className="num">Growth%</th>
+                <th className="num">Growth</th>
                 <th className="num">Downloads</th>
               </tr>
             </thead>
@@ -328,7 +365,8 @@ export function RisingPage({ theme, onToggleTheme }: { theme: Theme; onToggleThe
                 const d = a.growthPct;
                 return (
                   <tr key={a.id} onClick={() => nav(`/apps/${a.id}`)}>
-                    <td className="num num-strong">{i + 1}</td>
+                    {/* Truth prefixes ranks 4+ with "#"; 1–3 stay plain. */}
+                    <td className="num num-strong">{i < 3 ? i + 1 : `#${i + 1}`}</td>
                     <td className="col-app">
                       <div className="app-cell">
                         <AppIcon url={a.iconUrl} title={a.title} />

@@ -38,11 +38,14 @@ export async function getTopCharts(
     .from(appSnapshots)
     .innerJoin(apps, eq(appSnapshots.appId, apps.id))
     .where(
+      // No `apps.category` filter: the chart's genre lives in `chart_category`
+      // (resolved by the assembler), not the app's listed category. We load every
+      // chart-ranked row for the store+country (a small set) and let assembleTopCharts
+      // pick the requested (type, genre) chart and its clean prior day.
       and(
         eq(apps.store, params.store),
         eq(appSnapshots.chartCountry, country),
         isNotNull(appSnapshots.chartRank),
-        params.category ? eq(apps.category, params.category) : undefined,
       ),
     );
 

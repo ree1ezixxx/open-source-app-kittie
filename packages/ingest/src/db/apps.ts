@@ -22,6 +22,45 @@ export interface AppUpsertInput {
   updatedAt?: Date | null;
 }
 
+/**
+ * Insert an app only if absent — never clobbers an existing row. Used by the
+ * per-market snapshot sweep: non-US lookups return LOCALIZED metadata (title,
+ * description), which must not overwrite the catalog's canonical (US/English)
+ * app row. Existing apps keep their canonical fields; only genuinely new
+ * foreign-only apps get inserted. Returns the deterministic app id either way.
+ */
+export async function insertAppIfAbsent(db: Db, input: AppUpsertInput): Promise<string> {
+  const now = new Date();
+  const id = makeAppId(input.store, input.storeAppId);
+
+  await db
+    .insert(apps)
+    .values({
+      id,
+      store: input.store,
+      storeAppId: input.storeAppId,
+      bundleId: input.bundleId ?? null,
+      title: input.title,
+      developer: input.developer,
+      category: input.category ?? null,
+      iconUrl: input.iconUrl ?? null,
+      description: input.description ?? null,
+      websiteUrl: input.websiteUrl ?? null,
+      supportEmail: null,
+      price: input.price ?? null,
+      contentRating: input.contentRating ?? null,
+      languages: input.languages ? JSON.stringify(input.languages) : null,
+      screenshotUrls: input.screenshotUrls ? JSON.stringify(input.screenshotUrls) : null,
+      releasedAt: input.releasedAt ?? null,
+      updatedAt: input.updatedAt ?? null,
+      firstSeenAt: now,
+      lastIngestedAt: now,
+    })
+    .onConflictDoNothing({ target: [apps.store, apps.storeAppId] });
+
+  return id;
+}
+
 export interface SnapshotUpsertInput {
   appId: string;
   snapshotDate: string;
@@ -88,7 +127,7 @@ export async function upsertSnapshot(db: Db, input: SnapshotUpsertInput): Promis
   await db
     .insert(appSnapshots)
     .values({
-      id: makeSnapshotId(input.appId, input.snapshotDate),
+      id: makeSnapshotId(input.appId, input.snapshotDate, input.chartCountry ?? "US"),
       appId: input.appId,
       snapshotDate: input.snapshotDate,
       reviewCount: input.reviewCount,
@@ -99,7 +138,7 @@ export async function upsertSnapshot(db: Db, input: SnapshotUpsertInput): Promis
       createdAt: now,
     })
     .onConflictDoUpdate({
-      target: [appSnapshots.appId, appSnapshots.snapshotDate],
+      target: [appSnapshots.appId, appSnapshots.snapshotDate, appSnapshots.chartCountry],
       set: {
         reviewCount: input.reviewCount,
         rating: input.rating ?? null,

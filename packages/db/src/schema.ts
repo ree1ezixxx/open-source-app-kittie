@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { sqliteTable, text, integer, real, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 /** One store listing. Same product on two stores = two rows. */
@@ -57,12 +58,22 @@ export const appSnapshots = sqliteTable(
     createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
   },
   (t) => [
-    uniqueIndex("snapshots_app_date_idx").on(t.appId, t.snapshotDate),
+    // One Snapshot per App per day PER MARKET (ADR 0007). chart_country stays
+    // nullable but the upsert always writes a market, so dedup is exact. Existing
+    // rows are all 'US' (one per app/day) → valid under this key, no data rewrite.
+    uniqueIndex("snapshots_app_date_country_idx").on(t.appId, t.snapshotDate, t.chartCountry),
     index("snapshots_growth_idx").on(t.growthScore),
     index("snapshots_date_idx").on(t.snapshotDate),
     // Serves the /apps list: order the latest-day partition by review count
     // (the default sort + every live-metric proxy) without a temp b-tree sort.
     index("snapshots_date_reviews_idx").on(t.snapshotDate, t.reviewCount),
+    // Serves the Trending charts query. Chart-ranked rows are ~0.3% of the table
+    // (~8k of 3M); without this, finding them meant starting from every app of a
+    // store (~500k) and seeking each one's snapshots — a ~20s full traversal.
+    // Partial (chart_rank not null) so it stays tiny and the planner starts here.
+    index("snapshots_chart_idx")
+      .on(t.chartCountry, t.chartRank, t.appId)
+      .where(sql`${t.chartRank} is not null`),
   ],
 );
 

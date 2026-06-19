@@ -26,20 +26,33 @@ export function Pills<T extends string | number>({
   );
 }
 
-/** Multi-toggle pill (Marketing signals, Contacts). */
+/** Multi-toggle pill (Marketing signals, Contacts). `disabled` greys it out and
+ *  blocks toggling — used for presence filters whose source data isn't ingested
+ *  yet (honest-data: don't offer a filter that can never match). `title` is the
+ *  hover tooltip explaining why. */
 export function TogglePill({
   on,
   onToggle,
   icon,
   children,
+  disabled = false,
+  title,
 }: {
   on: boolean;
   onToggle: () => void;
   icon?: ReactNode;
   children: ReactNode;
+  disabled?: boolean;
+  title?: string;
 }) {
   return (
-    <button className={`fpill ${on ? "on" : ""}`} onClick={onToggle} aria-pressed={on}>
+    <button
+      className={`fpill ${on ? "on" : ""}`}
+      onClick={onToggle}
+      aria-pressed={on}
+      disabled={disabled}
+      title={title}
+    >
       {icon}
       {children}
     </button>

@@ -31,6 +31,8 @@ import {
 import { TrendChart, type TrendSeries } from "../../components/reviews/TrendChart";
 import { EmptyState } from "../../components/reviews/primitives";
 import { formatCompact } from "../../lib/format";
+import { HistoryChart } from "../../components/Chart";
+import type { AppHistoricalPoint } from "@kittie/types";
 import { IconStar, IconSearch, IconSpark, IconChart, IconUsers, IconMessage, IconExternal } from "../../icons";
 
 /* ---- tiny star row ---- */
@@ -328,7 +330,7 @@ function SingleAppOverview({
 type RatingFilter = "all" | "5" | "4" | "3" | "2" | "1";
 type SentFilter = "all" | Sentiment4;
 
-export function ReviewsTab({ tagged }: { tagged: TaggedReview[] }) {
+export function ReviewsTab({ tagged, history = [] }: { tagged: TaggedReview[]; history?: AppHistoricalPoint[] }) {
   const [sp, setSp] = useSearchParams();
 
   // Feed filters all live in the URL — reload-safe + shareable, like truth (?sentiment=…).
@@ -356,8 +358,31 @@ export function ReviewsTab({ tagged }: { tagged: TaggedReview[] }) {
   };
 
   const [growthMetric, setGrowthMetric] = useState<"new" | "total">("total");
+  const [chartDays, setChartDays] = useState<number | null>(30);
   const [topicsOpen, setTopicsOpen] = useState(false);
   const [impsOpen, setImpsOpen] = useState(false);
+
+  // Review Growth from real daily snapshots: Total = the running review count,
+  // New = day-over-day delta. Honestly limited to the days we've actually
+  // snapshotted (fills in as the worker runs) — never modelled.
+  const growthPoints = useMemo(() => {
+    const pts = history
+      .filter((h) => h.reviewCount != null)
+      .map((h) => ({ date: h.date, count: h.reviewCount as number }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+    if (pts.length < 2) return [] as { date: string; value: number }[];
+    const series =
+      growthMetric === "total"
+        ? pts.map((p) => ({ date: p.date, value: p.count }))
+        : pts.slice(1).map((p, i) => ({ date: p.date, value: Math.max(0, p.count - pts[i]!.count) }));
+    if (chartDays == null) return series;
+    // Anchor the window to the latest snapshot we actually hold (not wall-clock),
+    // so a lagging worker still shows the last N days of real history rather than
+    // emptying the chart when "now" has drifted past the freshest snapshot.
+    const anchor = new Date(pts[pts.length - 1]!.date + "T00:00:00").getTime();
+    const cutoff = anchor - chartDays * 86_400_000;
+    return series.filter((p) => new Date(p.date + "T00:00:00").getTime() >= cutoff);
+  }, [history, growthMetric, chartDays]);
 
   const periodSet = useMemo(() => withinPeriod(tagged, days), [tagged, days]);
   const sFacet = useMemo(() => sentimentCounts(periodSet), [periodSet]);
@@ -401,13 +426,27 @@ export function ReviewsTab({ tagged }: { tagged: TaggedReview[] }) {
           </div>
         </div>
         <div className="rv-growth-periods">
-          <span className="rv-period-label">Period:</span>
+          {/* Scopes only the chart (local chartDays); the feed has its own PeriodChips below. */}
+          <span className="rv-period-label">Chart range:</span>
           {PERIODS.map((p) => (
-            <button key={p.label} className={`rv-chip ${days === p.days ? "on" : ""}`} onClick={() => update({ period: p.days == null ? "all" : String(p.days) })}>{p.label}</button>
+            <button key={p.label} className={`rv-chip ${chartDays === p.days ? "on" : ""}`} onClick={() => setChartDays(p.days)}>{p.label}</button>
           ))}
         </div>
-        <div className="rv-growth-empty">No historical review metrics yet</div>
+        {growthPoints.length >= 2 ? (
+          <div className="rv-growth-chart">
+            {/* Total is a large cumulative base — zoom to its range so the slope reads;
+                New is a delta from 0, so keep it zero-based. */}
+            <HistoryChart points={growthPoints} fmt={formatCompact} zeroBased={growthMetric === "new"} watermark="Atlas" />
+          </div>
+        ) : (
+          <div className="rv-growth-empty">No historical review metrics yet</div>
+        )}
       </div>
+
+      <PeriodChips
+        days={days}
+        onChange={(d) => update({ period: d == null ? "all" : String(d) })}
+      />
 
       {/* search + rating + sentiment */}
       <div className="rv-filters">

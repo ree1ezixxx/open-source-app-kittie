@@ -1,76 +1,91 @@
 /* ============================================================
    Kittie — App Intelligence dashboard
-   Attio-style dense CRM layout, dark-first, lime accent
+   Reskinned to Cult UI (cult-ui.com): light neutral palette,
+   Geist Sans + Geist Mono, 10px radius, flat 1px borders.
+   Light is the default; [data-theme="dark"] is the dark variant.
    ============================================================ */
 
 :root {
-  /* brand */
-  --accent: #c6f24d;
-  --accent-hover: #d2f86b;
-  --accent-ink: #10130a;
-  --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
+  /* brand accent — Cult UI lime highlight (#adfa1b) */
+  --accent: #adfa1b;
+  --accent-hover: #c1ff4a;
+  --accent-ink: #14180a;
+  --accent-soft: color-mix(in srgb, var(--accent) 18%, transparent);
+  /* lime is unreadable as text on white — text usages get a darker lime,
+     backgrounds + graphics (bars, dots, carets, charts) keep --accent */
+  --accent-text: #4d7c0f;
 
-  /* dark theme (default) */
-  --bg: #0a0a0b;
-  --bg-sidebar: #0c0c0d;
-  --bg-topbar: rgba(10, 10, 11, 0.72);
-  --panel: #0f0f11;
-  --surface: #141416;
-  --surface-2: #1a1a1d;
-  --surface-hover: rgba(255, 255, 255, 0.035);
-  --row-hover: rgba(255, 255, 255, 0.028);
+  /* primary action — Cult UI near-black solid */
+  --primary: #171717;
+  --primary-ink: #fafafa;
 
-  --border: rgba(255, 255, 255, 0.07);
-  --border-soft: rgba(255, 255, 255, 0.045);
-  --border-strong: rgba(255, 255, 255, 0.12);
+  /* light theme (default) — shadcn neutral */
+  --bg: #ffffff;
+  --bg-sidebar: #fafafa;
+  --bg-topbar: rgba(255, 255, 255, 0.8);
+  --panel: #ffffff;
+  --surface: #f5f5f5;
+  --surface-2: #ebebeb;
+  --surface-hover: rgba(0, 0, 0, 0.04);
+  --row-hover: rgba(0, 0, 0, 0.028);
 
-  --text: #ededef;
-  --text-secondary: #9a9aa3;
-  --text-tertiary: #65656d;
-  --text-faint: #45454c;
+  --border: #e5e5e5;
+  --border-soft: #ececec;
+  --border-strong: #d4d4d4;
 
-  --danger: #ff6b6b;
-  --positive: #5fd08a;
-  --negative: #ff7a6b;
+  --text: #0a0a0a;
+  --text-secondary: #404040;
+  --text-tertiary: #737373;
+  --text-faint: #a1a1a1;
+  --text-muted: var(--text-tertiary);
 
-  --shadow-drawer: -24px 0 60px -12px rgba(0, 0, 0, 0.6);
-  --shadow-pop: 0 16px 40px -12px rgba(0, 0, 0, 0.7);
+  --danger: #e40014;
+  --positive: #18a957;
+  --negative: #e40014;
 
-  --radius: 9px;
-  --radius-sm: 6px;
+  --shadow-drawer: -24px 0 60px -16px rgba(0, 0, 0, 0.14);
+  --shadow-pop: 0 12px 32px -12px rgba(0, 0, 0, 0.16), 0 2px 6px -3px rgba(0, 0, 0, 0.08);
+
+  --radius: 10px;
+  --radius-sm: 8px;
   --radius-lg: 14px;
 
-  color-scheme: dark;
-  font-family: -apple-system, "SF Pro Text", "Inter", system-ui, sans-serif;
+  color-scheme: light;
+  font-family: "Geist", -apple-system, "SF Pro Text", system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, Monaco, monospace;
   font-synthesis: none;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
-[data-theme="light"] {
-  --bg: #f6f6f3;
-  --bg-sidebar: #f1f1ed;
-  --bg-topbar: rgba(246, 246, 243, 0.78);
-  --panel: #ffffff;
-  --surface: #ffffff;
-  --surface-2: #f1f1ee;
-  --surface-hover: rgba(0, 0, 0, 0.035);
-  --row-hover: rgba(0, 0, 0, 0.025);
+[data-theme="dark"] {
+  --accent-text: #adfa1b;
 
-  --border: rgba(0, 0, 0, 0.09);
-  --border-soft: rgba(0, 0, 0, 0.06);
-  --border-strong: rgba(0, 0, 0, 0.16);
+  --primary: #fafafa;
+  --primary-ink: #0a0a0a;
 
-  --text: #16161a;
-  --text-secondary: #5c5c64;
-  --text-tertiary: #8a8a92;
-  --text-faint: #b4b4ba;
+  --bg: #0a0a0a;
+  --bg-sidebar: #0f0f0f;
+  --bg-topbar: rgba(10, 10, 10, 0.78);
+  --panel: #141414;
+  --surface: #1a1a1a;
+  --surface-2: #242424;
+  --surface-hover: rgba(255, 255, 255, 0.04);
+  --row-hover: rgba(255, 255, 255, 0.03);
 
-  --accent-ink: #14180a;
-  --shadow-drawer: -24px 0 60px -12px rgba(0, 0, 0, 0.18);
-  --shadow-pop: 0 16px 40px -12px rgba(0, 0, 0, 0.22);
+  --border: #262626;
+  --border-soft: #1f1f1f;
+  --border-strong: #383838;
 
-  color-scheme: light;
+  --text: #fafafa;
+  --text-secondary: #a1a1a1;
+  --text-tertiary: #737373;
+  --text-faint: #525252;
+
+  --shadow-drawer: -24px 0 60px -12px rgba(0, 0, 0, 0.6);
+  --shadow-pop: 0 16px 40px -12px rgba(0, 0, 0, 0.7);
+
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -81,8 +96,8 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: 13.5px;
+  line-height: 1.5;
 }
 
 button { font: inherit; cursor: pointer; color: inherit; }
@@ -812,7 +827,7 @@ thead .col-app { z-index: 6; }
 .widget-body { padding: 6px 6px 8px; display: flex; flex-direction: column; }
 
 /* compact ranked row (widgets, charts, rankings) */
-.rank-row { display: flex; align-items: center; gap: 11px; padding: 8px 9px; border-radius: 8px; cursor: pointer; transition: background 0.1s; }
+.rank-row { display: flex; align-items: center; gap: 11px; padding: 8px 9px; border-radius: 8px; cursor: pointer; transition: background 0.1s; color: inherit; text-decoration: none; }
 .rank-row:hover { background: var(--row-hover); }
 .rank-row .rk { font-size: 11.5px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; min-width: 28px; }
 .rank-row .app-icon { width: 30px; height: 30px; border-radius: 8px; }
@@ -983,6 +998,10 @@ thead .col-app { z-index: 6; }
   border-color: color-mix(in srgb, var(--accent) 38%, transparent);
 }
 .fpill.ghost { color: var(--text-tertiary); }
+.fpill:disabled {
+  opacity: 0.4; cursor: not-allowed; color: var(--text-tertiary);
+}
+.fpill:disabled:hover { color: var(--text-tertiary); border-color: var(--border); }
 
 /* mini segmented (Released / Updated) */
 .seg-mini {
@@ -1170,3 +1189,70 @@ thead .col-app { z-index: 6; }
   color: var(--text); font-size: 12.5px; font-weight: 500; transition: background 0.12s;
 }
 .export-menu button:hover { background: var(--surface-hover); }
+
+/* ============================================================
+   Cult UI reskin layer — typography texture + component tuning.
+   Appended last so it wins the cascade; the structural rules above
+   are untouched — palette + fonts now flow from the tokens.
+   ============================================================ */
+
+/* Uppercase eyebrows / labels / table headers → Geist Mono (Cult UI's mono-label texture) */
+.nav-label, .section-label, .filter-label, .filter-sublabel, .fact-label,
+.metric-seg-label, table.apps thead th, .fsub-toggle, .dcard-count,
+.count-chip, .fm-badge, .tab-count, .nav-count, .pager-range, .pager-page,
+.toolbar-meta, .section-count {
+  font-family: var(--font-mono);
+}
+
+/* Key numerics in Geist Mono with tabular figures — terminal feel */
+.metric-seg-value, .stat .value, .tp-headval, .tp-tip-val, .num-strong,
+table.apps td.num, .delta, .bar-val, .similar-sub, .rank-row .rr-num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Headings — Cult UI keeps them light-weight + tightly tracked */
+.brand-name { font-weight: 600; letter-spacing: -0.02em; }
+.page-title { font-weight: 500; letter-spacing: -0.022em; }
+.hero-title { font-weight: 560; letter-spacing: -0.03em; }
+.drawer-app .name { font-weight: 560; letter-spacing: -0.02em; }
+.tp-title, .widget-title, .dcard-title { font-weight: 560; }
+.stat .value, .metric-seg-value { font-weight: 580; }
+
+/* Primary CTA → Cult UI solid: near-black, white uppercase, tracked, flat */
+.btn-accent {
+  background: var(--primary); color: var(--primary-ink);
+  border-color: var(--primary); border-radius: var(--radius-sm);
+  font-family: var(--font-mono); text-transform: uppercase;
+  letter-spacing: 0.05em; font-weight: 600; font-size: 12px;
+  box-shadow: none;
+}
+.btn-accent:hover { background: color-mix(in srgb, var(--primary) 84%, #fff); }
+[data-theme="dark"] .btn-accent:hover { background: color-mix(in srgb, var(--primary) 84%, #000); }
+
+/* Lime is readable as TEXT only via --accent-text (darker on light, bright on dark) */
+.nav-item.active, .tab.on .tab-count, .filter-rail-count, .fm-badge,
+.link-row.clickable .lr-value, .tp-latest b, .metric-seg-value,
+.metric-seg-value svg, .fav-toggle.on, .link-btn:hover, .achip-clear:hover {
+  color: var(--accent-text);
+}
+table.apps tbody tr:hover .col-app .app-title { color: var(--accent-text); }
+
+/* Crisp white input fields (Cult UI inputs are white with a 1px border) */
+.search input, .frange-inputs input, .select select { background: var(--panel); }
+
+/* Flatten the brand-chip glow; outline pills → Cult UI rounded-md */
+.brand-mark { box-shadow: none; }
+.pill, .fpill, .achip { border-radius: var(--radius-sm); }
+
+/* Collapsible nav groups (Studio, Developers) — keep the default sidebar calm */
+.nav-label-toggle {
+  display: flex; align-items: center; gap: 6px; width: 100%;
+  border: none; background: none; cursor: pointer;
+  font-family: var(--font-mono);
+  transition: color 0.12s;
+}
+.nav-label-toggle:hover { color: var(--text-tertiary); }
+.nav-chev { margin-left: auto; width: 12px; height: 12px; opacity: 0.65; transition: transform 0.15s; }
+.nav-label-toggle[aria-expanded="true"] .nav-chev { transform: rotate(180deg); }
+.sidebar-foot .nav-group { margin-top: 0; }

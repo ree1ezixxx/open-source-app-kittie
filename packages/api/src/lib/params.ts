@@ -26,6 +26,8 @@ const searchParamsSchema = z.object({
   excludedCategories: z.string().optional(),
   source: z.enum(["apple", "google"]).optional(),
   excludedSource: z.enum(["apple", "google"]).optional(),
+  countries: z.string().optional(),
+  excludedCountries: z.string().optional(),
   minDownloads: z.coerce.number().optional(),
   maxDownloads: z.coerce.number().optional(),
   minRevenue: z.coerce.number().optional(),
@@ -72,4 +74,12 @@ const searchParamsSchema = z.object({
 
 export function parseAppSearchParams(query: Record<string, string>): AppSearchParams {
   return searchParamsSchema.parse(query);
+}
+
+export function tryParseAppSearchParams(
+  query: Record<string, string>,
+): { ok: true; data: AppSearchParams } | { ok: false; error: z.ZodError } {
+  const result = searchParamsSchema.safeParse(query);
+  if (!result.success) return { ok: false, error: result.error };
+  return { ok: true, data: result.data };
 }

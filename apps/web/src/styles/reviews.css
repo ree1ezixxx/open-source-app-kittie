@@ -9,14 +9,14 @@
    vivid-lime accent #c8ff00, and 16px card radius. Scoped to .rv-page so the
    global shell is untouched (a full-shell reskin is a separate decision). */
 .rv-page {
-  --accent: #c8ff00;
-  --accent-hover: #d6ff4d;
-  --accent-ink: #0a0a0a;
-  --accent-soft: color-mix(in srgb, #c8ff00 14%, transparent);
-  --radius-lg: 16px;
-  --radius: 13px;
-  --rv-mono: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
-  font-family: "Space Grotesk", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --accent: #adfa1b;
+  --accent-hover: #c1ff4a;
+  --accent-ink: #14180a;
+  --accent-soft: color-mix(in srgb, #adfa1b 16%, transparent);
+  --radius-lg: 14px;
+  --radius: 10px;
+  --rv-mono: "Geist Mono", ui-monospace, "SF Mono", monospace;
+  font-family: "Geist", ui-sans-serif, system-ui, -apple-system, sans-serif;
 }
 /* numeric stats render in mono with tabular figures, like truth */
 .rv-page .rv-kpi-num,
@@ -633,6 +633,8 @@
   display: flex; align-items: center; justify-content: center;
   height: 200px; color: var(--text-tertiary); font-size: 13px;
 }
+.rv-growth-chart { margin-top: 6px; }
+.rv-growth-chart .tp-chart { height: 240px; }
 
 /* facet "+N more" expander */
 .rv-facet-more {

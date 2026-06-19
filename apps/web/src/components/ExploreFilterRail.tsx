@@ -14,6 +14,16 @@ import {
 
 export type CategoryMode = "include" | "exclude";
 
+// Presence filters are only offered when their source data is actually ingested —
+// otherwise the control could never match (honest-data: no dead filters). Flip these
+// to `true` once the matching ingest lands (the API EXISTS predicates already work).
+// Today: meta_ads / apple_search_ads / creators / apps.support_email are all empty;
+// apps.website_url is ~57% populated, so "Has website" stays live.
+const HAS_AD_DATA = false; // Meta Ads + Apple Ads (meta_ads / apple_search_ads)
+const HAS_CREATOR_DATA = false; // Creators (creators table)
+const HAS_EMAIL_DATA = false; // Has email (apps.support_email)
+const NO_DATA_TIP = "Not available yet — this signal hasn't been ingested.";
+
 /** Category emoji map — mirrors the live rail's emoji+name chips. */
 const CATEGORY_EMOJI: Record<string, string> = {
   Business: "💼",
@@ -309,9 +319,9 @@ export function ExploreFilterRail({
         >
           <SubLabel>Include</SubLabel>
           <div className="pill-wrap">
-            <TogglePill on={f.meta} onToggle={() => onPatch({ meta: !f.meta })}>Meta Ads</TogglePill>
-            <TogglePill on={f.aads} onToggle={() => onPatch({ aads: !f.aads })}>Apple Ads</TogglePill>
-            <TogglePill on={f.creators} onToggle={() => onPatch({ creators: !f.creators })}>Creators</TogglePill>
+            <TogglePill on={f.meta} onToggle={() => onPatch({ meta: !f.meta })} disabled={!HAS_AD_DATA} title={HAS_AD_DATA ? undefined : NO_DATA_TIP}>Meta Ads</TogglePill>
+            <TogglePill on={f.aads} onToggle={() => onPatch({ aads: !f.aads })} disabled={!HAS_AD_DATA} title={HAS_AD_DATA ? undefined : NO_DATA_TIP}>Apple Ads</TogglePill>
+            <TogglePill on={f.creators} onToggle={() => onPatch({ creators: !f.creators })} disabled={!HAS_CREATOR_DATA} title={HAS_CREATOR_DATA ? undefined : NO_DATA_TIP}>Creators</TogglePill>
           </div>
           <button
             type="button"
@@ -325,7 +335,7 @@ export function ExploreFilterRail({
           {contactsOpen && (
             <div className="pill-wrap">
               <TogglePill on={f.web} onToggle={() => onPatch({ web: !f.web })}>Has website</TogglePill>
-              <TogglePill on={f.email} onToggle={() => onPatch({ email: !f.email })}>Has email</TogglePill>
+              <TogglePill on={f.email} onToggle={() => onPatch({ email: !f.email })} disabled={!HAS_EMAIL_DATA} title={HAS_EMAIL_DATA ? undefined : NO_DATA_TIP}>Has email</TogglePill>
             </div>
           )}
         </FilterGroup>

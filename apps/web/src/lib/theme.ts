@@ -5,7 +5,7 @@ const KEY = "kittie-theme";
 
 function read(): Theme {
   const saved = localStorage.getItem(KEY);
-  return saved === "light" ? "light" : "dark";
+  return saved === "dark" ? "dark" : "light";
 }
 
 export function useTheme(): [Theme, () => void] {

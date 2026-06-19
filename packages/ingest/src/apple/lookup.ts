@@ -54,14 +54,22 @@ interface ItunesLookupResponse {
   }>;
 }
 
-const LOOKUP_BATCH_SIZE = 50;
+// Apple's lookup accepts up to 200 ids per request — batch at the max to cut
+// per-country call volume 4× (the Apple-IP rate ceiling, not SQLite, is the
+// snapshot bottleneck — see ADR 0007).
+const LOOKUP_BATCH_SIZE = 200;
 
-export async function lookupAppleApps(storeAppIds: string[]): Promise<AppleLookupResult[]> {
+/** `country` selects the storefront: userRatingCount/averageUserRating/price are
+ *  per-market, so a per-country snapshot passes its market here (default `us`). */
+export async function lookupAppleApps(
+  storeAppIds: string[],
+  country = "us",
+): Promise<AppleLookupResult[]> {
   const results: AppleLookupResult[] = [];
 
   for (let i = 0; i < storeAppIds.length; i += LOOKUP_BATCH_SIZE) {
     const batch = storeAppIds.slice(i, i + LOOKUP_BATCH_SIZE);
-    const url = `https://itunes.apple.com/lookup?id=${batch.join(",")}&country=us`;
+    const url = `https://itunes.apple.com/lookup?id=${batch.join(",")}&country=${country}`;
     const response = await fetch(url);
     if (!response.ok) {
       throw new Error(`iTunes lookup failed: ${response.status}`);
@@ -76,8 +84,11 @@ export async function lookupAppleApps(storeAppIds: string[]): Promise<AppleLooku
   return results;
 }
 
-export async function lookupAppleApp(storeAppId: string): Promise<AppleLookupResult | null> {
-  const results = await lookupAppleApps([storeAppId]);
+export async function lookupAppleApp(
+  storeAppId: string,
+  country = "us",
+): Promise<AppleLookupResult | null> {
+  const results = await lookupAppleApps([storeAppId], country);
   return results[0] ?? null;
 }
 
