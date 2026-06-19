@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
-import { parseAppSearchParams } from "../lib/params.js";
+import { tryParseAppSearchParams } from "../lib/params.js";
 import { getAppAbout } from "../services/app-about-service.js";
 import { getAppById, getAppHistoricals, listCategories, searchApps } from "../services/app-service.js";
 import { syncAppReviews } from "../services/review-sync-service.js";
@@ -8,8 +8,14 @@ import { syncAppReviews } from "../services/review-sync-service.js";
 export const appsRouter = new Hono();
 
 appsRouter.get("/", async (c) => {
-  const params = parseAppSearchParams(c.req.query());
-  const result = await searchApps(params);
+  const parsed = tryParseAppSearchParams(c.req.query());
+  if (!parsed.ok) {
+    // Name the offending params without echoing the raw Zod issue tree (internal
+    // schema detail) — keeps the error contract flat like the rest of the router.
+    const invalid = [...new Set(parsed.error.issues.map((i) => i.path.join(".")).filter(Boolean))];
+    return c.json({ error: "Invalid query parameters", invalid }, 400);
+  }
+  const result = await searchApps(parsed.data);
   return c.json(result);
 });
 

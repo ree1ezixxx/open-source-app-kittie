@@ -358,6 +358,7 @@ export function ReviewsTab({ tagged, history = [] }: { tagged: TaggedReview[]; h
   };
 
   const [growthMetric, setGrowthMetric] = useState<"new" | "total">("total");
+  const [chartDays, setChartDays] = useState<number | null>(30);
   const [topicsOpen, setTopicsOpen] = useState(false);
   const [impsOpen, setImpsOpen] = useState(false);
 
@@ -374,14 +375,14 @@ export function ReviewsTab({ tagged, history = [] }: { tagged: TaggedReview[]; h
       growthMetric === "total"
         ? pts.map((p) => ({ date: p.date, value: p.count }))
         : pts.slice(1).map((p, i) => ({ date: p.date, value: Math.max(0, p.count - pts[i]!.count) }));
-    if (days == null) return series;
+    if (chartDays == null) return series;
     // Anchor the window to the latest snapshot we actually hold (not wall-clock),
     // so a lagging worker still shows the last N days of real history rather than
     // emptying the chart when "now" has drifted past the freshest snapshot.
     const anchor = new Date(pts[pts.length - 1]!.date + "T00:00:00").getTime();
-    const cutoff = anchor - days * 86_400_000;
+    const cutoff = anchor - chartDays * 86_400_000;
     return series.filter((p) => new Date(p.date + "T00:00:00").getTime() >= cutoff);
-  }, [history, growthMetric, days]);
+  }, [history, growthMetric, chartDays]);
 
   const periodSet = useMemo(() => withinPeriod(tagged, days), [tagged, days]);
   const sFacet = useMemo(() => sentimentCounts(periodSet), [periodSet]);
@@ -425,9 +426,10 @@ export function ReviewsTab({ tagged, history = [] }: { tagged: TaggedReview[]; h
           </div>
         </div>
         <div className="rv-growth-periods">
-          <span className="rv-period-label">Period:</span>
+          {/* Scopes only the chart (local chartDays); the feed has its own PeriodChips below. */}
+          <span className="rv-period-label">Chart range:</span>
           {PERIODS.map((p) => (
-            <button key={p.label} className={`rv-chip ${days === p.days ? "on" : ""}`} onClick={() => update({ period: p.days == null ? "all" : String(p.days) })}>{p.label}</button>
+            <button key={p.label} className={`rv-chip ${chartDays === p.days ? "on" : ""}`} onClick={() => setChartDays(p.days)}>{p.label}</button>
           ))}
         </div>
         {growthPoints.length >= 2 ? (
@@ -440,6 +442,11 @@ export function ReviewsTab({ tagged, history = [] }: { tagged: TaggedReview[]; h
           <div className="rv-growth-empty">No historical review metrics yet</div>
         )}
       </div>
+
+      <PeriodChips
+        days={days}
+        onChange={(d) => update({ period: d == null ? "all" : String(d) })}
+      />
 
       {/* search + rating + sentiment */}
       <div className="rv-filters">

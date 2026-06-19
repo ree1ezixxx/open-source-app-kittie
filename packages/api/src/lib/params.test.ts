@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseAppSearchParams } from "./params.js";
+import { parseAppSearchParams, tryParseAppSearchParams } from "./params.js";
 
 describe("parseAppSearchParams textSearchFields", () => {
   it("normalizes and filters valid search fields", () => {
@@ -16,5 +16,10 @@ describe("parseAppSearchParams textSearchFields", () => {
 
   it("drops textSearchFields when no valid fields remain", () => {
     expect(parseAppSearchParams({ textSearchFields: "bogus" })).toEqual({});
+  });
+
+  it("rejects invalid growthPeriod via tryParse", () => {
+    const result = tryParseAppSearchParams({ growthPeriod: "14" });
+    expect(result.ok).toBe(false);
   });
 });
