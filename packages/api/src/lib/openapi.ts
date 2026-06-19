@@ -162,6 +162,7 @@ export const openapiDocument: Schema = {
         responses: {
           "200": jsonResponse("About narrative.", envelope({ type: "object" })),
           "404": jsonResponse("Unavailable.", { type: "object", properties: { error: STR } }),
+          "502": jsonResponse("AI generation failed (transient — safe to retry).", { type: "object", properties: { error: STR } }),
         },
       },
     },
@@ -224,7 +225,23 @@ export const openapiDocument: Schema = {
               schema: {
                 type: "object",
                 required: ["keywords"],
-                properties: { keywords: { type: "array", items: { type: "object" }, description: "Keyword + country + store tuples." } },
+                properties: {
+                  keywords: {
+                    type: "array",
+                    minItems: 1,
+                    maxItems: 25,
+                    description: "1–25 keyword tuples.",
+                    items: {
+                      type: "object",
+                      required: ["keyword"],
+                      properties: {
+                        keyword: STR,
+                        country: { type: "string", description: "ISO country code (default US)." },
+                        store: { type: "string", enum: ["apple", "google"] },
+                      },
+                    },
+                  },
+                },
               },
             },
           },
