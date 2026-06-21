@@ -41,8 +41,8 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
   const [query, setQuery] = useState("");
   const [searchResults, setSearchResults] = useState<AppListItem[]>([]);
   const [searching, setSearching] = useState(false);
-  // Per-app tracked-keyword selection — UI-only this slice; server-side
-  // keyword persistence lands in #23. Keyed by tracked-app id.
+  // Per-app manual keyword selection is UI-only until rank tracking lands.
+  // Generated keyword counts come from the server-persisted tracked app row.
   const [trackedKeywords, setTrackedKeywords] = useState<Record<string, string[]>>({});
 
   const [opps, setOpps] = useState<KeywordDifficulty[]>([]);
@@ -99,9 +99,22 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
   }, [selected?.id]);
 
   async function addApp(a: AppListItem) {
-    // Already tracked → just select it (server add is idempotent regardless).
-    if (tracked.some((t) => t.appId === a.id)) {
-      setSelectedId(a.id); setAdding(false); setQuery(""); return;
+    // Already tracked → select it, then hit the idempotent server add so a
+    // prior generation failure can retry and a cache hit never spends again.
+    const existing = tracked.find((t) => t.appId === a.id);
+    if (existing) {
+      setSelectedId(a.id);
+      setAdding(false);
+      setQuery("");
+      try {
+        const updated = await trackAppApi(a.id, "US");
+        if (updated) {
+          setTracked((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+        }
+      } catch {
+        /* selection still works; server retry can happen next add */
+      }
+      return;
     }
     setAdding(false);
     setQuery("");
@@ -198,7 +211,7 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
           )}
 
           {tracked.map((t) => {
-            const kwCount = trackedKeywords[t.id]?.length ?? 0;
+            const kwCount = t.generatedKeywordCount;
             return (
               <button key={t.id} className={`track-app ${t.appId === selectedId ? "active" : ""}`} onClick={() => setSelectedId(t.appId)}>
                 <AppAvatar title={t.title} iconUrl={t.iconUrl} />

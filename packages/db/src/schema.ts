@@ -298,6 +298,35 @@ export const trackedApps = sqliteTable(
 );
 
 /**
+ * AI-generated ASO seed keywords for one tracked App. These are the durable
+ * output of slice #23: rank positions attach later, but the generated keyword
+ * set itself is persisted and counted immediately.
+ */
+export const trackedAppKeywords = sqliteTable(
+  "tracked_app_keywords",
+  {
+    id: text("id").primaryKey(),
+    trackedAppId: text("tracked_app_id")
+      .notNull()
+      .references(() => trackedApps.id),
+    appId: text("app_id")
+      .notNull()
+      .references(() => apps.id),
+    store: text("store", { enum: ["apple", "google"] }).notNull(),
+    country: text("country").notNull().default("US"),
+    keyword: text("keyword").notNull(),
+    inputHash: text("input_hash").notNull(),
+    source: text("source").notNull().default("ai"),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  },
+  (t) => [
+    uniqueIndex("tracked_app_keywords_unique_idx").on(t.trackedAppId, t.keyword),
+    index("tracked_app_keywords_tracked_app_idx").on(t.trackedAppId),
+    index("tracked_app_keywords_app_idx").on(t.appId, t.country),
+  ],
+);
+
+/**
  * Cache of AI-generated artifacts (Gemini). One row per generated output, keyed
  * by kind + subject + a hash of the generation input. Generated once, read
  * forever — per-view regeneration is never allowed (ADR 0005); user-triggered
@@ -425,6 +454,7 @@ export type AppSnapshot = typeof appSnapshots.$inferSelect;
 export type ChartRanking = typeof chartRankings.$inferSelect;
 export type TrackedKeyword = typeof trackedKeywords.$inferSelect;
 export type TrackedApp = typeof trackedApps.$inferSelect;
+export type TrackedAppKeyword = typeof trackedAppKeywords.$inferSelect;
 export type AiGeneration = typeof aiGenerations.$inferSelect;
 export type SweepState = typeof sweepState.$inferSelect;
 export type AppIdea = typeof appIdeas.$inferSelect;
