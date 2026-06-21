@@ -54,7 +54,11 @@ export {
   type TrackedKeywordEntry,
 } from "./tracked-keywords.js";
 export {
+  deleteGeneratedKeywordsForTrackedApp,
+  getGeneratedKeywordInputHash,
+  getTrackedApp,
   listTrackedApps,
+  replaceGeneratedKeywordsForTrackedApp,
   trackApp,
   untrackApp,
   type TrackedAppEntry,

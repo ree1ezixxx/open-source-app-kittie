@@ -3,7 +3,7 @@ import { and, desc, eq } from "drizzle-orm";
 import type { Store } from "@kittie/types";
 
 import type { Db } from "../client.js";
-import { apps, trackedApps } from "../schema.js";
+import { apps, trackedAppKeywords, trackedApps } from "../schema.js";
 
 /** A tracked app joined to its store-listing metadata. */
 export interface TrackedAppEntry {
@@ -42,6 +42,91 @@ export async function trackApp(
     });
 }
 
+/** Look up the persisted tracked-app row for one app/store/country identity. */
+export async function getTrackedApp(
+  db: Db,
+  appId: string,
+  store: Store,
+  country: string,
+) {
+  const [row] = await db
+    .select()
+    .from(trackedApps)
+    .where(
+      and(
+        eq(trackedApps.appId, appId),
+        eq(trackedApps.store, store),
+        eq(trackedApps.country, country),
+      ),
+    )
+    .limit(1);
+  return row ?? null;
+}
+
+/** Replace the generated keyword set for a tracked app and sync its count. */
+export async function replaceGeneratedKeywordsForTrackedApp(
+  db: Db,
+  input: {
+    trackedAppId: string;
+    appId: string;
+    store: Store;
+    country: string;
+    inputHash: string;
+    keywords: string[];
+  },
+): Promise<void> {
+  const now = new Date();
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(trackedAppKeywords)
+      .where(eq(trackedAppKeywords.trackedAppId, input.trackedAppId));
+
+    if (input.keywords.length > 0) {
+      await tx.insert(trackedAppKeywords).values(
+        input.keywords.map((keyword) => ({
+          id: randomUUID(),
+          trackedAppId: input.trackedAppId,
+          appId: input.appId,
+          store: input.store,
+          country: input.country,
+          keyword,
+          inputHash: input.inputHash,
+          source: "ai",
+          createdAt: now,
+        })),
+      );
+    }
+
+    await tx
+      .update(trackedApps)
+      .set({ generatedKeywordCount: input.keywords.length })
+      .where(eq(trackedApps.id, input.trackedAppId));
+  });
+}
+
+/** The metadata hash currently backing this tracked app's generated set. */
+export async function getGeneratedKeywordInputHash(
+  db: Db,
+  trackedAppId: string,
+): Promise<string | null> {
+  const [row] = await db
+    .select({ inputHash: trackedAppKeywords.inputHash })
+    .from(trackedAppKeywords)
+    .where(eq(trackedAppKeywords.trackedAppId, trackedAppId))
+    .limit(1);
+  return row?.inputHash ?? null;
+}
+
+/** Delete generated keywords before removing the tracked-app row. */
+export async function deleteGeneratedKeywordsForTrackedApp(
+  db: Db,
+  trackedAppId: string,
+): Promise<void> {
+  await db
+    .delete(trackedAppKeywords)
+    .where(eq(trackedAppKeywords.trackedAppId, trackedAppId));
+}
+
 /** Remove an app from the tracked list. */
 export async function untrackApp(
   db: Db,
@@ -49,6 +134,9 @@ export async function untrackApp(
   store: Store,
   country: string,
 ): Promise<void> {
+  const tracked = await getTrackedApp(db, appId, store, country);
+  if (tracked) await deleteGeneratedKeywordsForTrackedApp(db, tracked.id);
+
   await db
     .delete(trackedApps)
     .where(
