@@ -14,19 +14,31 @@ import { getApp } from "../lib/api";
 import { IconStar, IconHeart } from "../icons";
 import type { Theme } from "../lib/theme";
 
-const TAB_IDS = ["apps", "meta-ads", "apple-ads", "creators", "hot-ideas"] as const;
+const TAB_IDS = ["apps", "ads", "apple-ads", "creators", "ideas"] as const;
 type TabId = (typeof TAB_IDS)[number];
 
 const TAB_TYPE: Record<TabId, FavoriteType> = {
   apps: "app",
-  "meta-ads": "metaAd",
+  ads: "metaAd",
   "apple-ads": "appleAd",
   creators: "creator",
-  "hot-ideas": "hotIdea",
+  ideas: "hotIdea",
 };
 
 function isTabId(v: string | null): v is TabId {
   return !!v && (TAB_IDS as readonly string[]).includes(v);
+}
+
+function tabFromLocation(pathname: string, queryTab: string | null): TabId {
+  const leaf = pathname.split("/").filter(Boolean).at(-1) ?? "";
+  if (isTabId(leaf)) return leaf;
+  if (leaf === "favorites") return "apps";
+  if (queryTab === "meta-ads" || queryTab === "hot-ideas") return queryTab === "meta-ads" ? "ads" : "ideas";
+  return isTabId(queryTab) ? queryTab : "apps";
+}
+
+function favoriteTabPath(id: TabId): string {
+  return `/dashboard/favorites/${id}`;
 }
 
 /** One saved entity rendered from its stored snapshot — no refetch needed. */
@@ -67,21 +79,29 @@ function SnapshotList({ type, entries }: { type: FavoriteType; entries: Favorite
   );
 }
 
+function AppsEmptyState({ count }: { count: number }) {
+  return (
+    <div className="center-state">
+      <IconHeart />
+      <div className="sub">{count} {count === 1 ? "app" : "apps"} saved</div>
+      <div className="title">No favorite apps yet</div>
+      <div className="sub">Go to the Explore page and click the heart icon on any app to add it here.</div>
+      <Link className="btn btn-accent" to="/dashboard/explore">
+        Browse Apps
+      </Link>
+    </div>
+  );
+}
+
 export function FavoritesPage({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => void }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
 
-  // /dashboard/favorites/apps pins the Apps tab; otherwise ?tab= drives selection.
-  const fromQuery = searchParams.get("tab");
-  const active: TabId = location.pathname.endsWith("/apps")
-    ? "apps"
-    : isTabId(fromQuery)
-      ? fromQuery
-      : "apps";
+  const active = tabFromLocation(location.pathname, searchParams.get("tab"));
 
   const setActive = (id: TabId) =>
-    navigate(id === "apps" ? "/dashboard/favorites" : `/dashboard/favorites?tab=${id}`, { replace: true });
+    navigate(favoriteTabPath(id), { replace: true });
 
   const favApps = useFavorites("app");
   const favMeta = useFavorites("metaAd");
@@ -115,29 +135,18 @@ export function FavoritesPage({ theme, onToggleTheme }: { theme: Theme; onToggle
 
   const tabs: TabItem[] = [
     { id: "apps", label: "Apps", count: favApps.count },
-    { id: "meta-ads", label: "Meta ads", count: favMeta.count },
+    { id: "ads", label: "Ads", count: favMeta.count },
     { id: "apple-ads", label: "Apple ads", count: favApple.count },
     { id: "creators", label: "Creators", count: favCreators.count },
-    { id: "hot-ideas", label: "Hot ideas", count: favIdeas.count },
+    { id: "ideas", label: "Hot ideas", count: favIdeas.count },
   ];
 
   const sections: Record<TabId, { entries: FavoriteEntry[]; empty: ReactNode }> = {
     apps: {
       entries: favApps.entries,
-      empty: (
-        <EmptyState
-          icon={<IconHeart />}
-          title="No favorite apps yet"
-          sub="Click the heart on any app in Explore to save it here."
-          action={
-            <Link className="btn btn-accent" to="/dashboard/explore">
-              Browse Apps
-            </Link>
-          }
-        />
-      ),
+      empty: <AppsEmptyState count={favApps.count} />,
     },
-    "meta-ads": {
+    ads: {
       entries: favMeta.entries,
       empty: (
         <EmptyState
@@ -167,7 +176,7 @@ export function FavoritesPage({ theme, onToggleTheme }: { theme: Theme; onToggle
         />
       ),
     },
-    "hot-ideas": {
+    ideas: {
       entries: favIdeas.entries,
       empty: (
         <EmptyState
