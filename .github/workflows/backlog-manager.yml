@@ -1,0 +1,62 @@
+name: backlog-manager
+
+# Manual-only for now. Add a schedule only after the manager loop has been
+# checked on this repo and the queue behavior is trusted.
+"on":
+  workflow_dispatch: {}
+  # schedule:
+  #   - cron: "17 */6 * * *"
+
+concurrency:
+  group: backlog-manager
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run backlog manager
+        uses: anthropics/claude-code-action@v1
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          prompt: |
+            Use the backlog-manager workflow for this GitHub repository: ${{ github.repository }}.
+
+            Goal:
+            - Treat GitHub Issues as the backlog/control plane.
+            - Triage and classify open issues.
+            - Prepare the safe agent pickup queue for the worker-loop coordinator.
+
+            Managed labels:
+            - risk:low, risk:medium, risk:high
+            - type:bug, type:feature, type:docs, type:test, type:refactor, type:chore
+            - agent:ready
+            - needs:human
+            - blocked:dependency
+
+            Rules:
+            - Do not edit source files.
+            - Do not create branches, commits, PRs, releases, deployments, or workflow changes.
+            - Do not merge or close PRs.
+            - Create missing managed labels if needed.
+            - Add/update issue comments with an "Agent Assessment" only when classification or reasoning changes.
+            - Add agent:ready only to low-risk, one-PR issues with clear acceptance criteria and no blockers.
+            - Prefer needs:human when scope, product judgment, dependencies, or prior failed attempts are unclear.
+            - Use blocked:dependency for valid future work that is waiting on another issue.
+            - Sync issue routing with open/merged/closed PR evidence.
+            - Report a compact summary in the workflow output.
+          claude_args: |
+            --max-turns 20

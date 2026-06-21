@@ -73,6 +73,12 @@ Merge to `main` when a slice is verified. Do not cross-edit another branch's own
 - **Git hygiene.** Don't commit, push, or amend unless the user asks. Never force-push `main`.
 - **Run commands yourself** to validate — don't ask the user to run steps you can execute in the sandbox.
 
+## Chrome DevTools / Truth Browser
+
+- When asked to use Chrome DevTools MCP or drive an existing Chrome tab, use `$chrome-devtools-cdp-fallback` if MCP `list_pages` is stale, wrong, or only shows `about:blank`.
+- Treat Chrome's CDP endpoint as the real tab inventory when needed: `http://127.0.0.1:9222/json/list`.
+- For AppKittie source-of-truth audits, never navigate the live truth Chrome to localhost unless explicitly requested. Use a separate isolated browser/profile for clone/localhost comparison.
+
 ## Context Management (Token Efficiency)
 
 - **One objective per thread.** If scope creeps, stop and narrow before continuing.
