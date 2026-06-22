@@ -21,7 +21,7 @@ import { StudioEmptyState } from "../components/aistudio/StudioEmptyState";
 import { IconImage, IconInfo } from "../icons";
 import { IconWand, IconPlus } from "../components/aistudio/icons";
 
-const STEPS = ["App details", "Upload screenshots", "Generate"];
+const STEPS = ["Select app", "Upload screenshots", "Generate"];
 const STYLES: { value: ScreenshotStyle; label: string }[] = [
   { value: "bold", label: "Bold" },
   { value: "minimal", label: "Minimal" },
@@ -129,7 +129,7 @@ export function ScreenshotGeneratorPage() {
       <StudioHeader
         icon={<IconImage style={{ width: 18, height: 18 }} />}
         title="AI Screenshot Generator"
-        subtitle="Generate optimized App-Store visuals from your screenshots"
+        subtitle="Upload your screenshots and let AI create optimized App Store visuals"
         actions={
           <button className="btn btn-accent" onClick={resetBuild}>
             <IconPlus /> Add generation
@@ -141,7 +141,10 @@ export function ScreenshotGeneratorPage() {
         {/* ---------------- left rail ---------------- */}
         <aside className="studio-rail">
           <div className="studio-rail-section">
-            <div className="studio-rail-label">Your apps</div>
+            <div className="studio-rail-intro">
+              <div className="studio-rail-title">Select App</div>
+              <div className="studio-rail-subcopy">Choose a tracked app or describe a new one</div>
+            </div>
             <AppPicker
               selectedId={selectedApp?.id ?? null}
               newMode={newMode}
@@ -152,10 +155,10 @@ export function ScreenshotGeneratorPage() {
           <div className="studio-rail-section" style={{ marginTop: "auto" }}>
             <div className="studio-rail-label">
               Previous Generations
-              {history.length > 0 && <span>{history.length}</span>}
+              <span>{history.length}</span>
             </div>
             {history.length === 0 ? (
-              <StudioEmptyState bare title="No generations yet" sub="Your generated sets appear here." />
+              <StudioEmptyState bare title="No generations yet" sub="Select an app and upload screenshots to get started" />
             ) : (
               <HistoryList items={history} activeId={activeId} onSelect={(id) => { setActiveId(id); setView("result"); }} />
             )}
@@ -181,16 +184,26 @@ export function ScreenshotGeneratorPage() {
               </>
             ) : (
               <>
-                <StepFlow steps={STEPS} current={step} />
+                {!started ? (
+                  <StudioEmptyState
+                    title="Generate App Store Screenshots"
+                    sub="Select one of your tracked apps from the left, or describe a new / unreleased app to get started."
+                    action={
+                      <div className="studio-empty-steps">
+                        <StepFlow steps={STEPS} current={-1} />
+                      </div>
+                    }
+                  />
+                ) : (
+                  <>
+                    <StepFlow steps={STEPS} current={step} />
 
-                {/* Step 1 — app details */}
-                <div className="studio-block">
-                  <div className="studio-block-head">
-                    <div className="studio-block-title">1 · App details</div>
-                    <div className="studio-block-hint">Pick a tracked app on the left, or describe a new one</div>
-                  </div>
-                  {started ? (
-                    <>
+                    {/* Step 1 — app details */}
+                    <div className="studio-block">
+                      <div className="studio-block-head">
+                        <div className="studio-block-title">1 · App details</div>
+                        <div className="studio-block-hint">Pick a tracked app on the left, or describe a new one</div>
+                      </div>
                       {selectedApp && (
                         <div className="studio-appitem active" style={{ cursor: "default", marginBottom: 14 }}>
                           {selectedApp.iconUrl ? (
@@ -205,14 +218,7 @@ export function ScreenshotGeneratorPage() {
                         </div>
                       )}
                       <AppDetailsForm details={details} onChange={patchDetails} />
-                    </>
-                  ) : (
-                    <StudioEmptyState
-                      title="No app selected"
-                      sub="Choose a tracked app from the left rail, or click “Describe a new / unreleased app”."
-                    />
-                  )}
-                </div>
+                    </div>
 
                 {/* Step 2 — upload */}
                 <div className="studio-block" style={{ opacity: targetChosen ? 1 : 0.5, pointerEvents: targetChosen ? "auto" : "none" }}>
@@ -323,12 +329,14 @@ export function ScreenshotGeneratorPage() {
                   </div>
                 )}
 
-                <div className="notice">
-                  <IconInfo />
-                  <span>
-                    <strong>Render &amp; export are live</strong> — real device frames, exact App Store PNG sizes. {SHOT_POINT.needs}
-                  </span>
-                </div>
+                    <div className="notice">
+                      <IconInfo />
+                      <span>
+                        <strong>Render &amp; export are live</strong> — real device frames, exact App Store PNG sizes. {SHOT_POINT.needs}
+                      </span>
+                    </div>
+                  </>
+                )}
               </>
             )}
           </div>
