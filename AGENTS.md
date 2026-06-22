@@ -115,7 +115,22 @@ pnpm typecheck        # build all packages, then tsc --noEmit
 
 ## Validation
 
-- `pnpm typecheck` must pass before handoff (runs `build` first — workspace packages resolve from `dist/`).
+Ground truth — a PR is not done until required commands exit 0 and are quoted in the PR body or issue evidence:
+- Full repo type-check/build: `pnpm typecheck`
+- Web-only change: also run `pnpm --filter @kittie/web typecheck`
+- API/package change: also run the touched package typecheck, e.g. `pnpm --filter @kittie/api typecheck`
+- Tests for touched package when present: `pnpm --filter <package> test`
+- Diff hygiene: `git diff --check`
+- Lint: no root lint script exists right now; do not claim lint ran unless a lint script is added.
+
+Worker stop rules:
+- Cap implementation at 3 validation attempts.
+- If checks still fail after the 3rd attempt, stop, label/comment `needs:human` where possible, and post the failing command output.
+- Do not modify, delete, or weaken tests, type checks, lint rules, or CI to make checks pass. If a check appears wrong, flag it for human review instead.
+- Workers must branch from fresh `origin/main`: clean status, `git fetch origin`, then create the issue branch from `origin/main`.
+- Independent review must confirm every issue acceptance criterion as met/unmet, not just inspect code quality.
+
+Other validation notes:
 - Ingestion jobs: log row counts, not full payloads.
 - API: curl smoke tests documented in package READMEs.
 
@@ -133,6 +148,10 @@ The explicit `DATABASE_URL` is the **shared** DB every lane's API reads — conf
 
 ## Local Dev Port/Data Guardrail
 
+Canonical local preview: `127.0.0.1:3008` = main API, `127.0.0.1:5173` = main web app. User LaunchAgents keep them alive: `com.ellis.kittie-api-dev`, `com.ellis.kittie-web-dev`.
+- Do not kill, reuse, or repoint these canonical ports unless the user explicitly asks. If a worker needs an isolated preview, use separate ports such as `3018/5174` from that worker's worktree.
+- If unavailable, restart with `launchctl kickstart -k gui/$(id -u)/com.ellis.kittie-api-dev` and `launchctl kickstart -k gui/$(id -u)/com.ellis.kittie-web-dev`.
+
 The dashboard must show the full local dataset. Before assuming data is missing, verify the API and web proxy are aligned:
 
 ```bash
@@ -143,11 +162,7 @@ lsof -p <api pid> | grep /Users/ellis/Documents/open-source-app-kittie/data/kitt
 
 `apps/web/vite.config.ts` proxies `/api` to `VITE_API_ORIGIN`, defaulting to `http://localhost:3008`. If the app shell loads but tables are empty or show API errors, check `/tmp/web.log` for Vite proxy `ECONNREFUSED` before touching ingestion or the database.
 
-Use the guardrail script after starting API + web:
-
-```bash
-pnpm dev:check-data
-```
+Use `pnpm dev:check-data` after starting API + web.
 
 Expected local baseline as of 2026-06-12: ~100K Apps, ~300K Snapshots, ~114K Reviews, 0 Meta ads. An empty Ads Library currently means `meta_ads` has not been ingested; it does not mean the app database is gone.
 
