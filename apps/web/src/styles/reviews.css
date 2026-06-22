@@ -560,6 +560,93 @@
 .set-export-table td { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 .set-export-table tbody tr:last-child td { border-bottom: none; }
 
+.api-keys-inner { max-width: 920px; }
+.api-back-link {
+  display: inline-flex; align-items: center; gap: 7px;
+  color: var(--text-secondary); font-size: 12.5px; font-weight: 600;
+  margin-bottom: 18px; transition: color 0.12s;
+}
+.api-back-link:hover { color: var(--text); }
+.api-back-link svg { width: 15px; height: 15px; }
+.api-credit-grid,
+.api-buy-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+.api-buy-summary { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 14px; }
+.api-metric {
+  min-width: 0;
+  background: var(--surface-2);
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  padding: 12px;
+}
+.api-metric span {
+  display: block;
+  color: var(--text-tertiary);
+  font-size: 11.5px;
+  margin-bottom: 7px;
+}
+.api-metric strong {
+  display: block;
+  color: var(--text);
+  font-size: 19px;
+  font-weight: 720;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.api-metric-primary strong { font-size: 28px; }
+.api-bundle-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.api-bundle-btn {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
+}
+.api-bundle-btn:hover { color: var(--text); border-color: var(--border-strong); }
+.api-bundle-btn.on {
+  color: var(--accent-ink);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.api-actions { margin-top: 16px; }
+.api-rate-table-wrap { margin-bottom: 0; }
+.api-rate-table { min-width: 760px; }
+.api-rate-table code,
+.api-keys-inner .set-export-sub code {
+  font-family: "SF Mono", "JetBrains Mono", ui-monospace, monospace;
+  font-size: 11.5px;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.api-method {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  height: 22px;
+  border-radius: 6px;
+  font-size: 10.5px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+}
+.api-method-get {
+  color: var(--positive);
+  background: color-mix(in srgb, var(--positive) 14%, transparent);
+}
+.api-method-post {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
 /* ===================================================== App-Detail parity */
 .parity { margin-top: 30px; display: flex; flex-direction: column; gap: 8px; }
 .parity > section { margin-top: 22px; }
@@ -604,6 +691,15 @@
   .set-invite-row { flex-direction: column; }
   .set-invite-row .btn { justify-content: center; }
   .set-export-metrics { grid-template-columns: 1fr; }
+  .api-credit-grid,
+  .api-buy-summary { grid-template-columns: 1fr 1fr; }
+  .api-metric-primary { grid-column: 1 / -1; }
+  .api-actions .btn { justify-content: center; width: 100%; }
+}
+@media (max-width: 460px) {
+  .api-credit-grid,
+  .api-buy-summary { grid-template-columns: 1fr; }
+  .api-keys-inner .set-section-head { align-items: flex-start; }
 }
 
 /* ── On-add 5-stage sync modal ─────────────────────────────────── */
