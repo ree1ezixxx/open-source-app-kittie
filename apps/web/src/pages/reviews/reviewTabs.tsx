@@ -727,7 +727,7 @@ export function ImprovementsTab({ tagged, onRefresh, refreshing }: { tagged: Tag
                     qs.set("improvementArea", a.category);
                     qs.delete("topic");
                     qs.delete("page");
-                    navigate(`/reviews/feed?${qs.toString()}`);
+                    navigate(`/dashboard/reviews/feed?${qs.toString()}`);
                   }}
                   title={`See the ${a.mentionCount} review${a.mentionCount === 1 ? "" : "s"} about ${a.category}`}
                 >
