@@ -1,7 +1,7 @@
 import { computeKeywordDifficulty } from "@kittie/intelligence";
 import { findKeyword, keywordRowToDifficulty, upsertKeywordRow, type Db } from "@kittie/db";
 import type { KeywordDifficulty, Store } from "@kittie/types";
-import { searchAppleKeywordField } from "../apple/search.js";
+import { searchAppleKeywordField, type StoreSearchResult } from "../apple/search.js";
 import { countGoogleResults, searchGoogleKeyword } from "../google/search.js";
 import { searchPopularity } from "../keyword-popularity.js";
 import { makeKeywordId } from "../util/ids.js";
@@ -13,6 +13,8 @@ interface KeywordField {
   topApps: KeywordDifficulty["topApps"];
   /** True competing-field depth (how many apps rank for the term), not just the top 10. */
   fieldDepth: number;
+  /** Raw ranked store results, including store app ids for app-specific rank resolution. */
+  results: StoreSearchResult[];
 }
 
 export async function fetchKeywordRankings(
@@ -24,17 +26,20 @@ export async function fetchKeywordRankings(
 
   // Apple gives the field depth free in one large fetch; Google needs a separate
   // un-enriched count call (its ranking fetch enriches each app, so it stays small).
-  let hits: KeywordDifficulty["topApps"];
+  let hits: StoreSearchResult[];
+  let results: StoreSearchResult[];
   let fieldDepth: number;
   if (store === "apple") {
     const field = await searchAppleKeywordField(keyword, countryCode, 200);
-    hits = field.results.slice(0, SEARCH_LIMIT);
+    results = field.results;
+    hits = results.slice(0, SEARCH_LIMIT);
     fieldDepth = field.fieldDepth;
   } else {
-    const [results, count] = await Promise.all([
+    const [googleResults, count] = await Promise.all([
       searchGoogleKeyword(keyword, countryCode, SEARCH_LIMIT),
       countGoogleResults(keyword, countryCode).catch(() => 0),
     ]);
+    results = googleResults;
     hits = results;
     fieldDepth = count || results.length;
   }
@@ -48,17 +53,23 @@ export async function fetchKeywordRankings(
       rank: hit.rank,
     })),
     fieldDepth,
+    results,
   };
 }
 
+export interface SyncedKeywordRankings {
+  difficulty: KeywordDifficulty;
+  results: StoreSearchResult[];
+}
+
 /** Pull live store rankings, score difficulty, persist to keywords table. */
-export async function syncKeyword(
+export async function syncKeywordWithRankings(
   db: Db,
   keyword: string,
   country: string,
   store: Store,
-): Promise<KeywordDifficulty> {
-  const [{ topApps: topRankedApps, fieldDepth }, popularity] = await Promise.all([
+): Promise<SyncedKeywordRankings> {
+  const [{ topApps: topRankedApps, fieldDepth, results }, popularity] = await Promise.all([
     fetchKeywordRankings(keyword, country, store),
     searchPopularity(keyword, country, store).catch(() => null),
   ]);
@@ -91,7 +102,18 @@ export async function syncKeyword(
     }),
   );
 
-  return scored;
+  return { difficulty: scored, results };
+}
+
+/** Pull live store rankings, score difficulty, persist to keywords table. */
+export async function syncKeyword(
+  db: Db,
+  keyword: string,
+  country: string,
+  store: Store,
+): Promise<KeywordDifficulty> {
+  const { difficulty } = await syncKeywordWithRankings(db, keyword, country, store);
+  return difficulty;
 }
 
 export async function getCachedKeyword(

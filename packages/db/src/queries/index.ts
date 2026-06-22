@@ -57,11 +57,18 @@ export {
   deleteGeneratedKeywordsForTrackedApp,
   getGeneratedKeywordInputHash,
   getTrackedApp,
+  getTrackedAppById,
+  insertKeywordRanking,
+  listGeneratedKeywordsForTrackedApp,
+  listTrackedAppKeywordRankings,
   listTrackedApps,
+  markTrackedAppAnalyzed,
   replaceGeneratedKeywordsForTrackedApp,
   trackApp,
   untrackApp,
+  type GeneratedTrackedAppKeyword,
   type TrackedAppEntry,
+  type TrackedAppKeywordRankingEntry,
 } from "./tracked-apps.js";
 export { getAiGeneration, saveAiGeneration } from "./ai-generations.js";
 export { getSweepState, listSweepStates, recordSweepRun } from "./sweep-state.js";

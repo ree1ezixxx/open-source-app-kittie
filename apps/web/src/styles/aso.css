@@ -484,6 +484,46 @@
 .opp-row .track-btn.on { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 30%, transparent); color: var(--accent); }
 .opp-row .track-btn svg { width: 13px; height: 13px; }
 
+.track-rank-search { margin-bottom: 12px; max-width: 360px; }
+.track-rank-table td.num {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.track-rank-table .kw-ideas-name {
+  border: none;
+  padding: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+.track-rank-table .kw-ideas-name:hover { color: var(--accent); }
+.track-rank-table .meter { min-width: 130px; }
+.track-rank-table .kw-appstack-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  overflow: hidden;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-2);
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 650;
+}
+.track-rank-table .kw-appstack-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.track-rank-table .kw-appstack-count {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+  margin-left: 2px;
+}
+
 /* small spinner reuse */
 .aso-spin { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border-strong); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
 

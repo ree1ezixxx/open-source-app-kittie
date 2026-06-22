@@ -105,8 +105,6 @@ export async function untrackKeyword(keyword: string, store: Store, country = "U
 }
 
 // ── Tracked apps (durable, server-persisted — survives reload). PRD #20 ──────
-// Persist-only at this slice (#22): adding an app records it server-side; no
-// keyword generation or rank ingestion yet (slices #23/#24).
 
 export interface TrackedApp {
   id: string;
@@ -122,6 +120,21 @@ export interface TrackedApp {
   generatedKeywordCount: number;
   /** When rank analysis last ran — null until slice #24. */
   lastAnalyzedAt: string | null;
+}
+
+export interface TrackedAppKeywordRanking {
+  keywordId: string;
+  keyword: string;
+  country: string;
+  store: Store;
+  position: number | null;
+  observedAt: string | null;
+  popularity: number | null;
+  difficulty: number | null;
+  trafficScore: number | null;
+  opportunityScore: number | null;
+  competingAppCount: number | null;
+  topApps: KeywordTopApp[];
 }
 
 export async function fetchTrackedApps(signal?: AbortSignal): Promise<TrackedApp[]> {
@@ -147,6 +160,20 @@ export async function untrackApp(appId: string, store: Store, country = "US"): P
   const q = new URLSearchParams({ appId, store, country });
   const res = await fetch(`${BASE}/keywords/tracked-apps?${q}`, { method: "DELETE" });
   if (!res.ok) throw new Error(`Untrack app failed (${res.status})`);
+}
+
+export async function fetchTrackedAppRankings(
+  trackedAppId: string,
+  signal?: AbortSignal,
+  opts: { refresh?: boolean } = {},
+): Promise<TrackedAppKeywordRanking[]> {
+  const q = new URLSearchParams();
+  if (opts.refresh) q.set("refresh", "true");
+  const suffix = q.toString() ? `?${q}` : "";
+  const res = await fetch(`${BASE}/keywords/tracked-apps/${trackedAppId}/rankings${suffix}`, { signal });
+  if (!res.ok) throw new Error(`Rankings fetch failed (${res.status})`);
+  const body = (await res.json()) as { data: TrackedAppKeywordRanking[] };
+  return body.data.map((row) => ({ ...row, topApps: [...(row.topApps ?? [])].sort((a, b) => a.rank - b.rank) }));
 }
 
 /** Batch compare ≤10 keywords — sorted by opportunity score descending (we sort, not the server). */

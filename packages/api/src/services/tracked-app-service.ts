@@ -2,12 +2,21 @@ import {
   getAppRowById,
   getGeneratedKeywordInputHash,
   getTrackedApp,
+  getTrackedAppById,
+  insertKeywordRanking,
+  listGeneratedKeywordsForTrackedApp,
+  listTrackedAppKeywordRankings,
   listTrackedApps,
+  markTrackedAppAnalyzed,
   replaceGeneratedKeywordsForTrackedApp,
   trackApp as dbTrackApp,
   untrackApp as dbUntrackApp,
+  makeKeywordLookupId,
+  type TrackedAppKeywordRankingEntry,
   type TrackedAppEntry,
 } from "@kittie/db";
+import { syncKeywordWithRankings } from "@kittie/ingest";
+import { resolveKeywordPosition } from "@kittie/intelligence";
 import type { Store } from "@kittie/types";
 
 import { getDb } from "../lib/db.js";
@@ -15,6 +24,7 @@ import { cachedGenerate, generate, hashInput, isGeminiConfigured } from "../lib/
 
 const GENERATED_KEYWORD_KIND = "tracked_app_keywords";
 const GENERATED_KEYWORD_LIMIT = 250;
+const RANK_SYNC_TTL_MS = 24 * 60 * 60 * 1000;
 
 interface AppKeywordMetadata {
   title: string;
@@ -100,6 +110,10 @@ export async function listTracked(): Promise<TrackedAppEntry[]> {
   return listTrackedApps(getDb());
 }
 
+function isRankSyncStale(lastAnalyzedAt: Date | null): boolean {
+  return !lastAnalyzedAt || Date.now() - lastAnalyzedAt.getTime() > RANK_SYNC_TTL_MS;
+}
+
 /**
  * Add an app to the tracked list. Idempotent on (appId, store, country), then
  * cache-generates ASO seed keywords from listing metadata when needed.
@@ -165,4 +179,59 @@ export async function removeTrackedApp(
   country: string,
 ): Promise<void> {
   await dbUntrackApp(getDb(), appId, store, country);
+}
+
+export interface TrackedAppRankingsResult {
+  rows: TrackedAppKeywordRankingEntry[];
+  synced: number;
+  failed: number;
+  analyzedAt: Date | null;
+}
+
+/** Live-sync US keyword positions for one tracked app's generated keywords. */
+export async function listRankingsForTrackedApp(
+  trackedAppId: string,
+  options: { forceRefresh?: boolean } = {},
+): Promise<TrackedAppRankingsResult | null> {
+  const db = getDb();
+  const tracked = await getTrackedAppById(db, trackedAppId);
+  if (!tracked) return null;
+
+  const generated = await listGeneratedKeywordsForTrackedApp(db, trackedAppId);
+  let synced = 0;
+  let failed = 0;
+  let analyzedAt = tracked.lastAnalyzedAt;
+
+  if (
+    generated.length > 0 &&
+    (options.forceRefresh || isRankSyncStale(tracked.lastAnalyzedAt))
+  ) {
+    const observedAt = new Date();
+    for (const item of generated) {
+      try {
+        const { results } = await syncKeywordWithRankings(db, item.keyword, item.country, item.store);
+        const position = resolveKeywordPosition(results, tracked.storeAppId);
+        await insertKeywordRanking(db, {
+          keywordId: makeKeywordLookupId(item.store, item.country, item.keyword),
+          appId: tracked.appId,
+          rank: position,
+          observedAt,
+        });
+        synced++;
+      } catch {
+        failed++;
+      }
+    }
+    if (failed === 0 && synced === generated.length) {
+      await markTrackedAppAnalyzed(db, trackedAppId, observedAt);
+      analyzedAt = observedAt;
+    }
+  }
+
+  return {
+    rows: await listTrackedAppKeywordRankings(db, trackedAppId),
+    synced,
+    failed,
+    analyzedAt,
+  };
 }
