@@ -53,7 +53,8 @@ export function AppSelector({
 
   const selected = monitored.find((a) => a.id === selectedId) || null;
   const showAll = isAll && allowAll;
-  const label = showAll ? "All Apps" : selected ? selected.title : "Select an app";
+  const showEmptyAll = allowAll && monitored.length === 0;
+  const label = showAll || showEmptyAll ? "All Apps" : selected ? selected.title : "Select an app";
 
   const appIcon = (a: MonitoredApp | null, size: number) =>
     a?.iconUrl
@@ -70,9 +71,9 @@ export function AppSelector({
         aria-expanded={open}
         aria-haspopup="listbox"
       >
-        <span className="rv-appsel-ic">{appIcon(showAll ? null : selected, 15)}</span>
+        <span className="rv-appsel-ic">{appIcon(showAll || showEmptyAll ? null : selected, 15)}</span>
         <span className="rv-appsel-label">{label}</span>
-        {monitored.length > 0 && <span className="rv-appsel-count">{monitored.length}</span>}
+        {(showEmptyAll || monitored.length > 0) && <span className="rv-appsel-count">{monitored.length}</span>}
         <IconChevron className={`rv-appsel-chev ${open ? "up" : ""}`} style={{ width: 15, height: 15 }} />
       </button>
 
