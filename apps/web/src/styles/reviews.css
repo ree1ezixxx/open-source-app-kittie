@@ -498,18 +498,23 @@
 .set-section-sub { font-size: 12px; color: var(--text-tertiary); margin-top: 1px; }
 .set-card { background: var(--surface); border: 1px solid var(--border-soft); border-radius: 14px; padding: 18px; }
 
-.set-plan-row { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 16px; }
+.set-plan-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
 .set-plan-name { font-size: 18px; font-weight: 700; display: flex; align-items: center; gap: 9px; }
+.set-plan-cycle { font-size: 13px; font-weight: 560; color: var(--text-tertiary); }
 .set-badge { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; padding: 2px 8px; border-radius: 6px; }
 .set-badge-active { color: var(--positive); background: color-mix(in srgb, var(--positive) 16%, transparent); }
 .set-plan-meta { font-size: 12px; color: var(--text-tertiary); margin-top: 4px; }
 .set-plan-price { text-align: right; }
 .set-price-num { font-size: 26px; font-weight: 720; letter-spacing: -0.02em; }
 .set-price-unit { font-size: 13px; color: var(--text-tertiary); }
+.set-plan-status { display: inline-flex; align-items: center; gap: 6px; color: var(--positive); font-size: 12.5px; font-weight: 650; white-space: nowrap; }
+.set-plan-status svg { width: 14px; height: 14px; }
+.set-plan-note { color: var(--text-secondary); font-size: 12.5px; line-height: 1.55; padding: 14px 0; border-top: 1px solid var(--border-soft); border-bottom: 1px solid var(--border-soft); margin-bottom: 15px; }
 .set-plan-feats { display: flex; flex-direction: column; gap: 8px; padding: 14px 0; border-top: 1px solid var(--border-soft); border-bottom: 1px solid var(--border-soft); margin-bottom: 15px; }
 .set-plan-feats span { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-secondary); }
 .set-actions { display: flex; gap: 10px; }
 
+.set-team-card { display: flex; flex-direction: column; gap: 16px; }
 .set-team-empty { display: flex; align-items: center; gap: 16px; }
 .set-team-avatars { display: flex; }
 .set-avatar { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 650; color: var(--text-secondary); background: var(--surface-2); border: 2px solid var(--panel); margin-left: -10px; }
@@ -517,6 +522,22 @@
 .set-team-copy { flex: 1; }
 .set-team-title { font-size: 13.5px; font-weight: 620; }
 .set-team-sub { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; line-height: 1.5; }
+.set-workspace-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.set-progress-block { display: flex; flex-direction: column; gap: 8px; }
+.set-progress-head { display: flex; justify-content: space-between; gap: 12px; color: var(--text-secondary); font-size: 12px; font-weight: 600; }
+.set-progress-track { height: 8px; border-radius: 99px; background: var(--surface-2); border: 1px solid var(--border-soft); overflow: hidden; }
+.set-progress-track span { display: block; height: 100%; border-radius: 99px; background: var(--accent); }
+.set-invite-row { display: flex; gap: 9px; }
+.set-input {
+  flex: 1; min-width: 0; height: 36px; border-radius: 9px; border: 1px solid var(--border);
+  background: var(--surface-2); color: var(--text); padding: 0 11px; font-size: 12.5px;
+}
+.set-input::placeholder { color: var(--text-faint); }
+.set-list-title { font-size: 12px; font-weight: 650; color: var(--text-secondary); margin-bottom: 9px; }
+.set-member-row { display: flex; align-items: center; gap: 11px; padding: 11px 0; border-top: 1px solid var(--border-soft); border-bottom: 1px solid var(--border-soft); }
+.set-member-row .set-avatar { margin-left: 0; flex-shrink: 0; }
+.set-member-copy { flex: 1; min-width: 0; }
+.set-card-foot { color: var(--text-tertiary); font-size: 12px; line-height: 1.5; }
 
 .set-export-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 9px; padding: 30px 20px; color: var(--text-tertiary); }
 .set-export-title { font-size: 13.5px; font-weight: 620; color: var(--text-secondary); }
@@ -527,6 +548,17 @@
 .set-export-label { font-weight: 560; }
 .set-export-rows { margin-left: auto; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
 .set-export-at { color: var(--text-tertiary); min-width: 96px; text-align: right; }
+.set-export-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
+.set-export-metric { background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: 10px; padding: 12px; }
+.set-export-metric span { display: block; color: var(--text-tertiary); font-size: 11.5px; margin-bottom: 6px; }
+.set-export-metric strong { display: block; color: var(--text); font-size: 22px; font-weight: 720; line-height: 1; font-variant-numeric: tabular-nums; }
+.set-export-table-wrap { overflow-x: auto; border: 1px solid var(--border-soft); border-radius: 10px; margin-bottom: 13px; }
+.set-export-table { width: 100%; border-collapse: collapse; min-width: 520px; font-size: 12.5px; }
+.set-export-table th,
+.set-export-table td { padding: 11px 12px; text-align: left; border-bottom: 1px solid var(--border-soft); white-space: nowrap; }
+.set-export-table th { color: var(--text-tertiary); font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.04em; background: var(--surface-2); }
+.set-export-table td { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.set-export-table tbody tr:last-child td { border-bottom: none; }
 
 /* ===================================================== App-Detail parity */
 .parity { margin-top: 30px; display: flex; flex-direction: column; gap: 8px; }
@@ -566,6 +598,12 @@
   .rv-layout { grid-template-columns: 1fr; }
   .rv-rail { display: none; }
   .mcp-skill-grid, .mcp-setup, .rv-howto-steps { grid-template-columns: 1fr; }
+  .set-inner { padding: 18px 14px 56px; }
+  .set-plan-row, .set-workspace-head { flex-direction: column; align-items: stretch; }
+  .set-plan-name { flex-wrap: wrap; }
+  .set-invite-row { flex-direction: column; }
+  .set-invite-row .btn { justify-content: center; }
+  .set-export-metrics { grid-template-columns: 1fr; }
 }
 
 /* ── On-add 5-stage sync modal ─────────────────────────────────── */

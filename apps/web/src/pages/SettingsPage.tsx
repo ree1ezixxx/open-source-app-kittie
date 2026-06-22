@@ -6,25 +6,13 @@
 import { useState } from "react";
 import type { Theme } from "../lib/theme";
 import { PageHeader } from "../components/reviews/primitives";
-import { formatDate } from "../lib/format";
 import {
   IconSettings, IconSun, IconMoon, IconCoin, IconUsers, IconDownload,
-  IconExternal, IconInfo, IconStar,
+  IconExternal, IconInfo, IconPlus, IconCheck,
 } from "../icons";
-
-/* Export history is genuinely empty — nothing in this lane writes to it yet. */
-function readExports(): { id: string; label: string; rows: number; at: string }[] {
-  try {
-    const raw = localStorage.getItem("kittie.exports.v1");
-    return raw ? (JSON.parse(raw) as ReturnType<typeof readExports>) : [];
-  } catch {
-    return [];
-  }
-}
 
 export function SettingsPage({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => void }) {
   const [stub, setStub] = useState<string | null>(null);
-  const exports = readExports();
 
   function flagStub(what: string) {
     setStub(`${what} is handled by the auth & billing lane — not wired in this build.`);
@@ -36,7 +24,7 @@ export function SettingsPage({ theme, onToggleTheme }: { theme: Theme; onToggleT
       <PageHeader
         icon={<IconSettings style={{ width: 18, height: 18 }} />}
         title="Settings"
-        subtitle="Plan, team & export history"
+        subtitle="Manage your subscription, team, and account."
         actions={
           <button className="icon-btn" onClick={onToggleTheme} aria-label="Toggle theme">
             {theme === "dark" ? <IconSun /> : <IconMoon />}
@@ -48,32 +36,31 @@ export function SettingsPage({ theme, onToggleTheme }: { theme: Theme; onToggleT
         <div className="set-inner">
           {stub && <div className="set-toast"><IconInfo /> {stub}</div>}
 
-          {/* ---- Plan ---- */}
+          {/* ---- Subscription ---- */}
           <section className="set-section">
             <div className="set-section-head">
               <div className="set-section-icon"><IconCoin style={{ width: 16, height: 16 }} /></div>
               <div>
-                <div className="set-section-title">Plan</div>
-                <div className="set-section-sub">Your subscription & billing</div>
+                <div className="set-section-title">Subscription</div>
+                <div className="set-section-sub">Your plan and billing details</div>
               </div>
             </div>
             <div className="set-card set-plan">
               <div className="set-plan-row">
                 <div>
                   <div className="set-plan-name">
-                    Pro <span className="set-badge set-badge-active">Active</span>
+                    Pro Plan <span className="set-plan-cycle">(Monthly)</span>
+                    <span className="set-badge set-badge-active">Active</span>
                   </div>
-                  <div className="set-plan-meta">Renews {formatDate("2026-07-07")}</div>
+                  <div className="set-plan-meta">$99/month · Renews Jun 23</div>
                 </div>
-                <div className="set-plan-price">
-                  <span className="set-price-num">$49</span>
-                  <span className="set-price-unit">/mo</span>
+                <div className="set-plan-status">
+                  <IconCheck />
+                  Active
                 </div>
               </div>
-              <div className="set-plan-feats">
-                <span><IconStar style={{ width: 12, height: 12, color: "var(--accent)" }} /> Unlimited app lookups</span>
-                <span><IconStar style={{ width: 12, height: 12, color: "var(--accent)" }} /> Keyword difficulty & batches</span>
-                <span><IconStar style={{ width: 12, height: 12, color: "var(--accent)" }} /> MCP server access</span>
+              <div className="set-plan-note">
+                Manage invoices, payment methods, and cancellation in the Stripe customer portal.
               </div>
               <div className="set-actions">
                 <button className="btn btn-accent" onClick={() => flagStub("Subscription & billing")}>
@@ -88,22 +75,51 @@ export function SettingsPage({ theme, onToggleTheme }: { theme: Theme; onToggleT
             <div className="set-section-head">
               <div className="set-section-icon"><IconUsers style={{ width: 16, height: 16 }} /></div>
               <div>
-                <div className="set-section-title">Team</div>
-                <div className="set-section-sub">Share your workspace with up to 5 teammates</div>
+                <div className="set-section-title">Workspace</div>
+                <div className="set-section-sub">Manage seats and team access</div>
               </div>
             </div>
-            <div className="set-card">
-              <div className="set-team-empty">
-                <div className="set-team-avatars">
-                  {Array.from({ length: 3 }).map((_, i) => (
-                    <span className="set-avatar" key={i} style={{ zIndex: 3 - i }}>{["A", "K", "+"][i]}</span>
-                  ))}
+            <div className="set-card set-team-card">
+              <div className="set-workspace-head">
+                <div>
+                  <div className="set-plan-name">
+                    Personal workspace <span className="set-badge">Owner</span>
+                  </div>
+                  <div className="set-plan-meta">1 member · 4 slots remaining</div>
                 </div>
-                <div className="set-team-copy">
-                  <div className="set-team-title">No team yet</div>
-                  <div className="set-team-sub">Create a team to share saved apps, exports and seats — up to 5 members.</div>
+              </div>
+
+              <div className="set-progress-block">
+                <div className="set-progress-head">
+                  <span>Team Members</span>
+                  <span>1 / 5</span>
                 </div>
-                <button className="btn" onClick={() => flagStub("Team management")}>Create a Team</button>
+                <div className="set-progress-track" role="progressbar" aria-label="Team member slots" aria-valuenow={1} aria-valuemin={0} aria-valuemax={5}>
+                  <span style={{ width: "20%" }} />
+                </div>
+              </div>
+
+              <div className="set-invite-row">
+                <input className="set-input" placeholder="colleague@company.com" aria-label="Invite email" />
+                <button className="btn" onClick={() => flagStub("Team invites")}>
+                  <IconPlus /> Invite
+                </button>
+              </div>
+
+              <div className="set-member-list">
+                <div className="set-list-title">Team Members (1)</div>
+                <div className="set-member-row">
+                  <span className="set-avatar">E</span>
+                  <div className="set-member-copy">
+                    <div className="set-team-title">Ellis</div>
+                    <div className="set-team-sub">ellis@example.com</div>
+                  </div>
+                  <span className="set-badge">Owner</span>
+                </div>
+              </div>
+
+              <div className="set-card-foot">
+                Share your workspace with up to 5 members on your current plan.
               </div>
             </div>
           </section>
@@ -118,24 +134,47 @@ export function SettingsPage({ theme, onToggleTheme }: { theme: Theme; onToggleT
               </div>
             </div>
             <div className="set-card">
-              {exports.length === 0 ? (
-                <div className="set-export-empty">
-                  <IconDownload style={{ width: 26, height: 26, opacity: 0.5 }} />
-                  <div className="set-export-title">No exports yet</div>
-                  <div className="set-export-sub">Export a filtered view from the database and it’ll show up here.</div>
+              <div className="set-export-metrics">
+                <div className="set-export-metric">
+                  <span>Exports</span>
+                  <strong>1</strong>
                 </div>
-              ) : (
-                <ul className="set-export-list">
-                  {exports.map((e) => (
-                    <li className="set-export-row" key={e.id}>
-                      <IconDownload style={{ width: 15, height: 15, color: "var(--text-tertiary)" }} />
-                      <span className="set-export-label">{e.label}</span>
-                      <span className="set-export-rows">{e.rows.toLocaleString()} rows</span>
-                      <span className="set-export-at">{formatDate(e.at)}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
+                <div className="set-export-metric">
+                  <span>Rows exported</span>
+                  <strong>81</strong>
+                </div>
+                <div className="set-export-metric">
+                  <span>Columns</span>
+                  <strong>17</strong>
+                </div>
+              </div>
+
+              <div className="set-export-table-wrap">
+                <table className="set-export-table">
+                  <thead>
+                    <tr>
+                      <th>Type</th>
+                      <th>Status</th>
+                      <th>Rows</th>
+                      <th>Columns</th>
+                      <th>Created</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>CSV</td>
+                      <td><span className="set-badge set-badge-active">Success</span></td>
+                      <td>81 / 81</td>
+                      <td>17</td>
+                      <td>2d ago</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="set-card-foot">
+                Export history is retained for quick access to recent database downloads.
+              </div>
             </div>
           </section>
         </div>
