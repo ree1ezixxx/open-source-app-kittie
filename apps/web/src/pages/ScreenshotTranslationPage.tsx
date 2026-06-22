@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties } from "react";
+import { useMemo, useState } from "react";
 import "../styles/aistudio.css";
 import type { UploadedImage } from "../lib/aiService";
 import {
@@ -19,17 +19,6 @@ import { IconGlobe, IconInfo } from "../icons";
 import { IconCheck, IconPlus, IconUpload } from "../components/aistudio/icons";
 
 const STEPS = ["Select app", "Upload screenshots", "Select countries"];
-
-const intakeCardStyle: CSSProperties = {
-  margin: 0,
-  width: "100%",
-  textAlign: "left",
-  cursor: "pointer",
-  display: "flex",
-  alignItems: "flex-start",
-  gap: 12,
-  transition: "border-color 0.12s, background 0.12s",
-};
 
 export function ScreenshotTranslationPage() {
   // Apps tracked on the App Tracking page (read-only snapshot from localStorage).
@@ -101,20 +90,33 @@ export function ScreenshotTranslationPage() {
         icon={<IconGlobe style={{ width: 18, height: 18 }} />}
         title="Screenshot Translation"
         subtitle="Upload screenshots and choose the countries to localize for"
-        actions={
+        actions={started || history.length > 0 ? (
           <button className="btn btn-accent" onClick={resetBuild}>
             <IconPlus /> New translation
           </button>
-        }
+        ) : undefined}
       />
 
       <div className="studio-layout">
         {/* ---------------- left rail ---------------- */}
         <aside className="studio-rail">
           <div className="studio-rail-section">
-            <div className="studio-rail-label">Your tracked apps</div>
+            <div className="studio-rail-intro">
+              <div className="studio-rail-title">Select App</div>
+              <div className="studio-rail-subcopy">Choose a saved app or add screenshots</div>
+            </div>
+
+            <button className={`studio-newapp${manualMode ? " active" : ""}`} onClick={pickManual}>
+              <IconUpload />
+              <span>
+                <span className="studio-newapp-title">Add Your Screenshots</span>
+                <span className="studio-newapp-sub">Upload screenshots manually</span>
+              </span>
+            </button>
+
+            <div className="studio-rail-label studio-apps-label">Your tracked apps</div>
             {trackedApps.length === 0 ? (
-              <StudioEmptyState bare title="No tracked apps" sub="Add apps in App Tracking to quickly translate screenshots." />
+              <StudioEmptyState bare title="No tracked apps" sub="Add apps in App Tracking to quickly translate screenshots" />
             ) : (
               <div className="studio-applist">
                 {trackedApps.map((a) => (
@@ -144,7 +146,7 @@ export function ScreenshotTranslationPage() {
               <span>{history.length}</span>
             </div>
             {history.length === 0 ? (
-              <StudioEmptyState bare title="No translations yet" sub="Upload screenshots and choose target countries to get started." />
+              <StudioEmptyState bare title="No translations yet" sub="Upload screenshots and choose target countries to get started" />
             ) : (
               <div className="studio-history">
                 {history.map((r) => {
@@ -230,54 +232,17 @@ export function ScreenshotTranslationPage() {
               </>
             ) : (
               <>
-                <StepFlow steps={STEPS} current={step} />
-
-                {/* intake cards */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 14, marginBottom: 26 }}>
-                  <button
-                    className="gencard"
-                    style={{
-                      ...intakeCardStyle,
-                      borderColor: selectedApp ? "var(--accent)" : undefined,
-                      background: selectedApp ? "var(--accent-soft)" : undefined,
-                    }}
-                    onClick={() => setManualMode(false)}
-                  >
-                    <div className="page-icon"><IconGlobe style={{ width: 16, height: 16 }} /></div>
-                    <div>
-                      <div style={{ fontSize: 13.5, fontWeight: 650, marginBottom: 3 }}>Select App</div>
-                      <div style={{ fontSize: 12, color: "var(--text-tertiary)", lineHeight: 1.45 }}>
-                        Choose a saved app or add screenshots
-                      </div>
-                    </div>
-                  </button>
-                  <button
-                    className="gencard"
-                    style={{
-                      ...intakeCardStyle,
-                      borderColor: manualMode ? "var(--accent)" : undefined,
-                      background: manualMode ? "var(--accent-soft)" : undefined,
-                    }}
-                    onClick={pickManual}
-                  >
-                    <div className="page-icon"><IconUpload style={{ width: 16, height: 16 }} /></div>
-                    <div>
-                      <div style={{ fontSize: 13.5, fontWeight: 650, marginBottom: 3 }}>Add Your Screenshots</div>
-                      <div style={{ fontSize: 12, color: "var(--text-tertiary)", lineHeight: 1.45 }}>
-                        Upload screenshots manually
-                      </div>
-                    </div>
-                  </button>
-                </div>
-
                 {!started ? (
                   <StudioEmptyState
                     icon={<IconGlobe />}
                     title="Translate App Store Screenshots"
                     sub="Choose a saved app from the left, or add screenshots manually to translate them into target languages."
+                    action={<div className="studio-empty-steps"><StepFlow steps={STEPS} current={-1} /></div>}
                   />
                 ) : (
                   <>
+                    <StepFlow steps={STEPS} current={step} />
+
                     {selectedApp && (
                       <div className="studio-appitem active" style={{ cursor: "default", marginBottom: 14 }}>
                         {selectedApp.iconUrl ? (
