@@ -20,7 +20,6 @@ import {
   isNull,
   like,
   lte,
-  max,
   ne,
   notInArray,
   or,
@@ -54,14 +53,43 @@ const POOL_CAP = 5000;
 // the in-process manual/CLI path.
 const MAX_DATE_TTL_MS = 5 * 60_000;
 const cachedMaxDate = new Map<string, { value: string | null; at: number }>();
+const SNAPSHOT_LOOKBACK_DAYS = 14;
+const MIN_COMPLETE_SNAPSHOT_ROWS = 1000;
+const MIN_COMPLETE_SNAPSHOT_RATIO = 0.8;
+
+export interface SnapshotDateCount {
+  d: string;
+  c: number;
+}
+
+export function chooseLatestCompleteSnapshotDate(
+  rows: SnapshotDateCount[],
+  options: { minRows?: number; minRatio?: number } = {},
+): string | null {
+  const newest = rows[0]?.d ?? null;
+  if (!newest) return null;
+
+  const bestCount = Math.max(...rows.map((r) => r.c));
+  const minRows = options.minRows ?? MIN_COMPLETE_SNAPSHOT_ROWS;
+  if (bestCount < minRows) return newest;
+
+  const minRatio = options.minRatio ?? MIN_COMPLETE_SNAPSHOT_RATIO;
+  const threshold = Math.max(minRows, Math.floor(bestCount * minRatio));
+  return rows.find((r) => r.c >= threshold)?.d ?? newest;
+}
+
 async function latestSnapshotDate(country = "US"): Promise<string | null> {
   const hit = cachedMaxDate.get(country);
   if (hit && Date.now() - hit.at < MAX_DATE_TTL_MS) return hit.value;
-  const [row] = await getDb()
-    .select({ d: max(appSnapshots.snapshotDate) })
+
+  const rows = await getDb()
+    .select({ d: appSnapshots.snapshotDate, c: count() })
     .from(appSnapshots)
-    .where(eq(appSnapshots.chartCountry, country));
-  const d = row?.d ?? null;
+    .where(eq(appSnapshots.chartCountry, country))
+    .groupBy(appSnapshots.snapshotDate)
+    .orderBy(desc(appSnapshots.snapshotDate))
+    .limit(SNAPSHOT_LOOKBACK_DAYS);
+  const d = chooseLatestCompleteSnapshotDate(rows);
   cachedMaxDate.set(country, { value: d, at: Date.now() });
   return d;
 }
