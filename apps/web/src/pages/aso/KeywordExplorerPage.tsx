@@ -10,7 +10,6 @@ import { MarketsModal } from "../../components/aso/MarketsModal";
 import {
   compareKeywords,
   fetchRelated,
-  fetchSuggestions,
   fetchTracked,
   lookupKeyword,
   streamKeywordMarkets,
@@ -82,7 +81,6 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
   const [tab, setTab] = useState<Tab>("all");
   const [sort, setSort] = useState<Sort>("newest");
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
-  const [chips, setChips] = useState<string[]>([]);
   // Durable shortlist, server-persisted — keyed by keyOf. See ADR 0003.
   const [tracked, setTracked] = useState<Map<string, TrackedKeyword>>(new Map());
   const [refreshing, setRefreshing] = useState(false);
@@ -233,15 +231,6 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Suggestion chips — re-seed per store.
-  useEffect(() => {
-    let alive = true;
-    fetchSuggestions(store, 12)
-      .then((c) => { if (alive) setChips(c); })
-      .catch(() => {});
-    return () => { alive = false; };
-  }, [store]);
-
   // On mount, restore the durable tracked shortlist from the server (survives reload).
   useEffect(() => {
     let alive = true;
@@ -381,6 +370,20 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
   const selected = results.find((r) => keyOf(r) === selectedKey) ?? null;
   const selectedIdeas = selected ? ideas[keyOf(selected)] : undefined;
   const hasAnything = results.length > 0 || pending.length > 0;
+  const tabs = (hasAnything
+    ? [
+        ["all", "All"],
+        ["opp", "Opportunities"],
+        ["lowdiff", "Low diff"],
+        ["tracked", "Tracked"],
+        ["pending", "Pending"],
+      ]
+    : [
+        ["all", "All"],
+        ["opp", "Opportunities"],
+        ["lowdiff", "Low diff"],
+        ["pending", "Pending"],
+      ]) as [Tab, string][];
 
   return (
     <main className="main">
@@ -390,8 +393,8 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
           <div className="page-title-wrap">
             <div className="page-icon"><IconKey style={{ width: 18, height: 18 }} /></div>
             <div>
-              <div className="page-title">Keyword Workspace</div>
-              <div className="page-sub">Explore a term, discover related ideas, find openings</div>
+              <div className="page-title">Keyword Explorer</div>
+              <div className="page-sub">Check keyword difficulty, popularity, and discover related keywords</div>
             </div>
             {results.length > 0 && <span className="count-chip">{results.length}</span>}
           </div>
@@ -412,63 +415,70 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); }
                 }}
-                placeholder="Search, paste keywords, or start a topic…"
+                placeholder="Search, paste keywords, or start a topic..."
                 rows={1}
                 spellCheck={false}
               />
             </div>
-            <div className="segmented">
-              <button className={store === "apple" ? "on" : ""} onClick={() => setStore("apple")}><IconApple /> App Store</button>
-              <button className={store === "google" ? "on" : ""} onClick={() => setStore("google")}><IconGooglePlay /> Google Play</button>
-            </div>
-            <div className="select market-select" title="Market">
-              <select value={country} onChange={(e) => setCountry(e.target.value)} aria-label="Market">
-                {MARKETS.map((m) => (
-                  <option key={m.code} value={m.code}>{m.flag} {m.code}</option>
-                ))}
-              </select>
-              <IconChevron />
-            </div>
-            {parseTerms(input).length === 1 && (
-              <button
-                className="btn"
-                onClick={() => { const t = parseTerms(input)[0]!; void trackTerm(t, store, country); setInput(""); }}
-                title="Add straight to your tracked shortlist (no idea generation)"
-              >
-                + Track
-              </button>
+            {hasAnything && (
+              <>
+                <div className="segmented">
+                  <button className={store === "apple" ? "on" : ""} onClick={() => setStore("apple")}><IconApple /> App Store</button>
+                  <button className={store === "google" ? "on" : ""} onClick={() => setStore("google")}><IconGooglePlay /> Google Play</button>
+                </div>
+                <div className="select market-select" title="Market">
+                  <select value={country} onChange={(e) => setCountry(e.target.value)} aria-label="Market">
+                    {MARKETS.map((m) => (
+                      <option key={m.code} value={m.code}>{m.flag} {m.code}</option>
+                    ))}
+                  </select>
+                  <IconChevron />
+                </div>
+                {parseTerms(input).length === 1 && (
+                  <button
+                    className="btn"
+                    onClick={() => { const t = parseTerms(input)[0]!; void trackTerm(t, store, country); setInput(""); }}
+                    title="Add straight to your tracked shortlist (no idea generation)"
+                  >
+                    + Track
+                  </button>
+                )}
+                <button className="btn btn-accent" onClick={submit} disabled={!input.trim()}>
+                  {parseTerms(input).length > 1 ? <><IconLayers /> Compare</> : <><IconSearch /> Explore</>}
+                </button>
+              </>
             )}
-            <button className="btn btn-accent" onClick={submit} disabled={!input.trim()}>
-              {parseTerms(input).length > 1 ? <><IconLayers /> Compare</> : <><IconSearch /> Explore</>}
-            </button>
           </div>
-          <div className="aso-hint">
-            <span className="kbd">⏎</span> explore one term for related ideas · paste up to 10 lines to compare · {market(country).flag} {market(country).name} · {MARKET_COUNT} markets
-          </div>
+          {hasAnything && (
+            <div className="aso-hint">
+              <span className="kbd">Enter</span> explore one term for related ideas · paste up to 10 lines to compare · {market(country).flag} {market(country).name} · {MARKET_COUNT} markets
+            </div>
+          )}
         </div>
 
         {/* tabs */}
         <div className="aso-tabs">
-          {([
-            ["all", "All"],
-            ["opp", "Opportunities"],
-            ["lowdiff", "Low-diff"],
-            ["tracked", "Tracked"],
-            ["pending", "Pending"],
-          ] as [Tab, string][]).map(([id, label]) => (
+          <div className="aso-workspace-title">
+            <span>Keyword Workspace</span>
+            <span className="aso-workspace-count">{results.length}</span>
+          </div>
+          <div className="select aso-sort-select">
+            <select value={sort} onChange={(e) => setSort(e.target.value as Sort)} aria-label="Sort keywords">
+              {SORT_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+            <IconChevron />
+          </div>
+          <button className="aso-row-action" onClick={submit} disabled={!input.trim()}>
+            Explore
+          </button>
+          {tabs.map(([id, label]) => (
             <button key={id} className={`aso-tab ${tab === id ? "on" : ""}`} onClick={() => setTab(id)}>
               {label}
               <span className="aso-tab-count">{counts[id]}</span>
             </button>
           ))}
-          <div className="select" style={{ marginLeft: "auto", alignSelf: "center" }}>
-            <select value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
-              {SORT_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>Sort: {o.label}</option>
-              ))}
-            </select>
-            <IconChevron />
-          </div>
         </div>
       </div>
 
@@ -481,20 +491,19 @@ export function KeywordExplorerPage({ theme, onToggleTheme }: { theme: Theme; on
 
       {/* body */}
       {!hasAnything ? (
-        <div className="aso-hero">
-          <div className="aso-hero-mark"><IconKey /></div>
-          <h2>Start with a keyword</h2>
-          <p>Explore one term to discover related keyword ideas — each scored for opportunity — or paste up to 10 terms to compare them side by side.</p>
-          {chips.length > 0 && (
-            <>
-              <div className="aso-hero-seedlabel">Try one from your catalog</div>
-              <div className="chip-rail">
-                {chips.map((c) => (
-                  <button key={c} className="chip" onClick={() => explore([c], store, country)}><IconSearch />{c}</button>
-                ))}
-              </div>
-            </>
-          )}
+        <div className="aso-empty-workspace">
+          <section className="aso-empty-pane">
+            <div className="aso-empty-copy">
+              <div className="t">No keywords yet</div>
+              <div className="s">Add a keyword above to start tracking and discover suggestions</div>
+            </div>
+          </section>
+          <section className="aso-empty-pane aso-empty-pane-detail">
+            <div className="aso-empty-copy">
+              <div className="t">Select a keyword</div>
+              <div className="s">Choose a tracked keyword from the left to discover similar opportunities</div>
+            </div>
+          </section>
         </div>
       ) : (
         <div className="aso-workspace">
