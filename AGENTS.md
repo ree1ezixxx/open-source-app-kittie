@@ -77,6 +77,9 @@ Merge to `main` when a slice is verified. Do not cross-edit another branch's own
 
 - When asked to use Chrome DevTools MCP or drive an existing Chrome tab, use `$chrome-devtools-cdp-fallback` if MCP `list_pages` is stale, wrong, or only shows `about:blank`.
 - Treat Chrome's CDP endpoint as the real tab inventory when needed: `http://127.0.0.1:9222/json/list`.
+- To control the already-open AppKittie truth tab, list and match via CDP, then navigate the matched tab:
+  `python3 ~/.codex/skills/chrome-devtools-cdp-fallback/scripts/cdp_tabs.py list --port 9222`
+  `python3 ~/.codex/skills/chrome-devtools-cdp-fallback/scripts/cdp_tabs.py navigate --match appkittie --url https://www.appkittie.com/dashboard/trending --port 9222`
 - For AppKittie source-of-truth audits, never navigate the live truth Chrome to localhost unless explicitly requested. Use a separate isolated browser/profile for clone/localhost comparison.
 
 ## Truth-Derived Clone Planning
