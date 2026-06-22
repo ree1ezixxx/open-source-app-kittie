@@ -11,26 +11,51 @@ import { formatCompact, formatMoney } from "../lib/format";
 import { IconTrending, IconChart } from "../icons";
 import type { Theme } from "../lib/theme";
 
-const CATEGORIES = [
-  "All categories", "Business", "Education", "Entertainment", "Finance", "Food & Drink",
-  "Games", "Graphics & Design", "Health & Fitness", "Lifestyle", "Music", "News",
-  "Photo & Video", "Productivity", "Shopping", "Social Networking", "Sports", "Travel",
-  "Utilities", "Weather",
+const CATEGORIES: { name: string; icon: string }[] = [
+  { name: "All categories", icon: "Categories" },
+  { name: "Business", icon: "💼" },
+  { name: "Education", icon: "🎓" },
+  { name: "Entertainment", icon: "🎬" },
+  { name: "Finance", icon: "💰" },
+  { name: "Food & Drink", icon: "🍔" },
+  { name: "Games", icon: "🎮" },
+  { name: "Graphics & Design", icon: "🎨" },
+  { name: "Health & Fitness", icon: "💪" },
+  { name: "Lifestyle", icon: "🌿" },
+  { name: "Music", icon: "🎵" },
+  { name: "News", icon: "📰" },
+  { name: "Photo & Video", icon: "📷" },
+  { name: "Productivity", icon: "⚡" },
+  { name: "Shopping", icon: "🛍️" },
+  { name: "Social Networking", icon: "💬" },
+  { name: "Sports", icon: "🏆" },
+  { name: "Travel", icon: "✈️" },
+  { name: "Utilities", icon: "🔧" },
+  { name: "Weather", icon: "☀️" },
 ];
 
 // Storefronts offered in the country selector (mirrors truth's control). Only US
 // chart data is ingested today; other storefronts render the honest empty-state
 // until their feeds are collected — never fabricated rows.
-const COUNTRIES: { code: string; label: string }[] = [
-  { code: "US", label: "United States" },
-  { code: "GB", label: "United Kingdom" },
-  { code: "CA", label: "Canada" },
-  { code: "AU", label: "Australia" },
-  { code: "DE", label: "Germany" },
-  { code: "FR", label: "France" },
-  { code: "JP", label: "Japan" },
-  { code: "BR", label: "Brazil" },
+const COUNTRIES: { code: string; flag: string; label: string }[] = [
+  { code: "US", flag: "🇺🇸", label: "United States" },
+  { code: "GB", flag: "🇬🇧", label: "United Kingdom" },
+  { code: "CA", flag: "🇨🇦", label: "Canada" },
+  { code: "AU", flag: "🇦🇺", label: "Australia" },
+  { code: "DE", flag: "🇩🇪", label: "Germany" },
+  { code: "FR", flag: "🇫🇷", label: "France" },
+  { code: "JP", flag: "🇯🇵", label: "Japan" },
+  { code: "BR", flag: "🇧🇷", label: "Brazil" },
 ];
+const DEFAULT_COUNTRY = COUNTRIES[0]!;
+const DEFAULT_CATEGORY = CATEGORIES[0]!;
+
+function chartFreshness(date: string | null): string | null {
+  if (!date) return null;
+  const d = new Date(`${date}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return `Updated ${date}`;
+  return `Updated ${d.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+}
 
 export function TrendingPage({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => void }) {
   const nav = useNavigate();
@@ -65,9 +90,9 @@ export function TrendingPage({ theme, onToggleTheme }: { theme: Theme; onToggleT
   }, [chart, store, category, country, refreshTick]);
 
   const entries = result?.entries ?? [];
-  const updated = result?.date
-    ? new Date(result.date).toLocaleDateString(undefined, { month: "short", day: "numeric" })
-    : null;
+  const updated = chartFreshness(result?.date ?? null);
+  const selectedCountry = COUNTRIES.find((c) => c.code === country) ?? DEFAULT_COUNTRY;
+  const selectedCategory = CATEGORIES.find((c) => c.name === category) ?? DEFAULT_CATEGORY;
 
   const toolbar = (
     <div className="toolbar">
@@ -90,18 +115,18 @@ export function TrendingPage({ theme, onToggleTheme }: { theme: Theme; onToggleT
       />
       <div className="select">
         <select value={country} onChange={(e) => setCountry(e.target.value)} aria-label="Country">
-          {COUNTRIES.map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}
+          {COUNTRIES.map((c) => <option key={c.code} value={c.code}>{c.flag} {c.label}</option>)}
         </select>
       </div>
       <div className="select">
         <select value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Category">
-          {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+          {CATEGORIES.map((c) => <option key={c.name}>{c.icon} {c.name}</option>)}
         </select>
       </div>
       <button className="btn" onClick={() => setRefreshTick((t) => t + 1)} disabled={loading}>
         Refresh rankings
       </button>
-      {updated && <span className="pill" style={pillStyle("#9a9aa3")}>Updated {updated}</span>}
+      {updated && <div className="trending-freshness">{updated}</div>}
     </div>
   );
 
@@ -115,6 +140,12 @@ export function TrendingPage({ theme, onToggleTheme }: { theme: Theme; onToggleT
       toolbar={toolbar}
       bodyClass="flush"
     >
+      <div className="trending-chart-meta" aria-label="Selected chart metadata">
+        <span title={selectedCountry.label}>{selectedCountry.flag}</span>
+        <span title={selectedCategory.name}>{selectedCategory.icon}</span>
+        <span className="trending-chart-dot">•</span>
+        <span>{entries.length} {entries.length === 1 ? "app" : "apps"}</span>
+      </div>
       <div className="table-scroll">
         {loading ? (
           <EmptyState icon={<IconChart />} title="Loading rankings…" />
