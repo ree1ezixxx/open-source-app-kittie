@@ -120,7 +120,7 @@ export function TrendingPage({ theme, onToggleTheme }: { theme: Theme; onToggleT
       </div>
       <div className="select">
         <select value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Category">
-          {CATEGORIES.map((c) => <option key={c.name}>{c.icon} {c.name}</option>)}
+          {CATEGORIES.map((c) => <option key={c.name} value={c.name}>{c.icon} {c.name}</option>)}
         </select>
       </div>
       <button className="btn" onClick={() => setRefreshTick((t) => t + 1)} disabled={loading}>
