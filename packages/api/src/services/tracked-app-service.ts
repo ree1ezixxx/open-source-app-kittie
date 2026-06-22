@@ -1,6 +1,7 @@
 import {
   addKeywordForTrackedApp,
   deleteKeywordForTrackedApp,
+  filterGeneratedKeywordsForCountry,
   getAppRowById,
   getGeneratedKeywordInputHash,
   getTrackedApp,
@@ -229,6 +230,11 @@ export async function addCustomKeywordToTrackedApp(
   if (!tracked) return null;
 
   const market = country.toUpperCase();
+  const generated = await listGeneratedKeywordsForTrackedApp(db, trackedAppId);
+  if (generated.some((row) => row.keyword === normalized && (row.source === "ai" || row.country === market))) {
+    return listRankingsForTrackedApp(trackedAppId, { country: market });
+  }
+
   await getKeywordDifficulty(normalized, market, tracked.store, { forceRefresh: true });
   await addKeywordForTrackedApp(db, {
     trackedAppId,
@@ -255,7 +261,7 @@ export async function removeKeywordFromTrackedApp(
   const tracked = await getTrackedAppById(db, trackedAppId);
   if (!tracked) return null;
 
-  await deleteKeywordForTrackedApp(db, trackedAppId, normalized);
+  await deleteKeywordForTrackedApp(db, trackedAppId, country.toUpperCase(), normalized);
   return listRankingsForTrackedApp(trackedAppId, { country: country.toUpperCase() });
 }
 
@@ -322,8 +328,11 @@ export async function listRankingsForTrackedApp(
   const tracked = await getTrackedAppById(db, trackedAppId);
   if (!tracked) return null;
 
-  const generated = await listGeneratedKeywordsForTrackedApp(db, trackedAppId);
   const country = (options.country ?? tracked.country).toUpperCase();
+  const generated = filterGeneratedKeywordsForCountry(
+    await listGeneratedKeywordsForTrackedApp(db, trackedAppId),
+    country,
+  );
   let synced = 0;
   let failed = 0;
   let analyzedAt = tracked.lastAnalyzedAt;
@@ -367,7 +376,6 @@ export async function syncRankingsForTrackedAppMarkets(
   const tracked = await getTrackedAppById(db, trackedAppId);
   if (!tracked) return null;
 
-  const generated = await listGeneratedKeywordsForTrackedApp(db, trackedAppId);
   const valid = new Set<string>(TRACKED_APP_RANK_MARKETS);
   const countries = (options.countries ?? TRACKED_APP_RANK_MARKETS)
     .map((c) => c.toUpperCase())
@@ -387,6 +395,10 @@ export async function syncRankingsForTrackedAppMarkets(
   });
 
   for (const country of countries) {
+    const generated = filterGeneratedKeywordsForCountry(
+      await listGeneratedKeywordsForTrackedApp(db, trackedAppId),
+      country,
+    );
     const result = await syncRankingsForMarket(db, tracked, generated, country, observedAt);
     synced += result.synced;
     failed += result.failed;

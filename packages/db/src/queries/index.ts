@@ -57,6 +57,7 @@ export {
   addKeywordForTrackedApp,
   deleteKeywordForTrackedApp,
   deleteGeneratedKeywordsForTrackedApp,
+  filterGeneratedKeywordsForCountry,
   getGeneratedKeywordInputHash,
   getTrackedApp,
   getTrackedAppById,
