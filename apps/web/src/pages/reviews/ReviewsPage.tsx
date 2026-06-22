@@ -1,5 +1,5 @@
 /* ============================================================
-   Lane D — Reviews page. /reviews/:tab  (overview|feed|semantics|improvements)
+   Lane D — Reviews page. /dashboard/reviews/:tab  (overview|feed|semantics|improvements)
    Monitor reviews, sentiment & AI insights.
 
    REAL: review text + rating distribution (POST /reviews).
@@ -151,7 +151,7 @@ export function ReviewsPage({ theme, onToggleTheme }: { theme: Theme; onToggleTh
 
   const setTab = useCallback((id: string) => {
     const qs = sp.toString();
-    navigate(`/reviews/${id}${qs ? `?${qs}` : ""}`, { replace: true });
+    navigate(`/dashboard/reviews/${id}${qs ? `?${qs}` : ""}`, { replace: true });
   }, [navigate, sp]);
 
   const selectApp = useCallback((id: string) => {

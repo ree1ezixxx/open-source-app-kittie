@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { Sidebar } from "./components/Sidebar";
 import { ExplorePage } from "./pages/ExplorePage";
 import { AppDetailPage } from "./pages/AppDetailPage";
@@ -23,6 +23,11 @@ import { HotIdeasPage } from "./pages/HotIdeasPage";
 import { IdeaDetailPage } from "./pages/IdeaDetailPage";
 import { PricingCalculatorPage } from "./pages/PricingCalculatorPage";
 import { useTheme } from "./lib/theme";
+
+function RedirectWithSearch({ to }: { to: string }) {
+  const { search } = useLocation();
+  return <Navigate to={`${to}${search}`} replace />;
+}
 
 export function App() {
   const [theme, toggleTheme] = useTheme();
@@ -65,11 +70,12 @@ export function App() {
         <Route path="/tools/pricing-calculator" element={<PricingCalculatorPage />} />
 
         {/* Reviews & Meta */}
-        <Route path="/reviews" element={<Navigate to="/reviews/overview" replace />} />
-        <Route path="/dashboard/reviews" element={<Navigate to="/reviews/overview" replace />} />
+        <Route path="/dashboard/reviews" element={<RedirectWithSearch to="/dashboard/reviews/overview" />} />
+        <Route path="/dashboard/reviews/:tab" element={<ReviewsPage theme={theme} onToggleTheme={toggleTheme} />} />
+        <Route path="/reviews" element={<RedirectWithSearch to="/dashboard/reviews/overview" />} />
         {/* legacy: the feed tab used to be /reviews/reviews — keep old links alive */}
-        <Route path="/reviews/reviews" element={<Navigate to="/reviews/feed" replace />} />
-        <Route path="/reviews/:tab" element={<ReviewsPage theme={theme} onToggleTheme={toggleTheme} />} />
+        <Route path="/reviews/reviews" element={<RedirectWithSearch to="/dashboard/reviews/feed" />} />
+        <Route path="/reviews/:tab" element={<LegacyReviewsRedirect />} />
         <Route path="/mcp" element={<McpLandingPage theme={theme} onToggleTheme={toggleTheme} />} />
         <Route path="/settings" element={<SettingsPage theme={theme} onToggleTheme={toggleTheme} />} />
         <Route path="/settings/api-keys" element={<ApiKeysPage theme={theme} onToggleTheme={toggleTheme} />} />
@@ -79,4 +85,10 @@ export function App() {
       </Routes>
     </div>
   );
+}
+
+function LegacyReviewsRedirect() {
+  const { tab } = useParams();
+  const target = tab === "reviews" ? "feed" : tab || "overview";
+  return <RedirectWithSearch to={`/dashboard/reviews/${target}`} />;
 }
