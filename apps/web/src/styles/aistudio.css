@@ -207,7 +207,73 @@
 .notice.warn svg { color: #f5c451; }
 
 /* ============================================================ Hot Ideas */
-.ideas-scroll { flex: 1; overflow-y: auto; }
+.ideas-layout {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  overflow: hidden;
+}
+.ideas-filter-rail {
+  border-right: 1px solid var(--border-soft);
+  background: var(--bg-sidebar);
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 12px 18px;
+}
+.ideas-filter-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 0 2px 13px; border-bottom: 1px solid var(--border-soft); margin-bottom: 13px;
+}
+.ideas-filter-title { font-size: 14px; font-weight: 740; letter-spacing: -0.01em; }
+.ideas-clear {
+  display: inline-flex; align-items: center; gap: 5px; border: none; background: none;
+  color: var(--text-tertiary); font-size: 11.5px; font-weight: 650; border-radius: 7px;
+  padding: 5px 6px; white-space: nowrap;
+}
+.ideas-clear:not(:disabled):hover { color: var(--text); background: var(--surface-hover); }
+.ideas-clear:disabled { opacity: 0.55; cursor: not-allowed; }
+.ideas-filter-section { padding: 0 0 15px; }
+.ideas-filter-section > label {
+  display: block; margin: 0 0 7px; font-size: 11.5px; font-weight: 690;
+  color: var(--text-secondary);
+}
+.ideas-filter-section .search, .ideas-filter-section .select { width: 100%; }
+.ideas-filter-section .search input, .ideas-filter-section .select select { width: 100%; }
+.ideas-filter-sub {
+  margin: -3px 0 6px; color: var(--text-tertiary); font-size: 10.5px;
+}
+.ideas-order {
+  display: flex; align-items: center; gap: 7px; width: 100%; height: 36px;
+  border: 1px solid var(--border); border-radius: 9px; background: var(--surface);
+  color: var(--text-secondary); padding: 0 10px; font-size: 12px; font-weight: 620;
+}
+.ideas-order:hover { color: var(--text); border-color: var(--border-strong); background: var(--surface-hover); }
+.ideas-order svg { width: 14px; height: 14px; }
+.ideas-blueprint-list { display: flex; flex-direction: column; gap: 7px; }
+.ideas-blueprint-toggle {
+  display: flex; align-items: center; gap: 7px; width: 100%; height: 34px;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--surface);
+  color: var(--text-secondary); padding: 0 10px; font-size: 11.5px; font-weight: 650;
+  text-align: left;
+}
+.ideas-blueprint-toggle:hover { color: var(--text); border-color: var(--border-strong); background: var(--surface-hover); }
+.ideas-blueprint-toggle.on { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 36%, transparent); background: var(--accent-soft); }
+.ideas-blueprint-toggle .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.ideas-main {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ideas-countline {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ideas-scroll { flex: 1; min-height: 0; overflow-y: auto; }
 .ideas-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(312px, 1fr));
   gap: 14px; padding: 18px 22px 8px;
@@ -261,6 +327,19 @@
   display: inline-grid; place-items: center; min-width: 17px; height: 17px; padding: 0 4px;
   border-radius: 9px; background: var(--accent); color: var(--accent-contrast, #08130a);
   font-size: 10.5px; font-weight: 750; font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 900px) {
+  .ideas-layout { display: flex; flex-direction: column; overflow: auto; }
+  .ideas-filter-rail {
+    flex: none; border-right: none; border-bottom: 1px solid var(--border-soft);
+    overflow: visible; background: var(--bg); padding: 12px 14px;
+  }
+  .ideas-filter-rail .ideas-filter-section { padding-bottom: 12px; }
+  .ideas-blueprint-list { flex-direction: row; flex-wrap: wrap; }
+  .ideas-blueprint-toggle { width: auto; min-width: 128px; flex: 1; }
+  .ideas-main { min-height: 680px; }
+  .ideas-countline { white-space: normal; }
 }
 
 /* ============================================================ Pricing Calculator */
