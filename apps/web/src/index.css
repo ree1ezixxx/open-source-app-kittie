@@ -1502,3 +1502,29 @@ table.apps tbody tr:hover td:first-child { box-shadow: inset 2px 0 0 0 var(--acc
 
 /* count chip — mono tabular, subtle */
 .count-chip { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+/* ---- Pass 3: shell (sidebar + topbar) ---- */
+.sidebar { border-right: 1px solid var(--border-soft); }
+/* serif wordmark — editorial brand lockup */
+.brand-name { font-family: var(--font-display); font-weight: 400; font-size: 19px; letter-spacing: 0; }
+.topbar { border-bottom: 1px solid var(--border-soft); }
+.nav-item.active { background: var(--accent-soft); }
+.nav-item.active svg { color: var(--accent); opacity: 1; }
+
+/* ---- Pass 5: cards & empty states ---- */
+.dcard { transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease); }
+.dcard:hover { border-color: var(--border-strong); }
+.empty-card, .center-state .title { font-family: var(--font-ui); }
+
+/* ---- Pass 6: motion — staggered list reveals ---- */
+@media (prefers-reduced-motion: no-preference) {
+  .widgets-grid > * { animation: signal-fade-up var(--dur-slow) var(--ease) both; }
+  .widgets-grid > *:nth-child(2) { animation-delay: 0.07s; }
+  .widgets-grid > *:nth-child(3) { animation-delay: 0.14s; }
+  .detail-stats > * { animation: signal-fade-up var(--dur) var(--ease) both; }
+  .detail-stats > *:nth-child(2) { animation-delay: 0.04s; }
+  .detail-stats > *:nth-child(3) { animation-delay: 0.08s; }
+  .detail-stats > *:nth-child(4) { animation-delay: 0.12s; }
+  .detail-stats > *:nth-child(5) { animation-delay: 0.16s; }
+  .detail-stats > *:nth-child(6) { animation-delay: 0.2s; }
+}
