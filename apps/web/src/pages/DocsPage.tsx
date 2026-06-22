@@ -30,6 +30,12 @@ const codeBlock: CSSProperties = {
   whiteSpace: "pre",
 };
 
+const card: CSSProperties = {
+  background: "var(--surface)",
+  border: "1px solid var(--border-soft)",
+  borderRadius: 13,
+};
+
 const METHOD_COLORS: Record<string, string> = {
   GET: "var(--accent)",
   POST: "var(--positive)",
@@ -80,6 +86,29 @@ function InlineCode({ children }: { children: ReactNode }) {
   );
 }
 
+function InfoCard({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div style={{ ...card, padding: 16 }}>
+      <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 6px", color: "var(--text)" }}>{title}</h3>
+      <div style={{ fontSize: 12.5, lineHeight: 1.6, color: "var(--text-secondary)" }}>{children}</div>
+    </div>
+  );
+}
+
+function CardGrid({ children }: { children: ReactNode }) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))",
+        gap: 12,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 interface EndpointDef {
   method: "GET" | "POST" | "DELETE";
   path: string;
@@ -92,8 +121,7 @@ function Endpoint({ ep }: { ep: EndpointDef }) {
   return (
     <div
       style={{
-        background: "var(--surface)", border: "1px solid var(--border-soft)",
-        borderRadius: 13, padding: 16, marginBottom: 12, scrollMarginTop: 16,
+        ...card, padding: 16, marginBottom: 12, scrollMarginTop: 16,
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 7 }}>
@@ -310,7 +338,10 @@ const MISC_ENDPOINTS: EndpointDef[] = [
 ];
 
 const NAV = [
-  { id: "introduction", label: "Introduction" },
+  { id: "what-is-appkittie", label: "What is AppKittie?" },
+  { id: "api-endpoints", label: "API Endpoints" },
+  { id: "key-features", label: "Key Features" },
+  { id: "local-api-reference", label: "Local API Reference" },
   { id: "quickstart", label: "Quickstart" },
   { id: "authentication", label: "Authentication" },
   { id: "credits", label: "Credits & rate limits" },
@@ -321,13 +352,69 @@ const NAV = [
   { id: "ref-misc", label: "Reference — Misc" },
 ];
 
+const DOC_CARDS = [
+  { title: "Quickstart", desc: "Get your API key and make your first request in under 2 minutes." },
+  { title: "API Reference", desc: "Explore all endpoints with request/response examples." },
+  { title: "Authentication", desc: "Learn how API key authentication works." },
+  { title: "Filters Reference", desc: "See every filter and sorting option available." },
+];
+
+const ENDPOINT_SUMMARY = [
+  ["/api/v1/apps", "GET", "Search and filter apps", "1 per app"],
+  ["/api/v1/apps/:appId", "GET", "Get detailed app data", "1 per request"],
+  ["/api/v1/apps/:appId/historicals", "GET", "Get historical metric time series", "1 per request"],
+  ["/api/v1/ads", "GET", "Search and filter ad creatives", "1 per ad"],
+  ["/api/v1/ads/:adId", "GET", "Get detailed ad creative data", "1 per request"],
+  ["/api/v1/creators", "GET", "Fetch app creator profiles", "1 per creator"],
+  ["/api/v1/organic", "GET", "Fetch app organic creator videos", "1 per item"],
+  ["/api/v1/keywords/difficulty", "GET", "Single keyword difficulty", "10 per request"],
+  ["/api/v1/keywords/difficulty", "POST", "Batch keyword difficulty (up to 10)", "10 per keyword"],
+  ["/api/v1/reviews", "POST", "Fetch app reviews with pagination", "1 per review"],
+] as const;
+
+const FEATURES = [
+  {
+    title: "App Discovery & Filtering",
+    desc: "Search across mobile app data with filters for category, store, rating, growth, revenue, downloads, and release timing.",
+  },
+  {
+    title: "Keyword Research",
+    desc: "Score keyword difficulty, compare markets, and discover related terms for ASO planning.",
+  },
+  {
+    title: "Revenue & Download Estimates",
+    desc: "Analyze estimated app momentum with revenue, download, and historical trend signals.",
+  },
+  {
+    title: "Ad Intelligence",
+    desc: "Explore creative patterns and campaign signals from app marketing activity.",
+  },
+  {
+    title: "Review Intelligence",
+    desc: "Fetch paginated reviews and turn user feedback into product and positioning signals.",
+  },
+  {
+    title: "Contact & Creator Data",
+    desc: "Find developer, creator, and marketing context for outreach and competitive research.",
+  },
+];
+
 export function DocsPage({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => void }) {
   return (
     <main className="main">
+      <style>{`
+        @media (max-width: 760px) {
+          .docs-layout { grid-template-columns: 1fr !important; padding: 20px 16px 72px !important; }
+          .docs-nav { position: static !important; display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+          .docs-nav-title { display: none; }
+          .docs-nav a { border-left: 0 !important; border-bottom: 2px solid var(--border-soft); padding: 6px 2px !important; white-space: nowrap; }
+          .docs-endpoints { min-width: 720px; }
+        }
+      `}</style>
       <PageHeader
         icon={<IconBook style={{ width: 18, height: 18 }} />}
-        title="API Docs"
-        subtitle="Kittie REST API — reference & quickstart"
+        title="Introduction"
+        subtitle="AppKittie API documentation for mobile app intelligence, keyword research, and marketing data."
         actions={
           <button className="icon-btn" onClick={onToggleTheme} aria-label="Toggle theme">
             {theme === "dark" ? <IconSun /> : <IconMoon />}
@@ -337,6 +424,7 @@ export function DocsPage({ theme, onToggleTheme }: { theme: Theme; onToggleTheme
 
       <div className="set-scroll">
         <div
+          className="docs-layout"
           style={{
             maxWidth: 1020, margin: "0 auto", padding: "26px 24px 90px",
             display: "grid", gridTemplateColumns: "168px minmax(0, 1fr)",
@@ -344,8 +432,9 @@ export function DocsPage({ theme, onToggleTheme }: { theme: Theme; onToggleTheme
           }}
         >
           {/* ---- in-page nav ---- */}
-          <nav aria-label="On this page" style={{ position: "sticky", top: 18 }}>
+          <nav className="docs-nav" aria-label="On this page" style={{ position: "sticky", top: 18 }}>
             <div
+              className="docs-nav-title"
               style={{
                 fontSize: 10.5, fontWeight: 650, textTransform: "uppercase",
                 letterSpacing: "0.06em", color: "var(--text-faint)", marginBottom: 10,
@@ -372,9 +461,80 @@ export function DocsPage({ theme, onToggleTheme }: { theme: Theme; onToggleTheme
 
           {/* ---- content ---- */}
           <div>
-            <Section id="introduction" title="Introduction">
+            <Section id="what-is-appkittie" title="What is AppKittie?">
+              <div style={{ ...card, padding: 18, marginBottom: 14 }}>
+                <P>
+                  AppKittie is the most comprehensive mobile app intelligence platform. Search,
+                  filter, and analyze App Store and Google Play apps with powerful APIs.
+                </P>
+                <P>
+                  It gives developers, marketers, and ASO professionals programmatic access to
+                  app database search, keyword difficulty, review intelligence, filters and
+                  sorting, and marketing intelligence for App Store and Google Play research.
+                </P>
+              </div>
+
+              <div style={{ ...card, padding: 16, marginBottom: 14 }}>
+                <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 8px", color: "var(--text)" }}>
+                  Documentation Index
+                </h3>
+                <P>
+                  Fetch the complete documentation index at: <InlineCode>/docs/llms.txt</InlineCode>
+                </P>
+                <P>Use this file to discover all available pages before exploring further.</P>
+              </div>
+
+              <CardGrid>
+                {DOC_CARDS.map((item) => (
+                  <InfoCard key={item.title} title={item.title}>
+                    {item.desc}
+                  </InfoCard>
+                ))}
+              </CardGrid>
+            </Section>
+
+            <Section id="api-endpoints" title="API Endpoints" sub="Hosted AppKittie endpoint summary. Some rows document parity targets only in this local build.">
+              <div style={{ ...card, overflowX: "auto" }}>
+                <table className="docs-endpoints" style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
+                  <thead>
+                    <tr style={{ color: "var(--text-tertiary)", textAlign: "left" }}>
+                      <th style={{ padding: "10px 12px", borderBottom: "1px solid var(--border-soft)", fontWeight: 650 }}>Endpoint</th>
+                      <th style={{ padding: "10px 12px", borderBottom: "1px solid var(--border-soft)", fontWeight: 650 }}>Method</th>
+                      <th style={{ padding: "10px 12px", borderBottom: "1px solid var(--border-soft)", fontWeight: 650 }}>Description</th>
+                      <th style={{ padding: "10px 12px", borderBottom: "1px solid var(--border-soft)", fontWeight: 650 }}>Credits</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ENDPOINT_SUMMARY.map(([path, method, desc, credits]) => (
+                      <tr key={`${method}-${path}`}>
+                        <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border-soft)" }}>
+                          <code style={{ ...mono, color: "var(--text)", fontSize: 12 }}>{path}</code>
+                        </td>
+                        <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border-soft)" }}>
+                          <MethodPill method={method} />
+                        </td>
+                        <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border-soft)", color: "var(--text-secondary)", lineHeight: 1.45 }}>{desc}</td>
+                        <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border-soft)", color: "var(--text-secondary)", whiteSpace: "nowrap" }}>{credits}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Section>
+
+            <Section id="key-features" title="Key Features">
+              <CardGrid>
+                {FEATURES.map((feature) => (
+                  <InfoCard key={feature.title} title={feature.title}>
+                    {feature.desc}
+                  </InfoCard>
+                ))}
+              </CardGrid>
+            </Section>
+
+            <Section id="local-api-reference" title="Local API Reference">
               <P>
-                The Kittie API exposes the same app-intelligence data the dashboard runs on:
+                The local Kittie API exposes the same app-intelligence data the dashboard runs on:
                 a searchable app database with revenue & download estimates, keyword difficulty
                 scored from live store searches, and full review text for sentiment work.
                 It's a plain REST API returning JSON.
