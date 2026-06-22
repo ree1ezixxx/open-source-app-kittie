@@ -104,6 +104,7 @@ keywordsRouter.get("/tracked-apps/stream", (c) => {
         data: JSON.stringify({
           tracked: result.tracked,
           rankings: result.rows,
+          history: result.history,
           synced: result.synced,
           failed: result.failed,
           analyzedAt: result.analyzedAt?.toISOString() ?? null,
@@ -145,6 +146,7 @@ keywordsRouter.get("/tracked-apps/:id/rankings", async (c) => {
       synced: result.synced,
       failed: result.failed,
       analyzedAt: result.analyzedAt?.toISOString() ?? null,
+      history: result.history,
     },
   });
 });
@@ -182,6 +184,7 @@ keywordsRouter.get("/tracked-apps/:id/rankings/stream", (c) => {
         data: JSON.stringify({
           tracked: result.tracked,
           rankings: result.rows,
+          history: result.history,
           synced: result.synced,
           failed: result.failed,
           analyzedAt: result.analyzedAt?.toISOString() ?? null,

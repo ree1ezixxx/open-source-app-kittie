@@ -79,6 +79,17 @@ export function registerAllSweeps(): void {
   });
 
   registerSweep({
+    name: "tracked-app-rank-history",
+    cadenceHours: 24,
+    async run() {
+      const { sweepTrackedAppRankHistory } = await import("./services/tracked-app-service.js");
+      const r = await sweepTrackedAppRankHistory();
+      return `synced ${r.synced} positions across ${r.tracked} tracked apps` +
+        (r.failed ? `, ${r.failed} failed` : "");
+    },
+  });
+
+  registerSweep({
     name: "hot-ideas",
     cadenceHours: 6,
     async run() {
