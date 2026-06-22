@@ -192,7 +192,9 @@ function buildConditions(params: AppSearchParams, maxDate: string): AppCondition
   if (params.maxRevenue != null) snapMetricCols.push(lte(sql`coalesce(${appSnapshots.revenueEstimate}, 0)`, params.maxRevenue));
 
   if (params.releasedAfter != null) appCols.push(gte(apps.releasedAt, new Date(params.releasedAfter * 1000)));
+  if (params.releasedBefore != null) appCols.push(lte(apps.releasedAt, new Date(params.releasedBefore * 1000)));
   if (params.updatedAfter != null) appCols.push(gte(apps.updatedAt, new Date(params.updatedAfter * 1000)));
+  if (params.updatedBefore != null) appCols.push(lte(apps.updatedAt, new Date(params.updatedBefore * 1000)));
 
   if (params.priceType === "free") appCols.push(or(isNull(apps.price), lte(apps.price, 0))!);
   if (params.priceType === "paid") appCols.push(and(isNotNull(apps.price), gt(apps.price, 0))!);

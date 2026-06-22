@@ -37,8 +37,13 @@ export function ExplorePage({
 
   // Rail extras that live outside ExploreFilters (URL stays the single source
   // of truth): category include/exclude mode + app-language multi-select.
-  const catMode: CategoryMode = sp.get("catmode") === "exclude" ? "exclude" : "include";
+  const catMode: CategoryMode =
+    sp.get("catmode") === "exclude" || sp.has("excludedCategories") ? "exclude" : "include";
   const langs = useMemo(() => sp.get("langs")?.split(",").filter(Boolean) ?? [], [spStr]);
+  const excludedCountries = useMemo(
+    () => sp.get("excludedCountries")?.split(",").filter(Boolean) ?? [],
+    [spStr],
+  );
 
   const apiParams = useMemo(() => {
     const base = toApiParams(filters);
@@ -46,6 +51,7 @@ export function ExplorePage({
       base.excludedCategories = base.categories;
       base.categories = undefined;
     }
+    if (excludedCountries.length) base.excludedCountries = excludedCountries.join(",");
     if (langs.length) base.languages = langs.join(",");
     return base;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -58,7 +64,7 @@ export function ExplorePage({
   // functional updater reads the *latest* params, so rapid successive clicks compose
   // instead of clobbering each other. writeFilters only knows ExploreFilters keys, so
   // the extra rail params are carried over from prev (or overridden via `extras`).
-  const EXTRA_KEYS = ["catmode", "langs"] as const;
+  const EXTRA_KEYS = ["catmode", "langs", "excludedCountries", "excludedCategories", "releasedAfter", "releasedAfterDate", "secondarySortBy", "secondarySortOrder"] as const;
   function patch(
     p: Partial<ExploreFilters>,
     extras?: Partial<Record<(typeof EXTRA_KEYS)[number], string | undefined>>,

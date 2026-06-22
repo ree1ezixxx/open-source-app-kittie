@@ -61,9 +61,17 @@ export function matchesSearch(row: ScoredAppRow, params: AppSearchParams): boole
     const released = item.releasedAt ? Math.floor(new Date(item.releasedAt).getTime() / 1000) : null;
     if (released == null || released < params.releasedAfter) return false;
   }
+  if (params.releasedBefore != null) {
+    const released = item.releasedAt ? Math.floor(new Date(item.releasedAt).getTime() / 1000) : null;
+    if (released == null || released > params.releasedBefore) return false;
+  }
   if (params.updatedAfter != null) {
     const updated = item.updatedAt ? Math.floor(new Date(item.updatedAt).getTime() / 1000) : null;
     if (updated == null || updated < params.updatedAfter) return false;
+  }
+  if (params.updatedBefore != null) {
+    const updated = item.updatedAt ? Math.floor(new Date(item.updatedAt).getTime() / 1000) : null;
+    if (updated == null || updated > params.updatedBefore) return false;
   }
 
   if (params.minGrowth != null && (item.growthScore ?? 0) < params.minGrowth) return false;

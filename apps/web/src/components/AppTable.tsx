@@ -45,7 +45,7 @@ function growthPct(a: AppListItem): number | null {
 
 /** Inline mini sparkline — renders whatever points exist; 1 point = flat line. */
 function Sparkline({ points, up }: { points: number[]; up: boolean }) {
-  const w = 56;
+  const w = 44;
   const h = 18;
   const pad = 2;
   if (points.length === 0) return null;

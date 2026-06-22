@@ -234,7 +234,7 @@ a { color: inherit; text-decoration: none; }
   background: var(--surface); border: 1px solid var(--border);
   color: var(--accent);
 }
-.page-title { font-size: 17px; font-weight: 650; letter-spacing: -0.015em; line-height: 1.1; }
+.page-title { margin: 0; font-size: 17px; font-weight: 650; letter-spacing: -0.015em; line-height: 1.1; }
 .page-sub { font-size: 11.5px; color: var(--text-tertiary); }
 .count-chip {
   font-size: 11px; font-weight: 600;
@@ -389,7 +389,7 @@ table.apps thead th {
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-tertiary);
-  padding: 10px 16px;
+  padding: 10px 11px;
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
   user-select: none;
@@ -402,7 +402,7 @@ table.apps th.num .th-inner { flex-direction: row-reverse; }
 table.apps th .sort-caret { color: var(--accent); display: inline-flex; }
 
 table.apps tbody td {
-  padding: 0 16px;
+  padding: 0 11px;
   height: 52px;
   border-bottom: 1px solid var(--border-soft);
   color: var(--text);
@@ -413,7 +413,7 @@ table.apps tbody tr:hover td { background: var(--row-hover); }
 table.apps tbody tr:hover .col-app .app-title { color: var(--accent); }
 
 /* sticky first column */
-.col-app { position: sticky; left: 0; z-index: 4; background: var(--bg); min-width: 280px; }
+.col-app { position: sticky; left: 0; z-index: 4; background: var(--bg); min-width: 228px; }
 table.apps tbody tr:hover .col-app { background: color-mix(in srgb, var(--bg) 100%, var(--row-hover)); }
 thead .col-app { z-index: 6; }
 
@@ -657,6 +657,21 @@ thead .col-app { z-index: 6; }
 }
 .detail-scroll { flex: 1; overflow-y: auto; }
 .detail-inner { max-width: 1060px; margin: 0 auto; padding: 26px 24px 72px; }
+
+/* truth-style headline stat cards row */
+.detail-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+.stat-card {
+  display: flex; flex-direction: column; gap: 5px;
+  padding: 12px 14px;
+  background: var(--panel); border: 1px solid var(--border-soft); border-radius: var(--radius-lg);
+}
+.stat-card-label { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-tertiary); }
+.stat-card-value { font-size: 16px; font-weight: 650; color: var(--text); font-variant-numeric: tabular-nums; }
 
 .hero { display: flex; align-items: center; gap: 20px; margin-bottom: 26px; }
 .hero-icon {
@@ -1042,6 +1057,35 @@ thead .col-app { z-index: 6; }
 }
 .frange-inputs input:focus { outline: none; border-color: var(--border-strong); }
 .frange-affix, .frange-dash { font-size: 12px; color: var(--text-tertiary); flex: none; }
+
+/* custom date dialog (Explore Time → Custom) */
+.datepick {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 40;
+  width: 268px; padding: 10px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+  box-shadow: var(--shadow-pop); display: flex; flex-direction: column; gap: 9px;
+}
+.datepick-modes { width: 100%; }
+.datepick-head { display: flex; align-items: center; justify-content: space-between; padding: 0 2px; }
+.datepick-month { font-size: 12.5px; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+.datepick-nav {
+  width: 26px; height: 26px; display: grid; place-items: center; cursor: pointer;
+  border: 1px solid var(--border); border-radius: 7px; background: var(--surface); color: var(--text-secondary);
+}
+.datepick-nav:hover { color: var(--text); border-color: var(--border-strong); }
+.datepick-nav svg { width: 14px; height: 14px; }
+.datepick-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.datepick-wd { display: grid; place-items: center; height: 24px; font-size: 10.5px; font-weight: 600; color: var(--text-tertiary); }
+.datepick-day {
+  height: 30px; border: none; border-radius: 7px; cursor: pointer; background: none;
+  color: var(--text); font-size: 12px; font-variant-numeric: tabular-nums; transition: background 0.1s, color 0.1s;
+}
+.datepick-day:hover:not(:disabled) { background: var(--surface-2); }
+.datepick-day.muted { color: var(--text-faint); }
+.datepick-day:disabled { opacity: 0.3; cursor: not-allowed; }
+.datepick-day.inrange { background: var(--accent-soft); border-radius: 0; }
+.datepick-day.sel { background: var(--accent); color: var(--accent-ink, #fff); font-weight: 700; }
+.datepick-foot { display: flex; align-items: center; justify-content: space-between; padding-top: 2px; }
 
 /* explore content column */
 .explore-main { display: flex; flex-direction: column; min-width: 0; overflow: hidden; }

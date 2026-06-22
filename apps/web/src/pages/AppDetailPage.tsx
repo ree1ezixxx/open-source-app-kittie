@@ -10,7 +10,6 @@ import { MetricBar } from "../components/MetricBar";
 import { DetailCard, EmptyCard, Fact } from "../components/DetailCard";
 import { TrendPanel, type ChartMetric } from "../components/TrendPanel";
 import { SimilarApps } from "../components/SimilarApps";
-import { CloneToIosCard } from "../components/detail/CloneToIosCard";
 import { FavoriteToggle } from "../components/FavoriteToggle";
 import { Lightbox } from "../components/Lightbox";
 import {
@@ -26,6 +25,7 @@ import {
   IconMoon,
   IconExternal,
   IconImage,
+  IconVideo,
   IconGlobe,
   IconMessage,
 } from "../icons";
@@ -197,6 +197,22 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
               </div>
             </header>
 
+            {/* truth-style headline stat cards: Creators · Ads · Size · Platforms · Rating */}
+            <div className="detail-stats">
+              <StatCard label="Creators" value={app.creators.length || "—"} />
+              <StatCard label="Meta Ads" value={app.metaAds.length || "—"} />
+              <StatCard
+                label={app.store === "apple" ? "Apple Search Ads" : "Google Play Ads"}
+                value={app.appleSearchAds.length || "—"}
+              />
+              <StatCard label="Size" value={formatBytes(app.fileSizeBytes)} />
+              <StatCard label="Platforms" value={app.store === "apple" ? "iOS" : "Android"} />
+              <StatCard
+                label="Rating"
+                value={app.rating != null ? `${formatRating(app.rating)} (${formatCompact(app.reviewCount)})` : "—"}
+              />
+            </div>
+
             {/* headline metrics — connected bar, click a segment to drive the chart */}
             <MetricBar
               segments={[
@@ -361,9 +377,6 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
               )}
             </DetailCard>
 
-            {/* clone-to-iOS engine */}
-            <CloneToIosCard appId={app.id} />
-
             {/* similar apps */}
             <DetailCard title="Similar apps">
               <SimilarApps category={app.category} excludeId={app.id} />
@@ -393,6 +406,15 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
                 )}
               </DetailCard>
             </div>
+
+            {/* organic content — TikTok/Instagram creator videos (truth parity); data-blocked */}
+            <DetailCard title="Organic Content">
+              <EmptyCard
+                icon={<IconVideo />}
+                title="No creator videos"
+                sub="TikTok & Instagram creator videos for this app aren’t ingested yet."
+              />
+            </DetailCard>
 
             {app.historicals.length < 2 && (
               <div className="notice">
@@ -459,6 +481,16 @@ function AiAbout({ appId }: { appId: string }) {
     <div className="ai-about">
       <span className="ai-about-tag">AI summary</span>
       <p className="desc">{about}</p>
+    </div>
+  );
+}
+
+/** Truth-style headline stat card (Creators / Meta Ads / Ads / Size / Platforms / Rating). */
+function StatCard({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="stat-card">
+      <span className="stat-card-label">{label}</span>
+      <span className="stat-card-value">{value}</span>
     </div>
   );
 }

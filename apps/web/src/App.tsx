@@ -4,6 +4,7 @@ import { Sidebar } from "./components/Sidebar";
 import { ExplorePage } from "./pages/ExplorePage";
 import { AppDetailPage } from "./pages/AppDetailPage";
 import { AdsLibraryPage } from "./pages/AdsLibraryPage";
+import { OrganicPage } from "./pages/OrganicPage";
 import { HighlightsPage } from "./pages/HighlightsPage";
 import { TrendingPage } from "./pages/TrendingPage";
 import { RisingPage } from "./pages/RisingPage";
@@ -50,6 +51,7 @@ export function App() {
         <Route path="/app/:slug" element={<AppDetailPage theme={theme} onToggleTheme={toggleTheme} />} />
 
         <Route path="/dashboard/ads" element={<AdsLibraryPage theme={theme} onToggleTheme={toggleTheme} />} />
+        <Route path="/dashboard/organic" element={<OrganicPage theme={theme} onToggleTheme={toggleTheme} />} />
         <Route path="/dashboard/highlights" element={<HighlightsPage theme={theme} onToggleTheme={toggleTheme} />} />
         <Route path="/dashboard/trending" element={<TrendingPage theme={theme} onToggleTheme={toggleTheme} />} />
         <Route path="/dashboard/rising" element={<RisingPage theme={theme} onToggleTheme={toggleTheme} />} />

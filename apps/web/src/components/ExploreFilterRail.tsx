@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Store } from "@kittie/types";
 import type { CategoryFacet } from "../lib/api";
 import { IconApple, IconGooglePlay, IconFilter, IconChevron } from "../icons";
+import { DatePickerDialog } from "./DatePickerDialog";
 import { FilterGroup, SubLabel } from "./FilterGroup";
 import { FilterSelectPopover } from "./FilterSelectPopover";
 import { Pills, TogglePill } from "./Pills";
@@ -26,135 +27,169 @@ const NO_DATA_TIP = "Not available yet — this signal hasn't been ingested.";
 
 /** Category emoji map — mirrors the live rail's emoji+name chips. */
 const CATEGORY_EMOJI: Record<string, string> = {
+  Books: "📚",
+  "Books & Reference": "📚",
   Business: "💼",
-  Communication: "💬",
+  Communication: "📞",
   Education: "🎓",
   Entertainment: "🎬",
   Finance: "💰",
   "Food & Drink": "🍔",
-  "Health & Fitness": "💪",
-  Lifestyle: "✨",
+  "Graphics & Design": "🎨",
+  "Health & Fitness": "❤️",
+  Lifestyle: "🌿",
+  "Magazines & Newspapers": "🗞️",
+  Medical: "🏥",
   Music: "🎵",
+  "Music & Audio": "🎵",
   Navigation: "🧭",
   News: "📰",
   "News & Magazines": "🗞️",
-  Personalization: "🎨",
+  "Maps & Navigation": "🧭",
+  Personalization: "🎛️",
+  Photography: "📸",
   "Photo & Video": "📸",
-  Productivity: "⚡",
-  Reference: "📚",
+  Productivity: "📊",
+  Reference: "📖",
   Shopping: "🛍️",
   Social: "👥",
-  "Social Networking": "🌐",
+  "Social Networking": "💬",
   Sports: "⚽",
   Tools: "🔧",
   Travel: "✈️",
-  Utilities: "🧰",
+  "Travel & Local": "✈️",
+  Utilities: "🔧",
   "Video Players & Editors": "🎥",
   Games: "🎮",
-  Medical: "🩺",
   Weather: "🌤️",
-  Books: "📖",
+  "Developer Tools": "🛠️",
+  Kids: "🧸",
+  "Safari Extensions": "🧩",
+  "Auto & Vehicles": "🚗",
+  Beauty: "✨",
+  Comics: "💬",
+  Dating: "💘",
+  Events: "📅",
+  "House & Home": "🏠",
+  "Libraries & Demo": "🧪",
+  Parenting: "🧸",
 };
 
 export const catEmoji = (cat: string): string => CATEGORY_EMOJI[cat] ?? "📱";
 
-/** Static ISO language list for the App Language multi-select (codes match
-    apps.languages, compared case-insensitively server-side). */
-const LANGUAGES: { code: string; name: string }[] = [
-  { code: "en", name: "English" },
-  { code: "es", name: "Spanish" },
-  { code: "fr", name: "French" },
-  { code: "de", name: "German" },
-  { code: "it", name: "Italian" },
-  { code: "pt", name: "Portuguese" },
-  { code: "nl", name: "Dutch" },
-  { code: "sv", name: "Swedish" },
-  { code: "no", name: "Norwegian" },
-  { code: "da", name: "Danish" },
-  { code: "fi", name: "Finnish" },
-  { code: "pl", name: "Polish" },
-  { code: "tr", name: "Turkish" },
-  { code: "ru", name: "Russian" },
-  { code: "uk", name: "Ukrainian" },
-  { code: "ar", name: "Arabic" },
-  { code: "he", name: "Hebrew" },
-  { code: "hi", name: "Hindi" },
-  { code: "th", name: "Thai" },
-  { code: "vi", name: "Vietnamese" },
-  { code: "id", name: "Indonesian" },
-  { code: "ja", name: "Japanese" },
-  { code: "ko", name: "Korean" },
-  { code: "zh", name: "Chinese" },
+/** Language list for the App Language multi-select — mirrors the live rail's
+    "Country Language CODE" entries (e.g. "United States English EN"). `code` is the
+    filter value (matched case-insensitively against apps.languages server-side). */
+const LANGUAGES: { code: string; name: string; country: string; display: string }[] = [
+  { code: "en", name: "English", country: "United States", display: "EN" },
+  { code: "de", name: "German", country: "Germany", display: "DE" },
+  { code: "fr", name: "French", country: "France", display: "FR" },
+  { code: "es", name: "Spanish", country: "Spain", display: "ES" },
+  { code: "it", name: "Italian", country: "Italy", display: "IT" },
+  { code: "pt", name: "Portuguese", country: "Brazil", display: "PT" },
+  { code: "nl", name: "Dutch", country: "Netherlands", display: "NL" },
+  { code: "sv", name: "Swedish", country: "Sweden", display: "SV" },
+  { code: "no", name: "Norwegian", country: "Norway", display: "NO" },
+  { code: "da", name: "Danish", country: "Denmark", display: "DA" },
+  { code: "fi", name: "Finnish", country: "Finland", display: "FI" },
+  { code: "zh-cn", name: "Chinese (Simplified)", country: "China", display: "ZH-CN" },
+  { code: "zh-tw", name: "Chinese (Traditional)", country: "Taiwan", display: "ZH-TW" },
+  { code: "ja", name: "Japanese", country: "Japan", display: "JA" },
+  { code: "ko", name: "Korean", country: "South Korea", display: "KO" },
+  { code: "af", name: "Afrikaans", country: "South Africa", display: "AF" },
+  { code: "sq", name: "Albanian", country: "Albania", display: "SQ" },
+  { code: "ar", name: "Arabic", country: "Saudi Arabia", display: "AR" },
+  { code: "az", name: "Azerbaijani", country: "Azerbaijan", display: "AZ" },
+  { code: "bn", name: "Bengali", country: "Bangladesh", display: "BN" },
+  { code: "bg", name: "Bulgarian", country: "Bulgaria", display: "BG" },
+  { code: "ca", name: "Catalan", country: "Andorra", display: "CA" },
+  { code: "hr", name: "Croatian", country: "Croatia", display: "HR" },
+  { code: "cs", name: "Czech", country: "Czech Republic", display: "CS" },
+  { code: "et", name: "Estonian", country: "Estonia", display: "ET" },
+  { code: "fa", name: "Persian", country: "Iran", display: "FA" },
+  { code: "gu", name: "Gujarati", country: "Gujarat", display: "GU" },
+  { code: "he", name: "Hebrew", country: "Israel", display: "HE" },
+  { code: "hi", name: "Hindi", country: "India", display: "HI" },
+  { code: "hu", name: "Hungarian", country: "Hungary", display: "HU" },
+  { code: "id", name: "Indonesian", country: "Indonesia", display: "ID" },
+  { code: "kk", name: "Kazakh", country: "Kazakhstan", display: "KK" },
+  { code: "kn", name: "Kannada", country: "Karnataka", display: "KN" },
+  { code: "lv", name: "Latvian", country: "Latvia", display: "LV" },
+  { code: "lt", name: "Lithuanian", country: "Lithuania", display: "LT" },
+  { code: "mk", name: "Macedonian", country: "North Macedonia", display: "MK" },
+  { code: "ms", name: "Malay", country: "Malaysia", display: "MS" },
+  { code: "ml", name: "Malayalam", country: "Kerala", display: "ML" },
+  { code: "mr", name: "Marathi", country: "Maharashtra", display: "MR" },
+  { code: "ne", name: "Nepali", country: "Nepal", display: "NE" },
+  { code: "pa", name: "Punjabi", country: "Punjab", display: "PA" },
+  { code: "pl", name: "Polish", country: "Poland", display: "PL" },
+  { code: "ro", name: "Romanian", country: "Romania", display: "RO" },
+  { code: "ru", name: "Russian", country: "Russia", display: "RU" },
+  { code: "sr", name: "Serbian", country: "Serbia", display: "SR" },
+  { code: "sk", name: "Slovak", country: "Slovakia", display: "SK" },
+  { code: "sl", name: "Slovenian", country: "Slovenia", display: "SL" },
+  { code: "sw", name: "Swahili", country: "Kenya", display: "SW" },
+  { code: "ta", name: "Tamil", country: "Tamil Nadu", display: "TA" },
+  { code: "te", name: "Telugu", country: "Andhra Pradesh", display: "TE" },
+  { code: "th", name: "Thai", country: "Thailand", display: "TH" },
+  { code: "tr", name: "Turkish", country: "Turkey", display: "TR" },
+  { code: "uk", name: "Ukrainian", country: "Ukraine", display: "UK" },
+  { code: "vi", name: "Vietnamese", country: "Vietnam", display: "VI" },
 ];
 
-const isPresetWindow = (v: number) => v === 0 || (TIME_WINDOWS as readonly number[]).includes(v);
+const isPresetWindow = (v: number) => (TIME_WINDOWS as readonly number[]).includes(v);
 
-/** "All 7 14 30 60 90 Custom" pill row; Custom reveals a numeric days input. */
+/** "All 7 14 30 60 90 Custom" pill row. Custom opens a truth-parity calendar dialog
+ *  (After / Before / Range) that emits a `within` (recent) and/or `atLeast` (older) bound. */
 function TimeWindowRow({
   label,
-  value,
-  onValue,
+  within,
+  atLeast,
+  onChange,
 }: {
   label: string;
-  value: number; // 0 = All
-  onValue: (days: number) => void;
+  within?: number;
+  atLeast?: number;
+  onChange: (next: { within?: number; atLeast?: number }) => void;
 }) {
-  const [customOpen, setCustomOpen] = useState(!isPresetWindow(value));
-  const customActive = customOpen || !isPresetWindow(value);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const isAll = within == null && atLeast == null;
+  const presetActive = within != null && atLeast == null && isPresetWindow(within);
+  const customActive = atLeast != null || (within != null && !isPresetWindow(within));
 
   return (
     <>
       <SubLabel>{label}</SubLabel>
-      <div className="pill-row">
-        <button
-          className={`fpill ${value === 0 && !customOpen ? "on" : ""}`}
-          onClick={() => {
-            setCustomOpen(false);
-            onValue(0);
-          }}
-        >
+      <div className="pill-row" style={{ position: "relative" }}>
+        <button className={`fpill ${isAll ? "on" : ""}`} onClick={() => onChange({})}>
           All
         </button>
         {TIME_WINDOWS.map((d) => (
           <button
             key={d}
-            className={`fpill ${value === d && !customOpen ? "on" : ""}`}
-            onClick={() => {
-              setCustomOpen(false);
-              onValue(d);
-            }}
+            className={`fpill ${presetActive && within === d ? "on" : ""}`}
+            onClick={() => onChange({ within: d })}
           >
             {d}
           </button>
         ))}
         <button
           className={`fpill ghost ${customActive ? "on" : ""}`}
-          onClick={() => {
-            if (customActive) {
-              setCustomOpen(false);
-              if (!isPresetWindow(value)) onValue(0);
-            } else {
-              setCustomOpen(true);
-            }
-          }}
+          onClick={() => setDialogOpen((o) => !o)}
+          aria-haspopup="dialog"
+          aria-expanded={dialogOpen}
         >
           Custom
         </button>
-      </div>
-      {customActive && (
-        <div className="frange-inputs">
-          <input
-            type="number"
-            inputMode="numeric"
-            min={1}
-            placeholder="Days"
-            aria-label={`${label} (days)`}
-            value={value || ""}
-            onChange={(e) => onValue(e.target.value ? Math.max(0, Number(e.target.value)) : 0)}
+        {dialogOpen && (
+          <DatePickerDialog
+            within={within}
+            atLeast={atLeast}
+            onApply={onChange}
+            onClose={() => setDialogOpen(false)}
           />
-          <span className="frange-affix">days ago</span>
-        </div>
-      )}
+        )}
+      </div>
     </>
   );
 }
@@ -186,12 +221,13 @@ export function ExploreFilterRail({
   const toggleLang = (code: string) =>
     onLangs(langs.includes(code) ? langs.filter((l) => l !== code) : [...langs, code]);
 
-  // Source toggles: both on = no source filter. Toggling the only-on store back
-  // off (or the off one on) returns to "both", which maps to source=undefined.
-  const appleOn = f.source !== "google";
-  const googleOn = f.source !== "apple";
+  // Source toggles (truth parity): nothing selected = all stores. Selecting a store
+  // filters to it; clicking the selected store again clears back to all. Matches the
+  // live rail, which shows neither store highlighted by default.
+  const appleOn = f.source === "apple";
+  const googleOn = f.source === "google";
   const toggleStore = (store: Store) =>
-    onPatch({ source: f.source == null ? (store === "apple" ? "google" : "apple") : undefined });
+    onPatch({ source: f.source === store ? undefined : store });
 
   const signalsActive = f.meta || f.aads || f.creators || f.web || f.email;
   // Contacts sub-section collapses by default (truth parity); open it if a contact filter is on.
@@ -217,18 +253,23 @@ export function ExploreFilterRail({
         <FilterGroup
           label="Time"
           defaultOpen
-          active={f.rel != null || f.upd != null}
-          summary={[f.rel != null && `Released ≤${f.rel}d`, f.upd != null && `Updated ≤${f.upd}d`].filter(Boolean).join(" · ")}
+          active={f.rel != null || f.relBefore != null || f.upd != null || f.updBefore != null}
+          summary={[
+            (f.rel != null || f.relBefore != null) && "Released",
+            (f.upd != null || f.updBefore != null) && "Updated",
+          ].filter(Boolean).join(" · ")}
         >
           <TimeWindowRow
             label="Released (days ago)"
-            value={f.rel ?? 0}
-            onValue={(v) => onPatch({ rel: v || undefined })}
+            within={f.rel}
+            atLeast={f.relBefore}
+            onChange={({ within, atLeast }) => onPatch({ rel: within, relBefore: atLeast })}
           />
           <TimeWindowRow
             label="Updated (days ago)"
-            value={f.upd ?? 0}
-            onValue={(v) => onPatch({ upd: v || undefined })}
+            within={f.upd}
+            atLeast={f.updBefore}
+            onChange={({ within, atLeast }) => onPatch({ upd: within, updBefore: atLeast })}
           />
         </FilterGroup>
 
@@ -303,7 +344,9 @@ export function ExploreFilterRail({
         >
           <FilterSelectPopover
             label="Select languages"
-            items={LANGUAGES.map((l) => ({ id: l.code, label: l.name }))}
+            searchable
+            searchPlaceholder="Search languages…"
+            items={LANGUAGES.map((l) => ({ id: l.code, label: `${l.country} ${l.name} ${l.display}` }))}
             selected={langs}
             onToggle={toggleLang}
           />

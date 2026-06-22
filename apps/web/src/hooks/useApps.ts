@@ -40,7 +40,7 @@ export function useApps(params: AppSearchParams) {
     setLoading(true);
     setError(null);
 
-    listApps({ ...params, limit: PAGE, cursor: cursorsRef.current[page] }, ac.signal)
+    listApps({ ...params, limit: params.limit ?? PAGE, cursor: cursorsRef.current[page] }, ac.signal)
       .then((res) => {
         if (ac.signal.aborted) return;
         setApps(res.data);
