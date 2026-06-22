@@ -5,85 +5,135 @@
    Light is the default; [data-theme="dark"] is the dark variant.
    ============================================================ */
 
+/* ============================================================
+   "Signal" redesign — premium dark-first intelligence terminal.
+   Editorial serif display (Instrument Serif) for hero metrics/titles,
+   Hanken Grotesk for UI, Geist Mono for tabular data. One dominant
+   lime signal accent that pops on obsidian. Light stays a refined
+   daylight variant. Shared shape/motion tokens drive the whole app.
+   ============================================================ */
 :root {
-  /* brand accent — Cult UI lime highlight (#adfa1b) */
-  --accent: #adfa1b;
-  --accent-hover: #c1ff4a;
-  --accent-ink: #14180a;
-  --accent-soft: color-mix(in srgb, var(--accent) 18%, transparent);
-  /* lime is unreadable as text on white — text usages get a darker lime,
-     backgrounds + graphics (bars, dots, carets, charts) keep --accent */
-  --accent-text: #4d7c0f;
+  /* ---- typography ---- */
+  --font-display: "Instrument Serif", "Playfair Display", Georgia, serif;
+  --font-ui: "Hanken Grotesk", -apple-system, "SF Pro Text", system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, Monaco, monospace;
 
-  /* primary action — Cult UI near-black solid */
-  --primary: #171717;
+  /* ---- shape ---- */
+  --radius: 12px;
+  --radius-sm: 9px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+
+  /* ---- motion ---- */
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.5, 1);
+  --dur-fast: 0.14s;
+  --dur: 0.24s;
+  --dur-slow: 0.45s;
+
+  /* brand accent — refined lime signal */
+  --accent: #84cc16;
+  --accent-hover: #a3e635;
+  --accent-ink: #16200a;
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
+  --accent-text: #4d7c0f;
+  --accent-glow: color-mix(in srgb, var(--accent) 28%, transparent);
+
+  /* primary action — near-black solid */
+  --primary: #18181b;
   --primary-ink: #fafafa;
 
-  /* light theme (default) — shadcn neutral */
-  --bg: #ffffff;
-  --bg-sidebar: #fafafa;
-  --bg-topbar: rgba(255, 255, 255, 0.8);
+  /* light theme — warm "daylight" paper */
+  --bg: #fbfbf8;
+  --bg-sidebar: #f4f4ef;
+  --bg-topbar: rgba(251, 251, 248, 0.72);
   --panel: #ffffff;
-  --surface: #f5f5f5;
-  --surface-2: #ebebeb;
-  --surface-hover: rgba(0, 0, 0, 0.04);
-  --row-hover: rgba(0, 0, 0, 0.028);
+  --surface: #f3f3ee;
+  --surface-2: #e8e8e1;
+  --surface-hover: rgba(20, 20, 10, 0.04);
+  --row-hover: rgba(20, 20, 10, 0.026);
 
-  --border: #e5e5e5;
-  --border-soft: #ececec;
-  --border-strong: #d4d4d4;
+  --border: #e6e6df;
+  --border-soft: #efefe9;
+  --border-strong: #d6d6cd;
 
-  --text: #0a0a0a;
-  --text-secondary: #404040;
-  --text-tertiary: #737373;
-  --text-faint: #a1a1a1;
+  --text: #18181b;
+  --text-secondary: #3f3f46;
+  --text-tertiary: #71717a;
+  --text-faint: #a1a1aa;
   --text-muted: var(--text-tertiary);
 
-  --danger: #e40014;
-  --positive: #18a957;
-  --negative: #e40014;
+  --danger: #dc2626;
+  --positive: #15a34a;
+  --negative: #dc2626;
 
+  /* elevation */
+  --elev-1: 0 1px 2px rgba(20, 20, 10, 0.05), 0 1px 3px rgba(20, 20, 10, 0.06);
+  --elev-2: 0 6px 18px -8px rgba(20, 20, 10, 0.12), 0 2px 6px -3px rgba(20, 20, 10, 0.08);
+  --elev-3: 0 24px 56px -20px rgba(20, 20, 10, 0.20), 0 8px 18px -10px rgba(20, 20, 10, 0.12);
   --shadow-drawer: -24px 0 60px -16px rgba(0, 0, 0, 0.14);
-  --shadow-pop: 0 12px 32px -12px rgba(0, 0, 0, 0.16), 0 2px 6px -3px rgba(0, 0, 0, 0.08);
+  --shadow-pop: var(--elev-3);
 
-  --radius: 10px;
-  --radius-sm: 8px;
-  --radius-lg: 14px;
+  /* atmosphere — subtle daylight wash */
+  --app-bg-image:
+    radial-gradient(120% 80% at 50% -8%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 55%),
+    radial-gradient(90% 60% at 100% 0%, rgba(120, 140, 200, 0.05), transparent 50%);
+  --grain-opacity: 0.025;
 
   color-scheme: light;
-  font-family: "Geist", -apple-system, "SF Pro Text", system-ui, sans-serif;
-  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, Monaco, monospace;
+  font-family: var(--font-ui);
   font-synthesis: none;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
 [data-theme="dark"] {
-  --accent-text: #adfa1b;
+  /* brighter lime — pops on obsidian */
+  --accent: #c7f24e;
+  --accent-hover: #d6ff63;
+  --accent-ink: #11180a;
+  --accent-soft: color-mix(in srgb, var(--accent) 13%, transparent);
+  --accent-text: #c7f24e;
+  --accent-glow: color-mix(in srgb, var(--accent) 38%, transparent);
 
   --primary: #fafafa;
   --primary-ink: #0a0a0a;
 
-  --bg: #0a0a0a;
-  --bg-sidebar: #0f0f0f;
-  --bg-topbar: rgba(10, 10, 10, 0.78);
-  --panel: #141414;
-  --surface: #1a1a1a;
-  --surface-2: #242424;
-  --surface-hover: rgba(255, 255, 255, 0.04);
-  --row-hover: rgba(255, 255, 255, 0.03);
+  /* obsidian — cool near-black, layered */
+  --bg: #0a0b0d;
+  --bg-sidebar: #0c0e11;
+  --bg-topbar: rgba(10, 11, 13, 0.7);
+  --panel: #131519;
+  --surface: #181b20;
+  --surface-2: #22262d;
+  --surface-hover: rgba(255, 255, 255, 0.045);
+  --row-hover: rgba(255, 255, 255, 0.028);
 
-  --border: #262626;
-  --border-soft: #1f1f1f;
-  --border-strong: #383838;
+  --border: #23272e;
+  --border-soft: #1b1e23;
+  --border-strong: #343a42;
 
-  --text: #fafafa;
-  --text-secondary: #a1a1a1;
-  --text-tertiary: #737373;
-  --text-faint: #525252;
+  --text: #f4f5f6;
+  --text-secondary: #a8aeb6;
+  --text-tertiary: #6b727b;
+  --text-faint: #474d55;
+  --text-muted: var(--text-tertiary);
 
+  --danger: #fb7185;
+  --positive: #34d399;
+  --negative: #fb7185;
+
+  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --elev-2: 0 10px 28px -10px rgba(0, 0, 0, 0.62), 0 2px 8px -3px rgba(0, 0, 0, 0.5);
+  --elev-3: 0 28px 64px -18px rgba(0, 0, 0, 0.78), 0 10px 24px -12px rgba(0, 0, 0, 0.6);
   --shadow-drawer: -24px 0 60px -12px rgba(0, 0, 0, 0.6);
-  --shadow-pop: 0 16px 40px -12px rgba(0, 0, 0, 0.7);
+  --shadow-pop: var(--elev-3);
+
+  /* atmosphere — accent glow bleeding from top + cool secondary */
+  --app-bg-image:
+    radial-gradient(120% 80% at 50% -10%, rgba(199, 242, 78, 0.07), transparent 58%),
+    radial-gradient(80% 60% at 100% 0%, rgba(80, 120, 255, 0.055), transparent 52%);
+  --grain-opacity: 0.04;
 
   color-scheme: dark;
 }
@@ -94,10 +144,59 @@ html, body, #root { height: 100%; }
 
 body {
   margin: 0;
-  background: var(--bg);
+  background-color: var(--bg);
+  background-image: var(--app-bg-image);
+  background-attachment: fixed;
+  background-repeat: no-repeat;
   color: var(--text);
   font-size: 13.5px;
   line-height: 1.5;
+  font-family: var(--font-ui);
+}
+
+/* fine grain overlay for depth/atmosphere (sits above bg, below content) */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: var(--grain-opacity);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.app-shell { position: relative; z-index: 1; }
+
+/* refined scrollbars */
+* { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 99px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover { background: var(--text-faint); background-clip: content-box; }
+
+::selection { background: var(--accent-soft); color: var(--text); }
+
+/* motion primitives */
+@keyframes signal-fade-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes signal-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .stagger > * { animation: signal-fade-up var(--dur-slow) var(--ease) both; }
+  .stagger > *:nth-child(1) { animation-delay: 0.02s; }
+  .stagger > *:nth-child(2) { animation-delay: 0.06s; }
+  .stagger > *:nth-child(3) { animation-delay: 0.1s; }
+  .stagger > *:nth-child(4) { animation-delay: 0.14s; }
+  .stagger > *:nth-child(5) { animation-delay: 0.18s; }
+  .stagger > *:nth-child(6) { animation-delay: 0.22s; }
 }
 
 button { font: inherit; cursor: pointer; color: inherit; }
@@ -1317,3 +1416,53 @@ table.apps tbody tr:hover .col-app .app-title { color: var(--accent-text); }
 .nav-chev { margin-left: auto; width: 12px; height: 12px; opacity: 0.65; transition: transform 0.15s; }
 .nav-label-toggle[aria-expanded="true"] .nav-chev { transform: rotate(180deg); }
 .sidebar-foot .nav-group { margin-top: 0; }
+
+/* ============================================================
+   "Signal" redesign — applied layer (layered last so it wins).
+   Editorial serif on large display text, real elevation, accent
+   glow on signal surfaces, page-load reveal.
+   ============================================================ */
+
+/* serif display on LARGE text only (hero metrics, titles, big numbers) */
+.hero-title, .page-title, .stat-card-value, .tp-title {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.hero-title { font-size: 35px; line-height: 1.02; }
+.page-title { font-size: 21px; line-height: 1.12; }
+.stat-card-value { font-size: 23px; line-height: 1; }
+.tp-title { font-size: 22px; }
+
+/* panels & cards — elevation + crisp hover lift */
+.stat-card, .dcard, .widget, .metric-bar {
+  box-shadow: var(--elev-1);
+  transition: box-shadow var(--dur) var(--ease), transform var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.stat-card:hover, .widget:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--elev-2);
+  border-color: var(--border-strong);
+}
+
+/* nav items — smooth, rounded, active accent rail */
+.nav-item {
+  border-radius: var(--radius-sm);
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+.nav-item.active { box-shadow: inset 2px 0 0 0 var(--accent); }
+
+/* accent buttons — signal glow */
+.btn-accent { box-shadow: 0 6px 18px -8px var(--accent-glow); transition: box-shadow var(--dur) var(--ease), background var(--dur) var(--ease); }
+.btn-accent:hover { box-shadow: 0 10px 26px -8px var(--accent-glow); }
+
+/* brand mark — soft signal glow */
+.brand-mark { box-shadow: 0 0 22px -6px var(--accent-glow); }
+
+/* row hover — accent edge cue on the data grid */
+table.apps tbody tr { transition: background var(--dur-fast) var(--ease); }
+
+/* page-load reveal */
+@media (prefers-reduced-motion: no-preference) {
+  .detail-inner { animation: signal-fade-up var(--dur-slow) var(--ease) both; }
+}
