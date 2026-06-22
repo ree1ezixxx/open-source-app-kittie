@@ -15,6 +15,7 @@ import {
 } from "../services/keyword-service.js";
 import {
   addTrackedApp,
+  listRankingsForTrackedApp,
   listTracked as listTrackedApps,
   removeTrackedApp,
 } from "../services/tracked-app-service.js";
@@ -48,6 +49,25 @@ keywordsRouter.delete("/tracked-apps", async (c) => {
 
   await removeTrackedApp(appId, store, country);
   return c.json({ data: { removed: true }, meta: { source: "tracked-apps" } });
+});
+
+keywordsRouter.get("/tracked-apps/:id/rankings", async (c) => {
+  const id = c.req.param("id");
+  const forceRefresh = c.req.query("refresh") === "true" || c.req.query("refresh") === "1";
+  const result = await listRankingsForTrackedApp(id, { forceRefresh });
+  if (!result) return c.json({ error: "tracked app not found" }, 404);
+
+  return c.json({
+    data: result.rows,
+    meta: {
+      source: "store-search",
+      country: "US",
+      refreshed: forceRefresh || result.synced > 0,
+      synced: result.synced,
+      failed: result.failed,
+      analyzedAt: result.analyzedAt?.toISOString() ?? null,
+    },
+  });
 });
 
 // The durable tracked-keyword shortlist (survives reload). See ADR 0003.

@@ -19,6 +19,7 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "generate": "drizzle-kit generate",
     "migrate": "drizzle-kit migrate",
     "studio": "drizzle-kit studio"
@@ -32,6 +33,7 @@
   "devDependencies": {
     "@types/node": "^22.15.21",
     "drizzle-kit": "^0.31.1",
+    "vitest": "^4.1.8",
     "typescript": "^5.8.3"
   }
 }

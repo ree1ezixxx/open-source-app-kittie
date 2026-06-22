@@ -245,7 +245,7 @@ export const keywordRankings = sqliteTable(
     appId: text("app_id")
       .notNull()
       .references(() => apps.id),
-    rank: integer("rank").notNull(),
+    rank: integer("rank"),
     observedAt: integer("observed_at", { mode: "timestamp" }).notNull(),
   },
   (t) => [index("keyword_rankings_keyword_idx").on(t.keywordId)],

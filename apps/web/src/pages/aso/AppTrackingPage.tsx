@@ -1,23 +1,27 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { AppListItem, Store } from "@kittie/types";
-import { IconChart, IconClose, IconInfo, IconMoon, IconRank, IconSearch, IconSpark, IconSun } from "../../icons";
+import { IconChart, IconClose, IconExternal, IconInfo, IconMoon, IconRank, IconRefresh, IconSearch, IconSpark, IconSun } from "../../icons";
 import { IconCheck, IconPlus, IconTrash } from "../../components/aso/icons";
 import { AppAvatar, Meter, OpportunityBadge, StorePill } from "../../components/aso/KeywordBits";
 import { listApps } from "../../lib/api";
 import {
   compareKeywords,
+  fetchTrackedAppRankings,
   fetchTrackedApps,
   trackApp as trackAppApi,
   untrackApp as untrackAppApi,
   type KeywordDifficulty,
   type TrackedApp,
+  type TrackedAppKeywordRanking,
 } from "../../lib/api/keywords";
 import { relativeTime } from "../../lib/format";
 import type { Theme } from "../../lib/theme";
 import "../../styles/aso.css";
 
 const STOPWORDS = new Set(["the", "and", "for", "with", "app", "apps", "your", "free", "pro", "plus", "lite", "ios", "android"]);
+type RankSort = "position" | "popularity" | "difficulty";
+type SortDir = "asc" | "desc";
 
 /** Candidate keywords to size up for a single app — category + title tokens/bigrams. */
 function candidateKeywords(app: TrackedApp): string[] {
@@ -31,6 +35,28 @@ function candidateKeywords(app: TrackedApp): string[] {
   out.push(...tokens);
   const seen = new Set<string>();
   return out.filter((t) => (seen.has(t) ? false : (seen.add(t), true))).slice(0, 8);
+}
+
+function compareRankValue(a: number | null, b: number | null, dir: SortDir): number {
+  if (a == null && b == null) return 0;
+  if (a == null) return 1;
+  if (b == null) return -1;
+  return dir === "asc" ? a - b : b - a;
+}
+
+function RankingAppsStack({ apps }: { apps: TrackedAppKeywordRanking["topApps"] }) {
+  const visible = apps.slice(0, 5);
+  if (visible.length === 0) return <span className="kw-appstack-empty">None</span>;
+  return (
+    <div className="kw-appstack" title={visible.map((a) => `#${a.rank} ${a.title}`).join("\n")}>
+      {visible.map((a) => (
+        <span className="kw-appstack-icon" key={`${a.rank}-${a.title}`}>
+          {a.iconUrl ? <img src={a.iconUrl} alt="" /> : a.title.slice(0, 1)}
+        </span>
+      ))}
+      <span className="kw-appstack-count">{apps.length}</span>
+    </div>
+  );
 }
 
 export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => void }) {
@@ -48,6 +74,12 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
   const [opps, setOpps] = useState<KeywordDifficulty[]>([]);
   const [oppLoading, setOppLoading] = useState(false);
   const [oppError, setOppError] = useState<string | null>(null);
+  const [rankings, setRankings] = useState<TrackedAppKeywordRanking[]>([]);
+  const [rankLoading, setRankLoading] = useState(false);
+  const [rankError, setRankError] = useState<string | null>(null);
+  const [rankSearch, setRankSearch] = useState("");
+  const [rankSort, setRankSort] = useState<RankSort>("position");
+  const [rankDir, setRankDir] = useState<SortDir>("asc");
 
   // Load the server-persisted tracked apps (survives reload).
   useEffect(() => {
@@ -58,6 +90,29 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
 
   const selected = tracked.find((t) => t.appId === selectedId) ?? null;
   const selectedKeywords = selected ? (trackedKeywords[selected.id] ?? []) : [];
+
+  const visibleRankings = useMemo(() => {
+    const needle = rankSearch.trim().toLowerCase();
+    const filtered = needle
+      ? rankings.filter((row) => row.keyword.toLowerCase().includes(needle))
+      : rankings;
+    return [...filtered].sort((a, b) => {
+      if (rankSort === "position") return compareRankValue(a.position, b.position, rankDir);
+      if (rankSort === "popularity") return compareRankValue(a.popularity, b.popularity, rankDir);
+      return compareRankValue(a.difficulty, b.difficulty, rankDir);
+    });
+  }, [rankDir, rankSearch, rankSort, rankings]);
+
+  const rankSortLabel = rankDir === "asc" ? "↑" : "↓";
+
+  function setRankingSort(next: RankSort) {
+    if (rankSort === next) {
+      setRankDir((dir) => (dir === "asc" ? "desc" : "asc"));
+      return;
+    }
+    setRankSort(next);
+    setRankDir(next === "position" ? "asc" : "desc");
+  }
 
   // debounced app search for the Add picker
   useEffect(() => {
@@ -97,6 +152,32 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
     // Keying on selectedId alone left the opportunities panel blank after every add.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected?.id]);
+
+  const loadRankings = useCallback((app: TrackedApp, signal?: AbortSignal, refresh = false) => {
+    setRankLoading(true);
+    setRankError(null);
+    setRankings([]);
+    fetchTrackedAppRankings(app.id, signal, { refresh })
+      .then((data) => { if (!signal?.aborted) setRankings(data); })
+      .catch((e) => {
+        if (!signal?.aborted) {
+          setRankings([]);
+          setRankError(e instanceof Error ? e.message : "Failed to load rankings");
+        }
+      })
+      .finally(() => { if (!signal?.aborted) setRankLoading(false); });
+  }, []);
+
+  useEffect(() => {
+    if (!selected) {
+      setRankings([]);
+      setRankSearch("");
+      return;
+    }
+    const ctrl = new AbortController();
+    loadRankings(selected, ctrl.signal);
+    return () => ctrl.abort();
+  }, [loadRankings, selected?.id]);
 
   async function addApp(a: AppListItem) {
     // Already tracked → select it, then hit the idempotent server add so a
@@ -254,13 +335,89 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
                 </div>
               </div>
 
-              {/* keyword rankings — honest empty state (keyword_rankings table is empty) */}
-              <div className="section-label">Keyword rankings</div>
-              <div className="aso-empty">
-                <IconRank />
-                <div className="t">No rank history yet</div>
-                <div className="s">Keyword rank tracking populates once daily store snapshots begin. Track keywords below to start building a baseline.</div>
+              <div className="section-head" style={{ margin: "22px 0 11px" }}>
+                <div className="section-label" style={{ margin: 0, display: "flex", alignItems: "center", gap: 7 }}>
+                  <IconRank style={{ width: 13, height: 13, color: "var(--accent)" }} /> Keyword rankings
+                </div>
+                <div className="kw-ideas-toolbar">
+                  <button className="kw-ideas-tool" onClick={() => loadRankings(selected, undefined, true)} title="Refresh US rankings">
+                    <IconRefresh style={{ width: 13, height: 13 }} /> Refresh
+                  </button>
+                </div>
               </div>
+
+              {rankError && (
+                <div className="notice" style={{ marginBottom: 12 }}>
+                  <IconInfo /> {rankError}. Start the API server and retry.
+                </div>
+              )}
+
+              {rankLoading ? (
+                <div className="opp-list">
+                  {[0, 1, 2, 3].map((i) => <div key={i} className="skel" style={{ height: 46, borderRadius: 8 }} />)}
+                </div>
+              ) : rankings.length === 0 && !rankError ? (
+                <div className="aso-empty">
+                  <IconRank />
+                  <div className="t">No generated keywords yet</div>
+                  <div className="s">Add the app again after keyword generation is configured, then rankings will sync from live US search.</div>
+                </div>
+              ) : (
+                <>
+                  <div className="search track-rank-search">
+                    <IconSearch />
+                    <input value={rankSearch} onChange={(e) => setRankSearch(e.target.value)} placeholder="Search keywords…" spellCheck={false} />
+                  </div>
+                  {visibleRankings.length === 0 ? (
+                    <div className="aso-empty">
+                      <IconSearch />
+                      <div className="t">No matching keywords</div>
+                      <div className="s">Clear the table search to see all generated rankings.</div>
+                    </div>
+                  ) : (
+                    <div className="kw-ideas-scroll">
+                      <table className="kw-ideas-table track-rank-table">
+                        <thead>
+                          <tr>
+                            <th>Keyword</th>
+                            <th className={`sortable ${rankSort === "position" ? "on" : ""}`} onClick={() => setRankingSort("position")}>
+                              Position {rankSort === "position" ? rankSortLabel : ""}
+                            </th>
+                            <th className={`sortable ${rankSort === "popularity" ? "on" : ""}`} onClick={() => setRankingSort("popularity")}>
+                              Popularity {rankSort === "popularity" ? rankSortLabel : ""}
+                            </th>
+                            <th className={`sortable ${rankSort === "difficulty" ? "on" : ""}`} onClick={() => setRankingSort("difficulty")}>
+                              Difficulty {rankSort === "difficulty" ? rankSortLabel : ""}
+                            </th>
+                            <th className="kw-ideas-appshead">Ranking apps</th>
+                            <th>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {visibleRankings.map((row) => (
+                            <tr key={row.keywordId}>
+                              <td>
+                                <button className="kw-ideas-name" onClick={() => navigate(`/dashboard/aso/keywords?q=${encodeURIComponent(row.keyword)}`)}>
+                                  {row.keyword}
+                                </button>
+                              </td>
+                              <td className="num">{row.position == null ? "Not ranked" : `#${row.position}`}</td>
+                              <td><Meter kind="popularity" label="Popularity" value={row.popularity ?? 0} /></td>
+                              <td><Meter kind="difficulty" label="Difficulty" value={row.difficulty ?? 0} /></td>
+                              <td><RankingAppsStack apps={row.topApps} /></td>
+                              <td className="kw-ideas-action">
+                                <button className="kw-ideas-expand" title="Open in Keyword Workspace" onClick={() => navigate(`/dashboard/aso/keywords?q=${encodeURIComponent(row.keyword)}`)}>
+                                  <IconExternal />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </>
+              )}
 
               {/* live opportunity panel */}
               <div className="section-head" style={{ margin: "30px 0 11px" }}>
