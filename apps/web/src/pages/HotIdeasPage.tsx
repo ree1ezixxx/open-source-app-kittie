@@ -110,155 +110,184 @@ export function HotIdeasPage() {
 
   const total = result?.total ?? 0;
   const pageCount = result?.pageCount ?? 1;
+  const currentPage = result?.page ?? page;
   const ideas = result?.ideas ?? [];
   const activeCount =
     (q ? 1 : 0) + (sourceCategory ? 1 : 0) + (ideaCategory ? 1 : 0) + blueprint.length;
   const filtered = activeCount > 0;
+  const clearFilters = () => setSp(new URLSearchParams(), { replace: true });
 
   return (
     <main className="main">
-      <StudioHeader
-        icon={<IconBulb style={{ width: 18, height: 18 }} />}
-        title="Hot app ideas"
-        subtitle="AI mockups and concepts from fast-growing apps"
-        count={total}
-      />
-
-      {/* ---------------- filter rail ---------------- */}
-      <div className="studio-filterbar">
-        <div className="search" style={{ flex: "0 1 280px" }}>
-          <IconSearch />
-          <input
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Search ideas…"
-            spellCheck={false}
-          />
-        </div>
-
-        <div className="select">
-          <select value={sourceCategory} onChange={(e) => update({ cat: e.target.value || null })}>
-            <option value="">All app categories</option>
-            {facets.sourceCategories.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
-          <IconChevron />
-        </div>
-
-        <div className="select">
-          <select value={ideaCategory} onChange={(e) => update({ type: e.target.value || null })}>
-            <option value="">All idea types</option>
-            {facets.ideaCategories.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
-          <IconChevron />
-        </div>
-
-        <div className="toolbar-divider" />
-
-        <div className="select">
-          <select value={sort} onChange={(e) => update({ sort: e.target.value })}>
-            {SORTS.map((s) => (
-              <option key={s.value} value={s.value}>Sort: {s.label}</option>
-            ))}
-          </select>
-          <IconChevron />
-        </div>
-        <button
-          className="icon-btn"
-          title={order === "desc" ? "High → low" : "Low → high"}
-          onClick={() => update({ order: order === "desc" ? "asc" : "desc" })}
-        >
-          {order === "desc" ? <IconArrowDown /> : <IconArrowUp />}
-        </button>
-
-        <div className="toolbar-divider" />
-
-        <div className="studio-filter-chips">
-          {BLUEPRINTS.map((tag) => (
-            <button key={tag} className={`studio-chip${blueprint.includes(tag) ? " on" : ""}`} onClick={() => toggleBlueprint(tag)}>
-              <span className="dot" />
-              {blueprintLabel(tag)}
+      <div className="ideas-layout">
+        {/* ---------------- filter rail ---------------- */}
+        <aside className="ideas-filter-rail" aria-label="Hot ideas filters">
+          <div className="ideas-filter-head">
+            <div className="ideas-filter-title">Filters</div>
+            <button className="ideas-clear" disabled={!filtered} onClick={clearFilters}>
+              <IconClose style={{ width: 12, height: 12 }} />
+              Clear all
+              {filtered && <span className="studio-clear-badge">{activeCount}</span>}
             </button>
-          ))}
-        </div>
-
-        {filtered && (
-          <button className="studio-clear" onClick={() => setSp(new URLSearchParams(), { replace: true })}>
-            <IconClose style={{ width: 12, height: 12 }} />
-            Clear all
-            <span className="studio-clear-badge">{activeCount}</span>
-          </button>
-        )}
-      </div>
-
-      {/* ---------------- grid ---------------- */}
-      <div className="ideas-scroll">
-        {loading ? (
-          <div className="ideas-grid">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div className="idea-card" key={i}>
-                <div className="skel" style={{ height: 18, width: "75%" }} />
-                <div className="skel" style={{ height: 44, width: "100%" }} />
-                <div className="skel" style={{ height: 12, width: "55%" }} />
-              </div>
-            ))}
           </div>
-        ) : ideas.length === 0 ? (
-          <StudioEmptyState
-            icon={<IconBulb />}
-            title={filtered ? "No ideas match these filters" : "No ideas yet"}
-            sub={
-              filtered
-                ? "Clear a filter or widen the blueprint tags."
-                : "Once the ideas pipeline runs against fast-growing apps, concepts will appear here."
+
+          <div className="ideas-filter-section">
+            <label>Search</label>
+            <div className="search">
+              <IconSearch />
+              <input
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                placeholder="Idea title, description, features…"
+                spellCheck={false}
+              />
+            </div>
+          </div>
+
+          <div className="ideas-filter-section">
+            <label>App Store category</label>
+            <div className="select">
+              <select value={sourceCategory} onChange={(e) => update({ cat: e.target.value || null })}>
+                <option value="">Select categories</option>
+                {facets.sourceCategories.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+              <IconChevron />
+            </div>
+          </div>
+
+          <div className="ideas-filter-section">
+            <label>Idea category</label>
+            <input
+              className="studio-input"
+              value={ideaCategory}
+              onChange={(e) => update({ type: e.target.value || null })}
+              placeholder="Comma-separated labels"
+              spellCheck={false}
+            />
+          </div>
+
+          <div className="ideas-filter-section">
+            <label>Sort</label>
+            <div className="ideas-filter-sub">Metric</div>
+            <div className="select">
+              <select value={sort} onChange={(e) => update({ sort: e.target.value })}>
+                {SORTS.map((s) => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+              </select>
+              <IconChevron />
+            </div>
+          </div>
+
+          <div className="ideas-filter-section">
+            <label>Order</label>
+            <button
+              className="ideas-order"
+              onClick={() => update({ order: order === "desc" ? "asc" : "desc" })}
+            >
+              {order === "desc" ? <IconArrowDown /> : <IconArrowUp />}
+              {order === "desc" ? "High → low" : "Low → high"}
+            </button>
+          </div>
+
+          <div className="ideas-filter-section">
+            <label>Blueprint</label>
+            <div className="ideas-blueprint-list">
+              {BLUEPRINTS.map((tag) => (
+                <button
+                  key={tag}
+                  className={`ideas-blueprint-toggle${blueprint.includes(tag) ? " on" : ""}`}
+                  onClick={() => toggleBlueprint(tag)}
+                >
+                  <span className="dot" />
+                  {blueprintLabel(tag)}
+                </button>
+              ))}
+            </div>
+          </div>
+        </aside>
+
+        <section className="ideas-main">
+          <StudioHeader
+            icon={<IconBulb style={{ width: 18, height: 18 }} />}
+            title="Hot app ideas"
+            subtitle="AI mockups and concepts from fast-growing apps."
+            count={total}
+            actions={
+              <div className="ideas-countline">
+                {total.toLocaleString()} idea{total === 1 ? "" : "s"} · Page {currentPage} of {pageCount}
+              </div>
             }
           />
-        ) : (
-          <div className="ideas-grid">
-            {ideas.map((idea) => (
-              // display:grid wrapper keeps the card stretching like a direct grid item.
-              <div key={idea.id} style={{ position: "relative", display: "grid" }}>
-                <IdeaCard idea={idea} />
-                <div
-                  style={{ position: "absolute", right: 12, bottom: 12 }}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <FavoriteToggle
-                    type="hotIdea"
-                    id={idea.id}
-                    snapshot={{
-                      title: idea.title,
-                      subtitle: `${idea.ideaCategory} · ${idea.sourceCategory}`,
-                      href: idea.storeAppId
-                        ? `/dashboard/hot-ideas/app-${idea.slug}-id${idea.storeAppId}`
-                        : "/dashboard/hot-ideas",
-                    }}
-                  />
+
+          {/* ---------------- grid ---------------- */}
+          <div className="ideas-scroll">
+            {loading ? (
+              <div className="ideas-grid">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div className="idea-card" key={i}>
+                    <div className="skel" style={{ height: 18, width: "75%" }} />
+                    <div className="skel" style={{ height: 44, width: "100%" }} />
+                    <div className="skel" style={{ height: 12, width: "55%" }} />
+                  </div>
+                ))}
+              </div>
+            ) : ideas.length === 0 ? (
+              <StudioEmptyState
+                icon={<IconBulb />}
+                title={filtered ? "No ideas match these filters" : "No ideas yet"}
+                sub={
+                  filtered
+                    ? "Clear a filter or widen the blueprint tags."
+                    : "Once the ideas pipeline runs against fast-growing apps, concepts will appear here."
+                }
+              />
+            ) : (
+              <div className="ideas-grid">
+                {ideas.map((idea) => (
+                  // display:grid wrapper keeps the card stretching like a direct grid item.
+                  <div key={idea.id} style={{ position: "relative", display: "grid" }}>
+                    <IdeaCard idea={idea} />
+                    <div
+                      style={{ position: "absolute", right: 12, bottom: 12 }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <FavoriteToggle
+                        type="hotIdea"
+                        id={idea.id}
+                        snapshot={{
+                          title: idea.title,
+                          subtitle: `${idea.ideaCategory} · ${idea.sourceCategory}`,
+                          href: idea.storeAppId
+                            ? `/dashboard/hot-ideas/app-${idea.slug}-id${idea.storeAppId}`
+                            : "/dashboard/hot-ideas",
+                        }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {!loading && total > 0 && (
+              <div className="ideas-pager">
+                <div className="meta">
+                  {total.toLocaleString()} idea{total === 1 ? "" : "s"} · Page {currentPage} of {pageCount}
+                </div>
+                <div className="nav">
+                  <button className="btn" disabled={currentPage <= 1} onClick={() => update({ page: String(Math.max(1, page - 1)) }, true)}>
+                    Prev
+                  </button>
+                  <button className="btn" disabled={currentPage >= pageCount} onClick={() => update({ page: String(Math.min(pageCount, page + 1)) }, true)}>
+                    Next
+                  </button>
                 </div>
               </div>
-            ))}
+            )}
           </div>
-        )}
-
-        {!loading && total > 0 && (
-          <div className="ideas-pager">
-            <div className="meta">
-              {total.toLocaleString()} idea{total === 1 ? "" : "s"} · Page {result?.page ?? 1} of {pageCount}
-            </div>
-            <div className="nav">
-              <button className="btn" disabled={(result?.page ?? 1) <= 1} onClick={() => update({ page: String(Math.max(1, page - 1)) }, true)}>
-                Prev
-              </button>
-              <span className="pager-page">{result?.page ?? 1} / {pageCount}</span>
-              <button className="btn" disabled={(result?.page ?? 1) >= pageCount} onClick={() => update({ page: String(Math.min(pageCount, page + 1)) }, true)}>
-                Next
-              </button>
-            </div>
-          </div>
-        )}
+        </section>
       </div>
     </main>
   );
