@@ -292,9 +292,11 @@ export function RisingPage({ theme, onToggleTheme }: { theme: Theme; onToggleThe
       <div style={{ flexBasis: "100%", fontSize: 11, color: "var(--text-tertiary)" }}>
         Filters apply to all data and persist across sessions
       </div>
-      <div style={{ flexBasis: "100%", fontSize: 11, color: "var(--text-tertiary)" }}>
-        Growth-signal windows re-rank as daily snapshot history deepens.
-      </div>
+      {activeFilterCount > 0 && (
+        <div style={{ flexBasis: "100%", fontSize: 11, color: "var(--text-tertiary)" }}>
+          {activeFilterCount} filter{activeFilterCount === 1 ? "" : "s"} active
+        </div>
+      )}
 
       {activeFilterCount > 0 && (
         <div className="active-filters" style={{ flexBasis: "100%" }}>
