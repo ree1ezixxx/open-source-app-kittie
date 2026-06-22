@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { AppListItem } from "@kittie/types";
-import { listApps } from "../../lib/api";
+import { fetchTrackedApps } from "../../lib/api/keywords";
 import { IconPlus } from "./icons";
 
 /**
@@ -25,8 +25,29 @@ export function AppPicker({
 
   useEffect(() => {
     const ctrl = new AbortController();
-    listApps({ sortBy: "revenue", sortOrder: "desc", limit: 24 }, ctrl.signal)
-      .then((res) => setApps(res.data))
+    fetchTrackedApps(ctrl.signal)
+      .then((rows) => setApps(rows.map((row) => ({
+        id: row.appId,
+        store: row.store,
+        storeAppId: row.appId,
+        title: row.title,
+        iconUrl: row.iconUrl,
+        developer: row.developer,
+        category: row.category,
+        rating: null,
+        reviewCount: 0,
+        reviewGrowth7d: null,
+        downloadsEstimate30d: null,
+        revenueEstimate30d: null,
+        growthScore: null,
+        growthPct: null,
+        downloadsEstimatePrior: null,
+        revenueEstimatePrior: null,
+        rankDelta: null,
+        isFirstMover: false,
+        releasedAt: null,
+        updatedAt: null,
+      }))))
       .catch(() => setFailed(true))
       .finally(() => setLoading(false));
     return () => ctrl.abort();
@@ -36,8 +57,13 @@ export function AppPicker({
     <div>
       <button className={`studio-newapp${newMode ? " active" : ""}`} onClick={onNewMode}>
         <IconPlus />
-        <span>Describe a new / unreleased app</span>
+        <span>
+          <span className="studio-newapp-title">New / Unreleased App</span>
+          <span className="studio-newapp-sub">Describe your app manually</span>
+        </span>
       </button>
+
+      <div className="studio-rail-label studio-apps-label">Your tracked apps</div>
 
       {loading ? (
         <div className="studio-applist">
@@ -54,12 +80,12 @@ export function AppPicker({
       ) : apps.length === 0 ? (
         <div className="studio-empty bare">
           <div className="t" style={{ fontSize: 12.5 }}>
-            {failed ? "App list unavailable" : "No tracked apps yet"}
+            {failed ? "App list unavailable" : "No tracked apps"}
           </div>
           <div className="s" style={{ fontSize: 11.5 }}>
             {failed
               ? "Start the API server to pick a tracked app — or describe a new app above."
-              : "Describe a new app above to generate from scratch."}
+              : "Add apps in App Tracking to quickly generate screenshots"}
           </div>
         </div>
       ) : (
