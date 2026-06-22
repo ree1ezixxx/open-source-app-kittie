@@ -75,6 +75,7 @@ Merge to `main` when a slice is verified. Do not cross-edit another branch's own
 
 ## Chrome DevTools / Truth Browser
 
+- Do not launch a new automated Chrome/browser for AppKittie truth work. If a new `about:blank` "controlled by automated test software" window appears, stop using it and attach to the existing CDP tab instead.
 - When asked to use Chrome DevTools MCP or drive an existing Chrome tab, use `$chrome-devtools-cdp-fallback` if MCP `list_pages` is stale, wrong, or only shows `about:blank`.
 - Treat Chrome's CDP endpoint as the real tab inventory when needed: `http://127.0.0.1:9222/json/list`.
 - To control the already-open AppKittie truth tab, list and match via CDP, then navigate the matched tab:
