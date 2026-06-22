@@ -137,6 +137,33 @@ export interface TrackedAppKeywordRanking {
   topApps: KeywordTopApp[];
 }
 
+export type TrackedAppProgressStage =
+  | "validate_url"
+  | "fetch_app"
+  | "generate_keywords"
+  | "analyze_markets"
+  | "save"
+  | "done";
+
+export interface TrackedAppProgressEvent {
+  stage: TrackedAppProgressStage;
+  label: string;
+  country?: string;
+  doneMarkets?: number;
+  totalMarkets?: number;
+  synced?: number;
+  failed?: number;
+}
+
+export interface TrackedAppSyncDone {
+  tracked: TrackedApp;
+  rankings: TrackedAppKeywordRanking[];
+  synced: number;
+  failed: number;
+  analyzedAt: string | null;
+  totalMarkets: number;
+}
+
 export async function fetchTrackedApps(signal?: AbortSignal): Promise<TrackedApp[]> {
   const res = await fetch(`${BASE}/keywords/tracked-apps`, { signal });
   if (!res.ok) throw new Error(`Tracked apps fetch failed (${res.status})`);
@@ -165,15 +192,84 @@ export async function untrackApp(appId: string, store: Store, country = "US"): P
 export async function fetchTrackedAppRankings(
   trackedAppId: string,
   signal?: AbortSignal,
-  opts: { refresh?: boolean } = {},
+  opts: { refresh?: boolean; country?: string } = {},
 ): Promise<TrackedAppKeywordRanking[]> {
   const q = new URLSearchParams();
   if (opts.refresh) q.set("refresh", "true");
+  if (opts.country) q.set("country", opts.country);
   const suffix = q.toString() ? `?${q}` : "";
   const res = await fetch(`${BASE}/keywords/tracked-apps/${trackedAppId}/rankings${suffix}`, { signal });
   if (!res.ok) throw new Error(`Rankings fetch failed (${res.status})`);
   const body = (await res.json()) as { data: TrackedAppKeywordRanking[] };
   return body.data.map((row) => ({ ...row, topApps: [...(row.topApps ?? [])].sort((a, b) => a.rank - b.rank) }));
+}
+
+function normalizeTrackedAppDone(raw: TrackedAppSyncDone): TrackedAppSyncDone {
+  return {
+    ...raw,
+    rankings: raw.rankings.map((row) => ({
+      ...row,
+      topApps: [...(row.topApps ?? [])].sort((a, b) => a.rank - b.rank),
+    })),
+  };
+}
+
+function streamTrackedAppUrl(url: string, handlers: {
+  onProgress: (event: TrackedAppProgressEvent) => void;
+  onDone: (event: TrackedAppSyncDone) => void;
+  onError?: (message: string) => void;
+}): () => void {
+  const es = new EventSource(url);
+  es.addEventListener("stage", (e) => {
+    handlers.onProgress(JSON.parse((e as MessageEvent).data) as TrackedAppProgressEvent);
+  });
+  es.addEventListener("market", (e) => {
+    handlers.onProgress(JSON.parse((e as MessageEvent).data) as TrackedAppProgressEvent);
+  });
+  es.addEventListener("done", (e) => {
+    handlers.onDone(normalizeTrackedAppDone(JSON.parse((e as MessageEvent).data) as TrackedAppSyncDone));
+    es.close();
+  });
+  es.addEventListener("error", (e) => {
+    let message = "Tracked app sync failed";
+    try {
+      const data = JSON.parse((e as MessageEvent).data) as { message?: string };
+      if (data.message) message = data.message;
+    } catch {
+      /* EventSource also calls onerror for transport issues. */
+    }
+    handlers.onError?.(message);
+    es.close();
+  });
+  es.onerror = () => {
+    handlers.onError?.("Tracked app sync failed");
+    es.close();
+  };
+  return () => es.close();
+}
+
+export function streamTrackApp(
+  appId: string,
+  country = "US",
+  handlers: {
+    onProgress: (event: TrackedAppProgressEvent) => void;
+    onDone: (event: TrackedAppSyncDone) => void;
+    onError?: (message: string) => void;
+  },
+): () => void {
+  const q = new URLSearchParams({ appId, country });
+  return streamTrackedAppUrl(`${BASE}/keywords/tracked-apps/stream?${q}`, handlers);
+}
+
+export function streamTrackedAppRankings(
+  trackedAppId: string,
+  handlers: {
+    onProgress: (event: TrackedAppProgressEvent) => void;
+    onDone: (event: TrackedAppSyncDone) => void;
+    onError?: (message: string) => void;
+  },
+): () => void {
+  return streamTrackedAppUrl(`${BASE}/keywords/tracked-apps/${trackedAppId}/rankings/stream`, handlers);
 }
 
 /** Batch compare ≤10 keywords — sorted by opportunity score descending (we sort, not the server). */

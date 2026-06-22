@@ -523,6 +523,116 @@
   font-variant-numeric: tabular-nums;
   margin-left: 2px;
 }
+.track-market-select select {
+  height: 28px;
+  min-width: 78px;
+  font-size: 12px;
+  border-radius: 8px;
+}
+.track-sync-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--bg) 58%, transparent);
+  backdrop-filter: blur(2px);
+  pointer-events: none;
+}
+.track-sync-modal {
+  width: min(440px, calc(100vw - 32px));
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: var(--shadow-xl);
+  padding: 16px;
+  pointer-events: auto;
+}
+.track-sync-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+.track-sync-kicker {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-tertiary);
+  font-weight: 650;
+}
+.track-sync-title {
+  font-size: 16px;
+  font-weight: 700;
+  margin-top: 3px;
+  color: var(--text);
+}
+.track-sync-stage {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 18px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.track-sync-bar {
+  height: 7px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--surface-2);
+  margin-top: 8px;
+}
+.track-sync-bar span {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 0.22s ease;
+}
+.track-sync-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 12px;
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.track-sync-error {
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--danger);
+}
+.track-sync-done { margin-top: 14px; width: 100%; justify-content: center; }
+.track-sync-mini {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 61;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 9px 13px;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: var(--shadow-lg);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.sync-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+.sync-dot.done { background: var(--positive); }
+.sync-dot.error { background: var(--danger); }
 
 /* small spinner reuse */
 .aso-spin { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border-strong); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }

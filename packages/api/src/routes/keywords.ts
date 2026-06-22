@@ -15,9 +15,12 @@ import {
 } from "../services/keyword-service.js";
 import {
   addTrackedApp,
+  addTrackedAppWithProgress,
   listRankingsForTrackedApp,
   listTracked as listTrackedApps,
   removeTrackedApp,
+  syncRankingsForTrackedAppMarkets,
+  type TrackedAppSyncProgress,
 } from "../services/tracked-app-service.js";
 
 export const keywordsRouter = new Hono();
@@ -41,6 +44,81 @@ keywordsRouter.post("/tracked-apps", async (c) => {
   return c.json({ data, meta: { source: "tracked-apps" } });
 });
 
+function trackedAppProgressLabel(stage: NonNullable<TrackedAppSyncProgress["stage"]>): string {
+  switch (stage) {
+    case "validate_url": return "Validate URL";
+    case "fetch_app": return "Fetch app";
+    case "generate_keywords": return "Generate keywords";
+    case "analyze_markets": return "Analyze markets";
+    case "save": return "Save";
+    case "done": return "Done";
+  }
+}
+
+async function writeTrackedAppProgress(
+  stream: { writeSSE: (message: { event?: string; data: string }) => Promise<void> },
+  event: TrackedAppSyncProgress,
+): Promise<void> {
+  const stage = event.stage ?? "analyze_markets";
+  await stream.writeSSE({
+    event: stage === "analyze_markets" && event.country ? "market" : "stage",
+    data: JSON.stringify({
+      ...event,
+      stage,
+      label: trackedAppProgressLabel(stage),
+    }),
+  });
+}
+
+keywordsRouter.get("/tracked-apps/stream", (c) => {
+  const appId = c.req.query("appId")?.trim() ?? "";
+  const country = (c.req.query("country") ?? "US").toUpperCase();
+
+  return streamSSE(c, async (stream) => {
+    if (!appId) {
+      await stream.writeSSE({ event: "error", data: JSON.stringify({ message: "appId is required" }) });
+      return;
+    }
+
+    try {
+      await stream.writeSSE({
+        event: "start",
+        data: JSON.stringify({ appId, country, totalMarkets: SUPPORTED_MARKETS.length }),
+      });
+      const result = await addTrackedAppWithProgress(appId, country, (event) =>
+        writeTrackedAppProgress(stream, event),
+      );
+      if (!result) {
+        await stream.writeSSE({ event: "error", data: JSON.stringify({ message: "tracked app not found" }) });
+        return;
+      }
+      await writeTrackedAppProgress(stream, {
+        stage: "done",
+        doneMarkets: result.totalMarkets,
+        totalMarkets: result.totalMarkets,
+        synced: result.synced,
+        failed: result.failed,
+      });
+      await stream.writeSSE({
+        event: "done",
+        data: JSON.stringify({
+          tracked: result.tracked,
+          rankings: result.rows,
+          synced: result.synced,
+          failed: result.failed,
+          analyzedAt: result.analyzedAt?.toISOString() ?? null,
+          totalMarkets: result.totalMarkets,
+        }),
+      });
+    } catch (error) {
+      await stream.writeSSE({
+        event: "error",
+        data: JSON.stringify({ message: error instanceof Error ? error.message : "tracked app sync failed" }),
+      });
+    }
+  });
+});
+
 keywordsRouter.delete("/tracked-apps", async (c) => {
   const appId = c.req.query("appId");
   const country = (c.req.query("country") ?? "US").toUpperCase();
@@ -54,19 +132,68 @@ keywordsRouter.delete("/tracked-apps", async (c) => {
 keywordsRouter.get("/tracked-apps/:id/rankings", async (c) => {
   const id = c.req.param("id");
   const forceRefresh = c.req.query("refresh") === "true" || c.req.query("refresh") === "1";
-  const result = await listRankingsForTrackedApp(id, { forceRefresh });
+  const country = (c.req.query("country") ?? "US").toUpperCase();
+  const result = await listRankingsForTrackedApp(id, { country, forceRefresh });
   if (!result) return c.json({ error: "tracked app not found" }, 404);
 
   return c.json({
     data: result.rows,
     meta: {
       source: "store-search",
-      country: "US",
+      country,
       refreshed: forceRefresh || result.synced > 0,
       synced: result.synced,
       failed: result.failed,
       analyzedAt: result.analyzedAt?.toISOString() ?? null,
     },
+  });
+});
+
+keywordsRouter.get("/tracked-apps/:id/rankings/stream", (c) => {
+  const id = c.req.param("id");
+
+  return streamSSE(c, async (stream) => {
+    try {
+      await stream.writeSSE({
+        event: "start",
+        data: JSON.stringify({ trackedAppId: id, totalMarkets: SUPPORTED_MARKETS.length }),
+      });
+      const result = await syncRankingsForTrackedAppMarkets(id, {
+        progress: (event) => writeTrackedAppProgress(stream, event),
+      });
+      if (!result) {
+        await stream.writeSSE({ event: "error", data: JSON.stringify({ message: "tracked app not found" }) });
+        return;
+      }
+      await writeTrackedAppProgress(stream, {
+        stage: "save",
+        synced: result.synced,
+        failed: result.failed,
+      });
+      await writeTrackedAppProgress(stream, {
+        stage: "done",
+        doneMarkets: result.totalMarkets,
+        totalMarkets: result.totalMarkets,
+        synced: result.synced,
+        failed: result.failed,
+      });
+      await stream.writeSSE({
+        event: "done",
+        data: JSON.stringify({
+          tracked: result.tracked,
+          rankings: result.rows,
+          synced: result.synced,
+          failed: result.failed,
+          analyzedAt: result.analyzedAt?.toISOString() ?? null,
+          totalMarkets: result.totalMarkets,
+        }),
+      });
+    } catch (error) {
+      await stream.writeSSE({
+        event: "error",
+        data: JSON.stringify({ message: error instanceof Error ? error.message : "tracked app sync failed" }),
+      });
+    }
   });
 });
 

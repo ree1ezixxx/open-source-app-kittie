@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { AppListItem, Store } from "@kittie/types";
-import { IconChart, IconClose, IconExternal, IconInfo, IconMoon, IconRank, IconRefresh, IconSearch, IconSpark, IconSun } from "../../icons";
+import { IconChart, IconChevron, IconClose, IconExternal, IconInfo, IconMoon, IconRank, IconRefresh, IconSearch, IconSpark, IconSun } from "../../icons";
 import { IconCheck, IconPlus, IconTrash } from "../../components/aso/icons";
 import { AppAvatar, Meter, OpportunityBadge, StorePill } from "../../components/aso/KeywordBits";
 import { listApps } from "../../lib/api";
@@ -9,19 +9,33 @@ import {
   compareKeywords,
   fetchTrackedAppRankings,
   fetchTrackedApps,
+  streamTrackApp,
+  streamTrackedAppRankings,
   trackApp as trackAppApi,
   untrackApp as untrackAppApi,
   type KeywordDifficulty,
   type TrackedApp,
   type TrackedAppKeywordRanking,
+  type TrackedAppProgressEvent,
+  type TrackedAppSyncDone,
 } from "../../lib/api/keywords";
 import { relativeTime } from "../../lib/format";
+import { MARKET_COUNT, MARKETS, market } from "../../lib/markets";
 import type { Theme } from "../../lib/theme";
 import "../../styles/aso.css";
 
 const STOPWORDS = new Set(["the", "and", "for", "with", "app", "apps", "your", "free", "pro", "plus", "lite", "ios", "android"]);
 type RankSort = "position" | "popularity" | "difficulty";
 type SortDir = "asc" | "desc";
+type SyncMode = "add" | "refresh";
+
+interface TrackingProgress extends TrackedAppProgressEvent {
+  mode: SyncMode;
+  title: string;
+  minimized: boolean;
+  complete?: boolean;
+  error?: string;
+}
 
 /** Candidate keywords to size up for a single app — category + title tokens/bigrams. */
 function candidateKeywords(app: TrackedApp): string[] {
@@ -59,8 +73,84 @@ function RankingAppsStack({ apps }: { apps: TrackedAppKeywordRanking["topApps"] 
   );
 }
 
+function mergeProgress(
+  current: TrackingProgress | null,
+  event: TrackedAppProgressEvent,
+): TrackingProgress | null {
+  if (!current) return null;
+  return {
+    ...current,
+    ...event,
+    doneMarkets: event.doneMarkets ?? current.doneMarkets,
+    totalMarkets: event.totalMarkets ?? current.totalMarkets,
+    synced: event.synced ?? current.synced,
+    failed: event.failed ?? current.failed,
+  };
+}
+
+function ProgressModal({
+  progress,
+  onMinimize,
+  onRestore,
+  onDismiss,
+}: {
+  progress: TrackingProgress;
+  onMinimize: () => void;
+  onRestore: () => void;
+  onDismiss: () => void;
+}) {
+  const total = progress.totalMarkets ?? MARKET_COUNT;
+  const done = progress.doneMarkets ?? 0;
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  const current = progress.country ? market(progress.country) : null;
+  const title = progress.mode === "add" ? "Adding app" : "Refreshing rankings";
+
+  if (progress.minimized) {
+    return (
+      <button className="track-sync-mini" onClick={onRestore} title="Show progress">
+        <span className={`sync-dot ${progress.complete ? "done" : progress.error ? "error" : ""}`} />
+        <span>{progress.complete ? "Analysis complete" : `${done}/${total} markets`}</span>
+      </button>
+    );
+  }
+
+  return (
+    <div className="track-sync-overlay" role="dialog" aria-modal="false" aria-label={title}>
+      <div className="track-sync-modal">
+        <div className="track-sync-head">
+          <div>
+            <div className="track-sync-kicker">{title}</div>
+            <div className="track-sync-title">{progress.title}</div>
+          </div>
+          <button className="icon-btn" onClick={onMinimize} title="Minimize">
+            <IconChevron style={{ width: 15, height: 15 }} />
+          </button>
+        </div>
+        <div className="track-sync-stage">
+          <span>{progress.label}</span>
+          <span>{progress.complete ? "Done" : `${pct}%`}</span>
+        </div>
+        <div className="track-sync-bar"><span style={{ width: `${pct}%` }} /></div>
+        <div className="track-sync-meta">
+          <span>{done}/{total} markets</span>
+          {current && <span>{current.flag} {current.name}</span>}
+          <span>{progress.synced ?? 0} synced</span>
+          {(progress.failed ?? 0) > 0 && <span>{progress.failed} failed</span>}
+        </div>
+        {progress.error && <div className="track-sync-error">{progress.error}</div>}
+        {progress.complete && (
+          <button className="btn btn-accent track-sync-done" onClick={onDismiss}>
+            <IconCheck /> Done
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => void }) {
   const navigate = useNavigate();
+  const syncCancel = useRef<(() => void) | null>(null);
   const [tracked, setTracked] = useState<TrackedApp[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -80,6 +170,10 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
   const [rankSearch, setRankSearch] = useState("");
   const [rankSort, setRankSort] = useState<RankSort>("position");
   const [rankDir, setRankDir] = useState<SortDir>("asc");
+  const [rankCountry, setRankCountry] = useState("US");
+  const [progress, setProgress] = useState<TrackingProgress | null>(null);
+
+  useEffect(() => () => syncCancel.current?.(), []);
 
   // Load the server-persisted tracked apps (survives reload).
   useEffect(() => {
@@ -153,11 +247,11 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected?.id]);
 
-  const loadRankings = useCallback((app: TrackedApp, signal?: AbortSignal, refresh = false) => {
+  const loadRankings = useCallback((app: TrackedApp, signal?: AbortSignal, refresh = false, country = rankCountry) => {
     setRankLoading(true);
     setRankError(null);
     setRankings([]);
-    fetchTrackedAppRankings(app.id, signal, { refresh })
+    fetchTrackedAppRankings(app.id, signal, { refresh, country })
       .then((data) => { if (!signal?.aborted) setRankings(data); })
       .catch((e) => {
         if (!signal?.aborted) {
@@ -166,7 +260,7 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
         }
       })
       .finally(() => { if (!signal?.aborted) setRankLoading(false); });
-  }, []);
+  }, [rankCountry]);
 
   useEffect(() => {
     if (!selected) {
@@ -175,9 +269,106 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
       return;
     }
     const ctrl = new AbortController();
-    loadRankings(selected, ctrl.signal);
+    loadRankings(selected, ctrl.signal, false, rankCountry);
     return () => ctrl.abort();
-  }, [loadRankings, selected?.id]);
+  }, [loadRankings, rankCountry, selected?.id]);
+
+  function applySyncDone(done: TrackedAppSyncDone) {
+    setTracked((prev) => {
+      const without = prev.filter((t) => t.id !== done.tracked.id);
+      return [done.tracked, ...without];
+    });
+    setSelectedId(done.tracked.appId);
+    if (rankCountry === done.tracked.country) {
+      setRankings(done.rankings);
+      setRankLoading(false);
+    } else {
+      fetchTrackedAppRankings(done.tracked.id, undefined, { country: rankCountry })
+        .then(setRankings)
+        .catch((e) => setRankError(e instanceof Error ? e.message : "Failed to load rankings"))
+        .finally(() => setRankLoading(false));
+    }
+    fetchTrackedApps().then(setTracked).catch(() => {});
+  }
+
+  function startAddSync(a: AppListItem) {
+    syncCancel.current?.();
+    setRankLoading(true);
+    setRankError(null);
+    setRankings([]);
+    setProgress({
+      mode: "add",
+      title: a.title,
+      stage: "validate_url",
+      label: "Validate URL",
+      doneMarkets: 0,
+      totalMarkets: MARKET_COUNT,
+      synced: 0,
+      failed: 0,
+      minimized: false,
+    });
+    syncCancel.current = streamTrackApp(a.id, "US", {
+      onProgress: (event) => setProgress((prev) => mergeProgress(prev, event)),
+      onDone: (done) => {
+        applySyncDone(done);
+        setProgress((prev) => prev ? {
+          ...prev,
+          stage: "done",
+          label: "Done",
+          doneMarkets: done.totalMarkets,
+          totalMarkets: done.totalMarkets,
+          synced: done.synced,
+          failed: done.failed,
+          complete: true,
+        } : prev);
+        syncCancel.current = null;
+      },
+      onError: (message) => {
+        setRankLoading(false);
+        setProgress((prev) => prev ? { ...prev, error: message, complete: true } : prev);
+        syncCancel.current = null;
+      },
+    });
+  }
+
+  function startRefreshSync(app: TrackedApp) {
+    syncCancel.current?.();
+    setRankLoading(true);
+    setRankError(null);
+    setProgress({
+      mode: "refresh",
+      title: app.title,
+      stage: "analyze_markets",
+      label: "Analyze markets",
+      doneMarkets: 0,
+      totalMarkets: MARKET_COUNT,
+      synced: 0,
+      failed: 0,
+      minimized: false,
+    });
+    syncCancel.current = streamTrackedAppRankings(app.id, {
+      onProgress: (event) => setProgress((prev) => mergeProgress(prev, event)),
+      onDone: (done) => {
+        applySyncDone(done);
+        setProgress((prev) => prev ? {
+          ...prev,
+          stage: "done",
+          label: "Done",
+          doneMarkets: done.totalMarkets,
+          totalMarkets: done.totalMarkets,
+          synced: done.synced,
+          failed: done.failed,
+          complete: true,
+        } : prev);
+        syncCancel.current = null;
+      },
+      onError: (message) => {
+        setRankLoading(false);
+        setProgress((prev) => prev ? { ...prev, error: message, complete: true } : prev);
+        syncCancel.current = null;
+      },
+    });
+  }
 
   async function addApp(a: AppListItem) {
     // Already tracked → select it, then hit the idempotent server add so a
@@ -191,6 +382,7 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
         const updated = await trackAppApi(a.id, "US");
         if (updated) {
           setTracked((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+          startRefreshSync(updated);
         }
       } catch {
         /* selection still works; server retry can happen next add */
@@ -200,13 +392,7 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
     setAdding(false);
     setQuery("");
     setSelectedId(a.id);
-    try {
-      await trackAppApi(a.id, "US");
-      const fresh = await fetchTrackedApps();
-      setTracked(fresh);
-    } catch {
-      /* leave list as-is on failure; the empty/select states stay coherent */
-    }
+    startAddSync(a);
   }
 
   async function untrack(appId: string, store: Store) {
@@ -299,7 +485,7 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
                 <div className="meta">
                   <div className="title">{t.title}</div>
                   <div className="sub">
-                    <span className="flag">🇺🇸</span>
+                    <span className="flag">{market(t.country).flag}</span>
                     <span>{kwCount} {kwCount === 1 ? "keyword" : "keywords"}</span>
                     <span>·</span>
                     <span>{relativeTime(t.addedAt)}</span>
@@ -331,7 +517,7 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
                 </div>
                 <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
                   <StorePill store={selected.store} />
-                  <span className="flag" title="United States">🇺🇸</span>
+                  <span className="flag" title={market(rankCountry).name}>{market(rankCountry).flag}</span>
                 </div>
               </div>
 
@@ -340,7 +526,14 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
                   <IconRank style={{ width: 13, height: 13, color: "var(--accent)" }} /> Keyword rankings
                 </div>
                 <div className="kw-ideas-toolbar">
-                  <button className="kw-ideas-tool" onClick={() => loadRankings(selected, undefined, true)} title="Refresh US rankings">
+                  <div className="select market-select track-market-select" title="Market">
+                    <select value={rankCountry} onChange={(e) => setRankCountry(e.target.value)} aria-label="Market">
+                      {MARKETS.map((m) => (
+                        <option key={m.code} value={m.code}>{m.flag} {m.code}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <button className="kw-ideas-tool" onClick={() => startRefreshSync(selected)} title="Refresh all market rankings">
                     <IconRefresh style={{ width: 13, height: 13 }} /> Refresh
                   </button>
                 </div>
@@ -360,7 +553,7 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
                 <div className="aso-empty">
                   <IconRank />
                   <div className="t">No generated keywords yet</div>
-                  <div className="s">Add the app again after keyword generation is configured, then rankings will sync from live US search.</div>
+                  <div className="s">Add or refresh the app to sync live rankings across {MARKET_COUNT} markets.</div>
                 </div>
               ) : (
                 <>
@@ -473,6 +666,14 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
           )}
         </div>
       </div>
+      {progress && (
+        <ProgressModal
+          progress={progress}
+          onMinimize={() => setProgress((p) => p ? { ...p, minimized: true } : p)}
+          onRestore={() => setProgress((p) => p ? { ...p, minimized: false } : p)}
+          onDismiss={() => setProgress(null)}
+        />
+      )}
     </main>
   );
 }

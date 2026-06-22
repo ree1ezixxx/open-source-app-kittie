@@ -57,6 +57,14 @@ export interface TrackedAppKeywordRankingEntry {
   }>;
 }
 
+export function keywordIdsForGeneratedKeywords(
+  generated: GeneratedTrackedAppKeyword[],
+  country?: string,
+): string[] {
+  const market = country?.toUpperCase();
+  return generated.map((row) => makeKeywordLookupId(row.store, market ?? row.country, row.keyword));
+}
+
 /**
  * Track an app. Idempotent on (appId, store, country) — adding the same app
  * twice is a no-op (unique index). Returns nothing; read back via list.
@@ -250,11 +258,13 @@ export async function markTrackedAppAnalyzed(
 export async function listTrackedAppKeywordRankings(
   db: Db,
   trackedAppId: string,
+  country?: string,
 ): Promise<TrackedAppKeywordRankingEntry[]> {
   const generated = await listGeneratedKeywordsForTrackedApp(db, trackedAppId);
   if (generated.length === 0) return [];
 
-  const keywordIds = generated.map((row) => makeKeywordLookupId(row.store, row.country, row.keyword));
+  const market = country?.toUpperCase();
+  const keywordIds = keywordIdsForGeneratedKeywords(generated, market);
   const keywordRows = await db
     .select()
     .from(keywords)
@@ -274,13 +284,14 @@ export async function listTrackedAppKeywordRankings(
   const latestRankByKeywordId = latestRankObservations(rankingRows);
 
   return generated.map((row) => {
-    const keywordId = makeKeywordLookupId(row.store, row.country, row.keyword);
+    const rowCountry = market ?? row.country;
+    const keywordId = makeKeywordLookupId(row.store, rowCountry, row.keyword);
     const metrics = keywordById.has(keywordId) ? keywordRowToDifficulty(keywordById.get(keywordId)!) : null;
     const latest = latestRankByKeywordId.get(keywordId);
     return {
       keywordId,
       keyword: row.keyword,
-      country: row.country,
+      country: rowCountry,
       store: row.store,
       position: latest?.rank ?? null,
       observedAt: latest?.observedAt ?? null,

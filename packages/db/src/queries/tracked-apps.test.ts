@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { latestRankObservations } from "./tracked-apps.js";
+import { keywordIdsForGeneratedKeywords, latestRankObservations } from "./tracked-apps.js";
 
 describe("latestRankObservations", () => {
   it("lets a fresh not-ranked observation supersede an older positive rank", () => {
@@ -13,5 +13,23 @@ describe("latestRankObservations", () => {
       rank: null,
       observedAt: new Date("2026-06-22T12:00:00Z"),
     });
+  });
+});
+
+describe("keywordIdsForGeneratedKeywords", () => {
+  it("fans generated keywords into a selected market lookup id", () => {
+    const ids = keywordIdsForGeneratedKeywords([
+      {
+        id: "tak_1",
+        trackedAppId: "ta_1",
+        appId: "app_1",
+        store: "apple",
+        country: "US",
+        keyword: "learn spanish",
+        createdAt: new Date("2026-06-22T12:00:00Z"),
+      },
+    ], "DE");
+
+    expect(ids).toEqual(["apple:DE:learn spanish"]);
   });
 });
