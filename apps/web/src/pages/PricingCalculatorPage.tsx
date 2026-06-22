@@ -1,9 +1,9 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import "../styles/aistudio.css";
 import pppData from "../datasets/truth-ppp.json";
 import { StudioHeader } from "../components/aistudio/StudioHeader";
 import { StudioEmptyState } from "../components/aistudio/StudioEmptyState";
-import { IconCoin, IconSearch, IconDownload } from "../icons";
+import { IconCoin, IconDownload } from "../icons";
 import { IconPlus, IconTrash, IconCopy, IconCheck } from "../components/aistudio/icons";
 
 interface Country {
@@ -59,18 +59,9 @@ function localize(baseUSD: number, c: Country) {
 
 export function PricingCalculatorPage() {
   const [prices, setPrices] = useState<number[]>([9.99]);
-  const [search, setSearch] = useState("");
   const [copied, setCopied] = useState(false);
   const [view, setView] = useState<"all" | "tabs">("all");
   const [activePriceIndex, setActivePriceIndex] = useState(0);
-
-  const rows = useMemo(() => {
-    const needle = search.trim().toLowerCase();
-    const list = needle
-      ? COUNTRIES.filter((c) => c.country.toLowerCase().includes(needle) || c.code.toLowerCase() === needle || c.currency.toLowerCase() === needle)
-      : COUNTRIES;
-    return list;
-  }, [search]);
 
   const validPrices = prices.filter((p) => p > 0);
   const activePrice = validPrices[Math.min(activePriceIndex, Math.max(validPrices.length - 1, 0))];
@@ -127,7 +118,6 @@ export function PricingCalculatorPage() {
       <div className="ppp-wrap">
         <div className="ppp-inner">
           <section className="ppp-hero">
-            <div className="ppp-hero-kicker">Free tool</div>
             <h1>App Pricing Calculator for Global Markets</h1>
             <p>
               Use our free App Pricing Calculator to determine the perfect localized price for your mobile app or SaaS
@@ -189,34 +179,24 @@ export function PricingCalculatorPage() {
                 </button>
               )}
             </div>
-
-            <div className="ppp-controls-foot">
-              <div className="search" style={{ flex: "0 1 260px" }}>
-                <IconSearch />
-                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Filter countries…" spellCheck={false} />
-              </div>
-              <div className="spacer" />
-              <button className="btn" onClick={copyJson} disabled={!validPrices.length}>
-                {copied ? <IconCheck /> : <IconCopy />} {copied ? "Copied" : "Copy JSON"}
-              </button>
-              <button className="btn btn-accent" onClick={exportJson} disabled={!validPrices.length}>
-                <IconDownload /> Export JSON
-              </button>
-            </div>
           </div>
 
           {/* ---------------- table ---------------- */}
           <div className="ppp-results-head">
             <div>
               <div className="ppp-results-title">Localized Prices</div>
-              <div className="ppp-results-sub">
-                {rows.length} {rows.length === 1 ? "country" : "countries"} · {validPrices.length}{" "}
-                {validPrices.length === 1 ? "base price" : "base prices"}
-              </div>
             </div>
-            <div className="ppp-view-toggle" aria-label="Price view">
-              <button className={view === "all" ? "on" : ""} onClick={() => setView("all")}>All</button>
-              <button className={view === "tabs" ? "on" : ""} onClick={() => setView("tabs")}>Tabs</button>
+            <div className="ppp-results-tools">
+              <div className="ppp-view-toggle" aria-label="Price view">
+                <button className={view === "all" ? "on" : ""} onClick={() => setView("all")}>All</button>
+                <button className={view === "tabs" ? "on" : ""} onClick={() => setView("tabs")}>Tabs</button>
+              </div>
+              <button className="btn" onClick={copyJson} disabled={!validPrices.length}>
+                {copied ? <IconCheck /> : <IconCopy />} {copied ? "Copied" : "Copy JSON"}
+              </button>
+              <button className="btn btn-accent" onClick={exportJson} disabled={!validPrices.length}>
+                <IconDownload /> Export JSON
+              </button>
             </div>
           </div>
           {view === "tabs" && validPrices.length > 1 && (
@@ -238,8 +218,6 @@ export function PricingCalculatorPage() {
               title="Enter a base price"
               sub="Add a USD price above to see purchasing-power-adjusted prices for every country."
             />
-          ) : rows.length === 0 ? (
-            <StudioEmptyState title="No countries match" sub="Try a different country name, ISO code, or currency." />
           ) : (
             <div className="ppp-table-scroll">
               <table className="ppp-table">
@@ -253,7 +231,7 @@ export function PricingCalculatorPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((c) => (
+                  {COUNTRIES.map((c) => (
                     <tr key={c.code + c.country}>
                       <td>
                         <div className="ppp-country">
