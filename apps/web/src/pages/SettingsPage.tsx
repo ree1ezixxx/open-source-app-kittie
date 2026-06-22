@@ -24,7 +24,7 @@ export function SettingsPage({ theme, onToggleTheme }: { theme: Theme; onToggleT
       <PageHeader
         icon={<IconSettings style={{ width: 18, height: 18 }} />}
         title="Settings"
-        subtitle="Manage your subscription, team, and account."
+        subtitle="Manage your subscription, team, and account"
         actions={
           <button className="icon-btn" onClick={onToggleTheme} aria-label="Toggle theme">
             {theme === "dark" ? <IconSun /> : <IconMoon />}
@@ -60,7 +60,7 @@ export function SettingsPage({ theme, onToggleTheme }: { theme: Theme; onToggleT
                 </div>
               </div>
               <div className="set-plan-note">
-                Manage invoices, payment methods, and cancellation in the Stripe customer portal.
+                Manage your billing, update payment method, view invoices, or cancel your subscription through the Stripe portal.
               </div>
               <div className="set-actions">
                 <button className="btn btn-accent" onClick={() => flagStub("Subscription & billing")}>
@@ -136,16 +136,16 @@ export function SettingsPage({ theme, onToggleTheme }: { theme: Theme; onToggleT
             <div className="set-card">
               <div className="set-export-metrics">
                 <div className="set-export-metric">
-                  <span>Exports</span>
+                  <span>TOTAL EXPORTS</span>
                   <strong>1</strong>
                 </div>
                 <div className="set-export-metric">
-                  <span>Rows exported</span>
+                  <span>ROWS EXPORTED</span>
                   <strong>81</strong>
                 </div>
                 <div className="set-export-metric">
-                  <span>Columns</span>
-                  <strong>17</strong>
+                  <span>SUCCESS RATE</span>
+                  <strong>100%</strong>
                 </div>
               </div>
 
@@ -153,11 +153,11 @@ export function SettingsPage({ theme, onToggleTheme }: { theme: Theme; onToggleT
                 <table className="set-export-table">
                   <thead>
                     <tr>
-                      <th>Type</th>
+                      <th>Format</th>
                       <th>Status</th>
                       <th>Rows</th>
-                      <th>Columns</th>
-                      <th>Created</th>
+                      <th>Fields</th>
+                      <th>Date</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -173,7 +173,7 @@ export function SettingsPage({ theme, onToggleTheme }: { theme: Theme; onToggleT
               </div>
 
               <div className="set-card-foot">
-                Export history is retained for quick access to recent database downloads.
+                Export history is retained for all your data exports. Head to the Explore page to create a new export.
               </div>
             </div>
           </section>
