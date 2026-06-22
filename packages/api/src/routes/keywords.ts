@@ -166,6 +166,11 @@ keywordsRouter.get("/tracked-apps/:id/rankings/stream", (c) => {
         return;
       }
       await writeTrackedAppProgress(stream, {
+        stage: "save",
+        synced: result.synced,
+        failed: result.failed,
+      });
+      await writeTrackedAppProgress(stream, {
         stage: "done",
         doneMarkets: result.totalMarkets,
         totalMarkets: result.totalMarkets,
