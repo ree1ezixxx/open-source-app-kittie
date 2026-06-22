@@ -7,13 +7,14 @@ import { AppAvatar, Meter, OpportunityBadge, StorePill } from "../../components/
 import { listApps } from "../../lib/api";
 import {
   compareKeywords,
-  fetchTrackedAppRankings,
+  fetchTrackedAppRankingsWithHistory,
   fetchTrackedApps,
   streamTrackApp,
   streamTrackedAppRankings,
   trackApp as trackAppApi,
   untrackApp as untrackAppApi,
   type KeywordDifficulty,
+  type TrackedAppPositionSeries,
   type TrackedApp,
   type TrackedAppKeywordRanking,
   type TrackedAppProgressEvent,
@@ -28,6 +29,7 @@ const STOPWORDS = new Set(["the", "and", "for", "with", "app", "apps", "your", "
 type RankSort = "position" | "popularity" | "difficulty";
 type SortDir = "asc" | "desc";
 type SyncMode = "add" | "refresh";
+type DetailTab = "rankings" | "history" | "opportunities";
 
 interface TrackingProgress extends TrackedAppProgressEvent {
   mode: SyncMode;
@@ -69,6 +71,87 @@ function RankingAppsStack({ apps }: { apps: TrackedAppKeywordRanking["topApps"] 
         </span>
       ))}
       <span className="kw-appstack-count">{apps.length}</span>
+    </div>
+  );
+}
+
+function growthLabel(growth: number | null): string {
+  if (growth == null) return "—";
+  if (growth === 0) return "0";
+  return growth > 0 ? `+${growth}` : `${growth}`;
+}
+
+function GrowthBadge({ growth }: { growth: number | null }) {
+  const kind = growth == null ? "empty" : growth > 0 ? "up" : growth < 0 ? "down" : "flat";
+  return <span className={`rank-growth ${kind}`}>{growthLabel(growth)}</span>;
+}
+
+function PositionHistoryPanel({
+  history,
+  search,
+  onOpenKeyword,
+}: {
+  history: TrackedAppPositionSeries[];
+  search: string;
+  onOpenKeyword: (keyword: string) => void;
+}) {
+  const needle = search.trim().toLowerCase();
+  const visible = needle ? history.filter((row) => row.keyword.toLowerCase().includes(needle)) : history;
+
+  if (visible.length === 0) {
+    return (
+      <div className="aso-empty">
+        <IconChart />
+        <div className="t">No position history</div>
+        <div className="s">Run a ranking sync to start recording daily observations.</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="position-history-list">
+      {visible.map((row) => {
+        const points = row.points.slice(-14);
+        const latest = row.points.at(-1);
+        const maxRank = Math.max(10, ...points.map((p) => p.position ?? 10));
+        return (
+          <div key={row.keywordId} className="position-history-row">
+            <div className="position-history-main">
+              <button className="kw-ideas-name" onClick={() => onOpenKeyword(row.keyword)}>
+                {row.keyword}
+              </button>
+              <div className="position-history-meta">
+                {latest ? (
+                  <>
+                    <span>{latest.position == null ? "Not ranked" : `#${latest.position}`}</span>
+                    <GrowthBadge growth={latest.delta} />
+                    <span>{latest.date}</span>
+                  </>
+                ) : (
+                  <span>No observations yet</span>
+                )}
+              </div>
+            </div>
+            {points.length <= 1 ? (
+              <div className="position-history-empty">Needs 2 daily observations</div>
+            ) : (
+              <div className="position-spark" aria-label={`${row.keyword} position history`}>
+                {points.map((point, i) => {
+                  const height = point.position == null ? 8 : Math.max(8, 38 - ((point.position - 1) / maxRank) * 30);
+                  return (
+                    <span
+                      key={`${point.date}-${i}`}
+                      className={point.position == null ? "missing" : ""}
+                      style={{ height }}
+                      title={`${point.date}: ${point.position == null ? "Not ranked" : `#${point.position}`}`}
+                    />
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -165,12 +248,14 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
   const [oppLoading, setOppLoading] = useState(false);
   const [oppError, setOppError] = useState<string | null>(null);
   const [rankings, setRankings] = useState<TrackedAppKeywordRanking[]>([]);
+  const [history, setHistory] = useState<TrackedAppPositionSeries[]>([]);
   const [rankLoading, setRankLoading] = useState(false);
   const [rankError, setRankError] = useState<string | null>(null);
   const [rankSearch, setRankSearch] = useState("");
   const [rankSort, setRankSort] = useState<RankSort>("position");
   const [rankDir, setRankDir] = useState<SortDir>("asc");
   const [rankCountry, setRankCountry] = useState("US");
+  const [activeTab, setActiveTab] = useState<DetailTab>("rankings");
   const [progress, setProgress] = useState<TrackingProgress | null>(null);
 
   useEffect(() => () => syncCancel.current?.(), []);
@@ -251,11 +336,18 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
     setRankLoading(true);
     setRankError(null);
     setRankings([]);
-    fetchTrackedAppRankings(app.id, signal, { refresh, country })
-      .then((data) => { if (!signal?.aborted) setRankings(data); })
+    setHistory([]);
+    fetchTrackedAppRankingsWithHistory(app.id, signal, { refresh, country })
+      .then((data) => {
+        if (!signal?.aborted) {
+          setRankings(data.rankings);
+          setHistory(data.history);
+        }
+      })
       .catch((e) => {
         if (!signal?.aborted) {
           setRankings([]);
+          setHistory([]);
           setRankError(e instanceof Error ? e.message : "Failed to load rankings");
         }
       })
@@ -265,6 +357,7 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
   useEffect(() => {
     if (!selected) {
       setRankings([]);
+      setHistory([]);
       setRankSearch("");
       return;
     }
@@ -281,10 +374,14 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
     setSelectedId(done.tracked.appId);
     if (rankCountry === done.tracked.country) {
       setRankings(done.rankings);
+      setHistory(done.history);
       setRankLoading(false);
     } else {
-      fetchTrackedAppRankings(done.tracked.id, undefined, { country: rankCountry })
-        .then(setRankings)
+      fetchTrackedAppRankingsWithHistory(done.tracked.id, undefined, { country: rankCountry })
+        .then((data) => {
+          setRankings(data.rankings);
+          setHistory(data.history);
+        })
         .catch((e) => setRankError(e instanceof Error ? e.message : "Failed to load rankings"))
         .finally(() => setRankLoading(false));
     }
@@ -296,6 +393,7 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
     setRankLoading(true);
     setRankError(null);
     setRankings([]);
+    setHistory([]);
     setProgress({
       mode: "add",
       title: a.title,
@@ -521,22 +619,36 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
                 </div>
               </div>
 
+              <div className="track-tabs">
+                <button className={activeTab === "rankings" ? "on" : ""} onClick={() => setActiveTab("rankings")}>Rankings</button>
+                <button className={activeTab === "history" ? "on" : ""} onClick={() => setActiveTab("history")}>Position History</button>
+                <button className={activeTab === "opportunities" ? "on" : ""} onClick={() => setActiveTab("opportunities")}>Opportunities</button>
+              </div>
+
               <div className="section-head" style={{ margin: "22px 0 11px" }}>
                 <div className="section-label" style={{ margin: 0, display: "flex", alignItems: "center", gap: 7 }}>
-                  <IconRank style={{ width: 13, height: 13, color: "var(--accent)" }} /> Keyword rankings
+                  {activeTab === "opportunities" ? (
+                    <><IconSpark style={{ width: 13, height: 13, color: "var(--accent)" }} /> Keyword opportunities</>
+                  ) : activeTab === "history" ? (
+                    <><IconChart style={{ width: 13, height: 13, color: "var(--accent)" }} /> Position History</>
+                  ) : (
+                    <><IconRank style={{ width: 13, height: 13, color: "var(--accent)" }} /> Keyword rankings</>
+                  )}
                 </div>
-                <div className="kw-ideas-toolbar">
-                  <div className="select market-select track-market-select" title="Market">
-                    <select value={rankCountry} onChange={(e) => setRankCountry(e.target.value)} aria-label="Market">
-                      {MARKETS.map((m) => (
-                        <option key={m.code} value={m.code}>{m.flag} {m.code}</option>
-                      ))}
-                    </select>
+                {activeTab !== "opportunities" && (
+                  <div className="kw-ideas-toolbar">
+                    <div className="select market-select track-market-select" title="Market">
+                      <select value={rankCountry} onChange={(e) => setRankCountry(e.target.value)} aria-label="Market">
+                        {MARKETS.map((m) => (
+                          <option key={m.code} value={m.code}>{m.flag} {m.code}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <button className="kw-ideas-tool" onClick={() => startRefreshSync(selected)} title="Refresh all market rankings">
+                      <IconRefresh style={{ width: 13, height: 13 }} /> Refresh
+                    </button>
                   </div>
-                  <button className="kw-ideas-tool" onClick={() => startRefreshSync(selected)} title="Refresh all market rankings">
-                    <IconRefresh style={{ width: 13, height: 13 }} /> Refresh
-                  </button>
-                </div>
+                )}
               </div>
 
               {rankError && (
@@ -545,7 +657,7 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
                 </div>
               )}
 
-              {rankLoading ? (
+              {activeTab === "rankings" && (rankLoading ? (
                 <div className="opp-list">
                   {[0, 1, 2, 3].map((i) => <div key={i} className="skel" style={{ height: 46, borderRadius: 8 }} />)}
                 </div>
@@ -582,6 +694,7 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
                             <th className={`sortable ${rankSort === "difficulty" ? "on" : ""}`} onClick={() => setRankingSort("difficulty")}>
                               Difficulty {rankSort === "difficulty" ? rankSortLabel : ""}
                             </th>
+                            <th>Growth</th>
                             <th className="kw-ideas-appshead">Ranking apps</th>
                             <th>Actions</th>
                           </tr>
@@ -597,6 +710,7 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
                               <td className="num">{row.position == null ? "Not ranked" : `#${row.position}`}</td>
                               <td><Meter kind="popularity" label="Popularity" value={row.popularity ?? 0} /></td>
                               <td><Meter kind="difficulty" label="Difficulty" value={row.difficulty ?? 0} /></td>
+                              <td><GrowthBadge growth={row.growth} /></td>
                               <td><RankingAppsStack apps={row.topApps} /></td>
                               <td className="kw-ideas-action">
                                 <button className="kw-ideas-expand" title="Open in Keyword Workspace" onClick={() => navigate(`/dashboard/aso/keywords?q=${encodeURIComponent(row.keyword)}`)}>
@@ -610,23 +724,33 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
                     </div>
                   )}
                 </>
-              )}
+              ))}
 
-              {/* live opportunity panel */}
-              <div className="section-head" style={{ margin: "30px 0 11px" }}>
-                <div className="section-label" style={{ margin: 0, display: "flex", alignItems: "center", gap: 7 }}>
-                  <IconSpark style={{ width: 13, height: 13, color: "var(--accent)" }} /> Keyword opportunities
+              {activeTab === "history" && (rankLoading ? (
+                <div className="opp-list">
+                  {[0, 1, 2].map((i) => <div key={i} className="skel" style={{ height: 58, borderRadius: 8 }} />)}
                 </div>
-                <span className="section-count">{selectedKeywords.length} tracked</span>
-              </div>
+              ) : (
+                <>
+                  <div className="search track-rank-search">
+                    <IconSearch />
+                    <input value={rankSearch} onChange={(e) => setRankSearch(e.target.value)} placeholder="Search keywords…" spellCheck={false} />
+                  </div>
+                  <PositionHistoryPanel
+                    history={history}
+                    search={rankSearch}
+                    onOpenKeyword={(keyword) => navigate(`/dashboard/aso/keywords?q=${encodeURIComponent(keyword)}`)}
+                  />
+                </>
+              ))}
 
-              {oppError && (
+              {activeTab === "opportunities" && oppError && (
                 <div className="notice" style={{ marginBottom: 12 }}>
                   <IconInfo /> {oppError}. Start the API server and retry.
                 </div>
               )}
 
-              {oppLoading ? (
+              {activeTab === "opportunities" && (oppLoading ? (
                 <div className="opp-list">
                   {[0, 1, 2, 3].map((i) => <div key={i} className="skel" style={{ height: 56, borderRadius: 12 }} />)}
                 </div>
@@ -661,7 +785,7 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
                     );
                   })}
                 </div>
-              )}
+              ))}
             </div>
           )}
         </div>

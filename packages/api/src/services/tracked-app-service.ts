@@ -5,6 +5,7 @@ import {
   getTrackedAppById,
   insertKeywordRanking,
   listGeneratedKeywordsForTrackedApp,
+  listTrackedAppPositionHistory,
   listTrackedAppKeywordRankings,
   listTrackedApps,
   markTrackedAppAnalyzed,
@@ -13,6 +14,7 @@ import {
   untrackApp as dbUntrackApp,
   makeKeywordLookupId,
   type TrackedAppKeywordRankingEntry,
+  type TrackedAppPositionSeries,
   type TrackedAppEntry,
 } from "@kittie/db";
 import { syncKeywordWithRankings } from "@kittie/ingest";
@@ -214,6 +216,7 @@ export async function removeTrackedApp(
 
 export interface TrackedAppRankingsResult {
   rows: TrackedAppKeywordRankingEntry[];
+  history: TrackedAppPositionSeries[];
   synced: number;
   failed: number;
   analyzedAt: Date | null;
@@ -280,6 +283,7 @@ export async function listRankingsForTrackedApp(
 
   return {
     rows: await listTrackedAppKeywordRankings(db, trackedAppId, country),
+    history: await listTrackedAppPositionHistory(db, trackedAppId, country),
     synced,
     failed,
     analyzedAt,
@@ -343,6 +347,7 @@ export async function syncRankingsForTrackedAppMarkets(
   return {
     tracked,
     rows: await listTrackedAppKeywordRankings(db, trackedAppId, tracked.country),
+    history: await listTrackedAppPositionHistory(db, trackedAppId, tracked.country),
     synced,
     failed,
     analyzedAt: failed === 0 ? observedAt : tracked.lastAnalyzedAt,
@@ -393,5 +398,27 @@ export async function addTrackedAppWithProgress(
     ...synced,
     tracked: refreshed,
     rows: await listTrackedAppKeywordRankings(db, tracked.id, market),
+    history: await listTrackedAppPositionHistory(db, tracked.id, market),
   };
+}
+
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+export async function sweepTrackedAppRankHistory(): Promise<{ tracked: number; synced: number; failed: number }> {
+  const apps = await listTrackedApps(getDb());
+  let synced = 0;
+  let failed = 0;
+
+  for (const app of apps) {
+    try {
+      const result = await syncRankingsForTrackedAppMarkets(app.id);
+      synced += result?.synced ?? 0;
+      failed += result?.failed ?? 1;
+    } catch {
+      failed++;
+    }
+    await sleep(400);
+  }
+
+  return { tracked: apps.length, synced, failed };
 }

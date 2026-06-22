@@ -59,6 +59,7 @@ export {
   getTrackedApp,
   getTrackedAppById,
   insertKeywordRanking,
+  listTrackedAppPositionHistory,
   listGeneratedKeywordsForTrackedApp,
   listTrackedAppKeywordRankings,
   listTrackedApps,
@@ -67,6 +68,7 @@ export {
   trackApp,
   untrackApp,
   type GeneratedTrackedAppKeyword,
+  type TrackedAppPositionSeries,
   type TrackedAppEntry,
   type TrackedAppKeywordRankingEntry,
 } from "./tracked-apps.js";

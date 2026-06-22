@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import type { Store } from "@kittie/types";
 
 import type { Db } from "../client.js";
@@ -42,6 +42,7 @@ export interface TrackedAppKeywordRankingEntry {
   country: string;
   store: Store;
   position: number | null;
+  growth: number | null;
   observedAt: Date | null;
   popularity: number | null;
   difficulty: number | null;
@@ -55,6 +56,20 @@ export interface TrackedAppKeywordRankingEntry {
     rating: number | null;
     rank: number;
   }>;
+}
+
+export interface PositionHistoryPoint {
+  date: string;
+  position: number | null;
+  delta: number | null;
+}
+
+export interface TrackedAppPositionSeries {
+  keywordId: string;
+  keyword: string;
+  country: string;
+  store: Store;
+  points: PositionHistoryPoint[];
 }
 
 export function keywordIdsForGeneratedKeywords(
@@ -243,6 +258,69 @@ export function latestRankObservations(
   return latestRankByKeywordId;
 }
 
+function dayKey(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function positionDelta(current: number | null, previous: number | null): number | null {
+  if (current == null || previous == null) return null;
+  return previous - current;
+}
+
+function dailyRankObservations(
+  rankingRows: Array<{ rank: number | null; observedAt: Date }>,
+): Array<{ rank: number | null; observedAt: Date }> {
+  const latestByDay = new Map<string, { rank: number | null; observedAt: Date }>();
+
+  for (const row of rankingRows) {
+    const key = dayKey(row.observedAt);
+    const current = latestByDay.get(key);
+    if (!current || row.observedAt > current.observedAt) {
+      latestByDay.set(key, row);
+    }
+  }
+
+  return [...latestByDay.values()].sort((a, b) => a.observedAt.getTime() - b.observedAt.getTime());
+}
+
+export function buildPositionHistorySeries(input: {
+  generated: GeneratedTrackedAppKeyword[];
+  rankingRows: Array<{ keywordId: string; rank: number | null; observedAt: Date }>;
+  country?: string;
+}): TrackedAppPositionSeries[] {
+  const market = input.country?.toUpperCase();
+  const byKeyword = new Map<string, Array<{ rank: number | null; observedAt: Date }>>();
+
+  for (const row of input.rankingRows) {
+    const rows = byKeyword.get(row.keywordId) ?? [];
+    rows.push({ rank: row.rank, observedAt: row.observedAt });
+    byKeyword.set(row.keywordId, rows);
+  }
+
+  return input.generated.map((row) => {
+    const rowCountry = market ?? row.country;
+    const keywordId = makeKeywordLookupId(row.store, rowCountry, row.keyword);
+    const rows = dailyRankObservations(byKeyword.get(keywordId) ?? []);
+    let previousRank: number | null | undefined;
+
+    return {
+      keywordId,
+      keyword: row.keyword,
+      country: rowCountry,
+      store: row.store,
+      points: rows.map((rankRow) => {
+        const delta = previousRank === undefined ? null : positionDelta(rankRow.rank, previousRank);
+        previousRank = rankRow.rank;
+        return {
+          date: dayKey(rankRow.observedAt),
+          position: rankRow.rank,
+          delta,
+        };
+      }),
+    };
+  });
+}
+
 export async function markTrackedAppAnalyzed(
   db: Db,
   trackedAppId: string,
@@ -282,18 +360,24 @@ export async function listTrackedAppKeywordRankings(
     )
     .orderBy(desc(keywordRankings.observedAt));
   const latestRankByKeywordId = latestRankObservations(rankingRows);
+  const historyByKeywordId = new Map(
+    buildPositionHistorySeries({ generated, rankingRows, country: market })
+      .map((row) => [row.keywordId, row]),
+  );
 
   return generated.map((row) => {
     const rowCountry = market ?? row.country;
     const keywordId = makeKeywordLookupId(row.store, rowCountry, row.keyword);
     const metrics = keywordById.has(keywordId) ? keywordRowToDifficulty(keywordById.get(keywordId)!) : null;
     const latest = latestRankByKeywordId.get(keywordId);
+    const latestPoint = historyByKeywordId.get(keywordId)?.points.at(-1);
     return {
       keywordId,
       keyword: row.keyword,
       country: rowCountry,
       store: row.store,
       position: latest?.rank ?? null,
+      growth: latestPoint?.delta ?? null,
       observedAt: latest?.observedAt ?? null,
       popularity: metrics?.popularity ?? null,
       difficulty: metrics?.difficulty ?? null,
@@ -303,6 +387,35 @@ export async function listTrackedAppKeywordRankings(
       topApps: metrics?.topApps ?? [],
     };
   });
+}
+
+/** Full append-only position history for a tracked app in one market. */
+export async function listTrackedAppPositionHistory(
+  db: Db,
+  trackedAppId: string,
+  country?: string,
+): Promise<TrackedAppPositionSeries[]> {
+  const generated = await listGeneratedKeywordsForTrackedApp(db, trackedAppId);
+  if (generated.length === 0) return [];
+
+  const market = country?.toUpperCase();
+  const keywordIds = keywordIdsForGeneratedKeywords(generated, market);
+  const rankingRows = await db
+    .select({
+      keywordId: keywordRankings.keywordId,
+      rank: keywordRankings.rank,
+      observedAt: keywordRankings.observedAt,
+    })
+    .from(keywordRankings)
+    .where(
+      and(
+        eq(keywordRankings.appId, generated[0]!.appId),
+        inArray(keywordRankings.keywordId, keywordIds),
+      ),
+    )
+    .orderBy(asc(keywordRankings.observedAt));
+
+  return buildPositionHistorySeries({ generated, rankingRows, country: market });
 }
 
 /** Remove an app from the tracked list. */

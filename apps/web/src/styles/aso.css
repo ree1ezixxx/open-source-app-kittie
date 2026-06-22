@@ -465,6 +465,25 @@
 .track-detail-head .app-icon { width: 52px; height: 52px; border-radius: 13px; }
 .track-detail-head .name { font-size: 19px; font-weight: 700; letter-spacing: -0.02em; }
 .track-detail-head .dev { font-size: 12.5px; color: var(--text-secondary); }
+.track-tabs {
+  display: flex;
+  gap: 4px;
+  margin-top: 18px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.track-tabs button {
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 10px 10px 11px;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  cursor: pointer;
+}
+.track-tabs button:hover { color: var(--text-secondary); }
+.track-tabs button.on { color: var(--accent); border-bottom-color: var(--accent); }
 
 /* opportunity panel rows (App Tracking right pane) */
 .opp-list { display: flex; flex-direction: column; gap: 8px; }
@@ -500,6 +519,63 @@
 }
 .track-rank-table .kw-ideas-name:hover { color: var(--accent); }
 .track-rank-table .meter { min-width: 130px; }
+.rank-growth {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 24px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid var(--border-soft);
+  color: var(--text-tertiary);
+  background: var(--surface);
+}
+.rank-growth.up { color: var(--success); background: color-mix(in srgb, var(--success) 10%, transparent); }
+.rank-growth.down { color: var(--danger); background: color-mix(in srgb, var(--danger) 9%, transparent); }
+.rank-growth.flat { color: var(--text-secondary); }
+.position-history-list { display: flex; flex-direction: column; gap: 8px; }
+.position-history-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(220px, 320px);
+  gap: 16px;
+  align-items: center;
+  border: 1px solid var(--border-soft);
+  background: var(--surface);
+  border-radius: 10px;
+  padding: 12px 13px;
+}
+.position-history-main { min-width: 0; }
+.position-history-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 5px;
+  color: var(--text-tertiary);
+  font-size: 11.5px;
+}
+.position-history-empty {
+  color: var(--text-tertiary);
+  font-size: 12px;
+  text-align: right;
+}
+.position-spark {
+  height: 42px;
+  display: flex;
+  align-items: end;
+  justify-content: flex-end;
+  gap: 4px;
+}
+.position-spark span {
+  width: 12px;
+  min-height: 8px;
+  border-radius: 4px 4px 2px 2px;
+  background: var(--accent);
+  opacity: 0.78;
+}
+.position-spark span.missing { background: var(--border-strong); opacity: 0.45; }
 .track-rank-table .kw-appstack-icon {
   width: 26px;
   height: 26px;

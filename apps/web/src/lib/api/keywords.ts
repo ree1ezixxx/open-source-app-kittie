@@ -128,6 +128,7 @@ export interface TrackedAppKeywordRanking {
   country: string;
   store: Store;
   position: number | null;
+  growth: number | null;
   observedAt: string | null;
   popularity: number | null;
   difficulty: number | null;
@@ -135,6 +136,20 @@ export interface TrackedAppKeywordRanking {
   opportunityScore: number | null;
   competingAppCount: number | null;
   topApps: KeywordTopApp[];
+}
+
+export interface PositionHistoryPoint {
+  date: string;
+  position: number | null;
+  delta: number | null;
+}
+
+export interface TrackedAppPositionSeries {
+  keywordId: string;
+  keyword: string;
+  country: string;
+  store: Store;
+  points: PositionHistoryPoint[];
 }
 
 export type TrackedAppProgressStage =
@@ -158,10 +173,16 @@ export interface TrackedAppProgressEvent {
 export interface TrackedAppSyncDone {
   tracked: TrackedApp;
   rankings: TrackedAppKeywordRanking[];
+  history: TrackedAppPositionSeries[];
   synced: number;
   failed: number;
   analyzedAt: string | null;
   totalMarkets: number;
+}
+
+export interface TrackedAppRankingsPayload {
+  rankings: TrackedAppKeywordRanking[];
+  history: TrackedAppPositionSeries[];
 }
 
 export async function fetchTrackedApps(signal?: AbortSignal): Promise<TrackedApp[]> {
@@ -189,24 +210,40 @@ export async function untrackApp(appId: string, store: Store, country = "US"): P
   if (!res.ok) throw new Error(`Untrack app failed (${res.status})`);
 }
 
-export async function fetchTrackedAppRankings(
+export async function fetchTrackedAppRankingsWithHistory(
   trackedAppId: string,
   signal?: AbortSignal,
   opts: { refresh?: boolean; country?: string } = {},
-): Promise<TrackedAppKeywordRanking[]> {
+): Promise<TrackedAppRankingsPayload> {
   const q = new URLSearchParams();
   if (opts.refresh) q.set("refresh", "true");
   if (opts.country) q.set("country", opts.country);
   const suffix = q.toString() ? `?${q}` : "";
   const res = await fetch(`${BASE}/keywords/tracked-apps/${trackedAppId}/rankings${suffix}`, { signal });
   if (!res.ok) throw new Error(`Rankings fetch failed (${res.status})`);
-  const body = (await res.json()) as { data: TrackedAppKeywordRanking[] };
-  return body.data.map((row) => ({ ...row, topApps: [...(row.topApps ?? [])].sort((a, b) => a.rank - b.rank) }));
+  const body = (await res.json()) as {
+    data: TrackedAppKeywordRanking[];
+    meta?: { history?: TrackedAppPositionSeries[] };
+  };
+  return {
+    rankings: body.data.map((row) => ({ ...row, topApps: [...(row.topApps ?? [])].sort((a, b) => a.rank - b.rank) })),
+    history: body.meta?.history ?? [],
+  };
+}
+
+export async function fetchTrackedAppRankings(
+  trackedAppId: string,
+  signal?: AbortSignal,
+  opts: { refresh?: boolean; country?: string } = {},
+): Promise<TrackedAppKeywordRanking[]> {
+  const payload = await fetchTrackedAppRankingsWithHistory(trackedAppId, signal, opts);
+  return payload.rankings;
 }
 
 function normalizeTrackedAppDone(raw: TrackedAppSyncDone): TrackedAppSyncDone {
   return {
     ...raw,
+    history: raw.history ?? [],
     rankings: raw.rankings.map((row) => ({
       ...row,
       topApps: [...(row.topApps ?? [])].sort((a, b) => a.rank - b.rank),
