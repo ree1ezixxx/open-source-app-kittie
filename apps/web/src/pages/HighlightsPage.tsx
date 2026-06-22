@@ -8,7 +8,7 @@ import { useApps } from "../hooks/useApps";
 import { IconSpark } from "../icons";
 import type { Theme } from "../lib/theme";
 
-/** A single independent store-source toggle (truth: "Select …" / "Included …"). */
+/** A single independent store-source toggle. */
 function StoreToggle({ label, on, onClick }: { label: string; on: boolean; onClick: () => void }) {
   return (
     <button
@@ -25,7 +25,7 @@ function StoreToggle({ label, on, onClick }: { label: string; on: boolean; onCli
         borderColor: on ? "var(--accent)" : undefined,
       }}
     >
-      {on ? `Included ${label}` : `Select ${label}`}
+      {label}
     </button>
   );
 }
