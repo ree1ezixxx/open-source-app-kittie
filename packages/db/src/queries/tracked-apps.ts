@@ -187,6 +187,77 @@ export async function replaceGeneratedKeywordsForTrackedApp(
   });
 }
 
+/** Add one user-supplied keyword to a tracked app without replacing AI keywords. */
+export async function addKeywordForTrackedApp(
+  db: Db,
+  input: {
+    trackedAppId: string;
+    appId: string;
+    store: Store;
+    country: string;
+    keyword: string;
+    inputHash: string;
+    source: string;
+  },
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx
+      .insert(trackedAppKeywords)
+      .values({
+        id: randomUUID(),
+        trackedAppId: input.trackedAppId,
+        appId: input.appId,
+        store: input.store,
+        country: input.country.toUpperCase(),
+        keyword: input.keyword,
+        inputHash: input.inputHash,
+        source: input.source,
+        createdAt: new Date(),
+      })
+      .onConflictDoNothing({
+        target: [trackedAppKeywords.trackedAppId, trackedAppKeywords.keyword],
+      });
+
+    const rows = await tx
+      .select({ id: trackedAppKeywords.id })
+      .from(trackedAppKeywords)
+      .where(eq(trackedAppKeywords.trackedAppId, input.trackedAppId));
+
+    await tx
+      .update(trackedApps)
+      .set({ generatedKeywordCount: rows.length })
+      .where(eq(trackedApps.id, input.trackedAppId));
+  });
+}
+
+/** Remove one keyword from a tracked app's durable keyword set. */
+export async function deleteKeywordForTrackedApp(
+  db: Db,
+  trackedAppId: string,
+  keyword: string,
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(trackedAppKeywords)
+      .where(
+        and(
+          eq(trackedAppKeywords.trackedAppId, trackedAppId),
+          eq(trackedAppKeywords.keyword, keyword),
+        ),
+      );
+
+    const rows = await tx
+      .select({ id: trackedAppKeywords.id })
+      .from(trackedAppKeywords)
+      .where(eq(trackedAppKeywords.trackedAppId, trackedAppId));
+
+    await tx
+      .update(trackedApps)
+      .set({ generatedKeywordCount: rows.length })
+      .where(eq(trackedApps.id, trackedAppId));
+  });
+}
+
 /** The metadata hash currently backing this tracked app's generated set. */
 export async function getGeneratedKeywordInputHash(
   db: Db,

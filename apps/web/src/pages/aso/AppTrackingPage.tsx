@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { AppListItem, Store } from "@kittie/types";
-import { IconChart, IconChevron, IconClose, IconExternal, IconInfo, IconMoon, IconRank, IconRefresh, IconSearch, IconSpark, IconSun } from "../../icons";
+import { IconApple, IconChart, IconChevron, IconClose, IconExternal, IconGooglePlay, IconInfo, IconMoon, IconRank, IconRefresh, IconSearch, IconSpark, IconStar, IconSun } from "../../icons";
 import { IconCheck, IconPlus, IconTrash } from "../../components/aso/icons";
 import { AppAvatar, Meter, OpportunityBadge, StorePill } from "../../components/aso/KeywordBits";
-import { listApps } from "../../lib/api";
+import { getApp, listApps } from "../../lib/api";
 import {
+  addTrackedAppKeyword,
   compareKeywords,
+  fetchTrackedAppSimilarKeywords,
   fetchTrackedAppRankingsWithHistory,
   fetchTrackedApps,
+  removeTrackedAppKeyword,
   streamTrackApp,
   streamTrackedAppRankings,
   trackApp as trackAppApi,
@@ -20,7 +23,7 @@ import {
   type TrackedAppProgressEvent,
   type TrackedAppSyncDone,
 } from "../../lib/api/keywords";
-import { relativeTime } from "../../lib/format";
+import { formatCompact, relativeTime } from "../../lib/format";
 import { MARKET_COUNT, MARKETS, market } from "../../lib/markets";
 import type { Theme } from "../../lib/theme";
 import "../../styles/aso.css";
@@ -30,6 +33,8 @@ type RankSort = "position" | "popularity" | "difficulty";
 type SortDir = "asc" | "desc";
 type SyncMode = "add" | "refresh";
 type DetailTab = "rankings" | "history" | "opportunities";
+type AddMode = "search" | "url";
+type AppCandidate = Pick<AppListItem, "id" | "title" | "developer" | "iconUrl" | "store" | "category" | "rating" | "reviewCount">;
 
 interface TrackingProgress extends TrackedAppProgressEvent {
   mode: SyncMode;
@@ -79,6 +84,22 @@ function growthLabel(growth: number | null): string {
   if (growth == null) return "—";
   if (growth === 0) return "0";
   return growth > 0 ? `+${growth}` : `${growth}`;
+}
+
+function parseStoreUrl(raw: string): string | null {
+  const url = raw.trim();
+  if (!url) return null;
+  if (/apps\.apple\.com|itunes\.apple\.com/.test(url)) {
+    const match = url.match(/id(\d{4,})/);
+    if (match) return `apple:${match[1]}`;
+  }
+  if (/play\.google\.com/.test(url)) {
+    const match = url.match(/[?&]id=([\w.]+)/);
+    if (match) return `google:${match[1]}`;
+  }
+  if (/^\d{6,}$/.test(url)) return `apple:${url}`;
+  if (/^[a-z][\w.]+\.[\w.]+$/i.test(url)) return `google:${url}`;
+  return null;
 }
 
 function GrowthBadge({ growth }: { growth: number | null }) {
@@ -237,12 +258,14 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
   const [tracked, setTracked] = useState<TrackedApp[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [addMode, setAddMode] = useState<AddMode>("search");
   const [query, setQuery] = useState("");
   const [searchResults, setSearchResults] = useState<AppListItem[]>([]);
   const [searching, setSearching] = useState(false);
-  // Per-app manual keyword selection is UI-only until rank tracking lands.
-  // Generated keyword counts come from the server-persisted tracked app row.
-  const [trackedKeywords, setTrackedKeywords] = useState<Record<string, string[]>>({});
+  const [urlInput, setUrlInput] = useState("");
+  const [urlResolving, setUrlResolving] = useState(false);
+  const [urlError, setUrlError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<AppCandidate | null>(null);
 
   const [opps, setOpps] = useState<KeywordDifficulty[]>([]);
   const [oppLoading, setOppLoading] = useState(false);
@@ -255,6 +278,10 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
   const [rankSort, setRankSort] = useState<RankSort>("position");
   const [rankDir, setRankDir] = useState<SortDir>("asc");
   const [rankCountry, setRankCountry] = useState("US");
+  const [customKeyword, setCustomKeyword] = useState("");
+  const [keywordBusy, setKeywordBusy] = useState<string | null>(null);
+  const [keywordError, setKeywordError] = useState<string | null>(null);
+  const [similar, setSimilar] = useState<Record<string, string[]>>({});
   const [activeTab, setActiveTab] = useState<DetailTab>("rankings");
   const [progress, setProgress] = useState<TrackingProgress | null>(null);
 
@@ -268,7 +295,10 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
   }, []);
 
   const selected = tracked.find((t) => t.appId === selectedId) ?? null;
-  const selectedKeywords = selected ? (trackedKeywords[selected.id] ?? []) : [];
+  const trackedKeywordSet = useMemo(
+    () => new Set(rankings.map((row) => row.keyword.toLowerCase())),
+    [rankings],
+  );
 
   const visibleRankings = useMemo(() => {
     const needle = rankSearch.trim().toLowerCase();
@@ -295,7 +325,7 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
 
   // debounced app search for the Add picker
   useEffect(() => {
-    if (!adding) return;
+    if (!adding || addMode !== "search") return;
     const q = query.trim();
     if (!q) { setSearchResults([]); return; }
     setSearching(true);
@@ -307,7 +337,7 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
         .finally(() => setSearching(false));
     }, 260);
     return () => { clearTimeout(t); ctrl.abort(); };
-  }, [query, adding]);
+  }, [query, adding, addMode]);
 
   // load live keyword opportunities for the selected app
   const loadOpps = useCallback((app: TrackedApp, signal: AbortSignal) => {
@@ -359,6 +389,7 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
       setRankings([]);
       setHistory([]);
       setRankSearch("");
+      setSimilar({});
       return;
     }
     const ctrl = new AbortController();
@@ -388,7 +419,7 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
     fetchTrackedApps().then(setTracked).catch(() => {});
   }
 
-  function startAddSync(a: AppListItem) {
+  function startAddSync(a: AppCandidate) {
     syncCancel.current?.();
     setRankLoading(true);
     setRankError(null);
@@ -468,7 +499,7 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
     });
   }
 
-  async function addApp(a: AppListItem) {
+  async function addApp(a: AppCandidate) {
     // Already tracked → select it, then hit the idempotent server add so a
     // prior generation failure can retry and a cache hit never spends again.
     const existing = tracked.find((t) => t.appId === a.id);
@@ -493,6 +524,33 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
     startAddSync(a);
   }
 
+  async function resolveUrlAdd() {
+    const id = parseStoreUrl(urlInput);
+    if (!id) {
+      setUrlError("Paste a valid App Store or Google Play app URL.");
+      return;
+    }
+    setUrlResolving(true);
+    setUrlError(null);
+    try {
+      const app = await getApp(id);
+      setConfirming({
+        id: app.id,
+        title: app.title,
+        developer: app.developer,
+        iconUrl: app.iconUrl,
+        store: app.store,
+        category: app.category,
+        rating: app.rating,
+        reviewCount: app.reviewCount,
+      });
+    } catch {
+      setUrlError("Couldn't find that app in our catalog.");
+    } finally {
+      setUrlResolving(false);
+    }
+  }
+
   async function untrack(appId: string, store: Store) {
     setTracked((prev) => prev.filter((t) => t.appId !== appId));
     if (selectedId === appId) setSelectedId(null);
@@ -504,12 +562,55 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
     }
   }
 
-  function toggleKeyword(rowId: string, kw: string) {
-    setTrackedKeywords((prev) => {
-      const cur = prev[rowId] ?? [];
-      const next = cur.includes(kw) ? cur.filter((k) => k !== kw) : [...cur, kw];
-      return { ...prev, [rowId]: next };
-    });
+  async function addKeyword(app: TrackedApp, keyword: string) {
+    const kw = keyword.trim();
+    if (!kw) return;
+    setKeywordBusy(`add:${kw.toLowerCase()}`);
+    setKeywordError(null);
+    try {
+      const data = await addTrackedAppKeyword(app.id, kw, rankCountry);
+      setRankings(data.rankings);
+      setHistory(data.history);
+      setCustomKeyword("");
+      fetchTrackedApps().then(setTracked).catch(() => {});
+    } catch (e) {
+      setKeywordError(e instanceof Error ? e.message : "Failed to add keyword");
+    } finally {
+      setKeywordBusy(null);
+    }
+  }
+
+  async function removeKeyword(app: TrackedApp, keyword: string) {
+    setKeywordBusy(`remove:${keyword}`);
+    setKeywordError(null);
+    try {
+      const data = await removeTrackedAppKeyword(app.id, keyword, rankCountry);
+      setRankings(data.rankings);
+      setHistory(data.history);
+      setSimilar((prev) => {
+        const next = { ...prev };
+        delete next[keyword];
+        return next;
+      });
+      fetchTrackedApps().then(setTracked).catch(() => {});
+    } catch (e) {
+      setKeywordError(e instanceof Error ? e.message : "Failed to remove keyword");
+    } finally {
+      setKeywordBusy(null);
+    }
+  }
+
+  async function findSimilar(app: TrackedApp, keyword: string) {
+    setKeywordBusy(`similar:${keyword}`);
+    setKeywordError(null);
+    try {
+      const ideas = await fetchTrackedAppSimilarKeywords(app.id, keyword, rankCountry);
+      setSimilar((prev) => ({ ...prev, [keyword]: ideas.filter((idea) => !trackedKeywordSet.has(idea.toLowerCase())) }));
+    } catch (e) {
+      setKeywordError(e instanceof Error ? e.message : "Failed to find similar keywords");
+    } finally {
+      setKeywordBusy(null);
+    }
   }
 
   return (
@@ -543,26 +644,87 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
 
           {adding && (
             <div className="track-add-panel">
-              <div className="search">
-                <IconSearch />
-                <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search apps to track…" spellCheck={false} />
+              <div className="track-add-modes">
+                <button className={addMode === "search" ? "on" : ""} onClick={() => { setAddMode("search"); setConfirming(null); }}>
+                  Search
+                </button>
+                <button className={addMode === "url" ? "on" : ""} onClick={() => { setAddMode("url"); setConfirming(null); }}>
+                  Paste URL
+                </button>
               </div>
-              <div className="track-add-results">
-                {searching && <div className="meter-label" style={{ padding: "8px" }}>Searching…</div>}
-                {!searching && query.trim() && searchResults.length === 0 && (
-                  <div className="meter-label" style={{ padding: "8px" }}>No apps found.</div>
-                )}
-                {searchResults.map((a) => (
-                  <button key={a.id} className="track-result" onClick={() => addApp(a)}>
-                    <AppAvatar title={a.title} iconUrl={a.iconUrl} />
-                    <div style={{ minWidth: 0 }}>
-                      <div className="t">{a.title}</div>
-                      <div className="s">{a.developer}</div>
+
+              {confirming ? (
+                <div className="track-confirm-card">
+                  <AppAvatar title={confirming.title} iconUrl={confirming.iconUrl} />
+                  <div className="track-confirm-meta">
+                    <div className="track-confirm-title">
+                      {confirming.store === "apple" ? <IconApple /> : <IconGooglePlay />}
+                      {confirming.title}
                     </div>
-                    <IconPlus className="add-mark" style={{ width: 15, height: 15 }} />
-                  </button>
-                ))}
-              </div>
+                    <div className="track-confirm-dev">{confirming.developer}</div>
+                    <div className="track-confirm-stats">
+                      <span>{confirming.category ?? "Uncategorized"}</span>
+                      <span><IconStar /> {confirming.rating != null ? confirming.rating.toFixed(1) : "—"}</span>
+                      <span>{formatCompact(confirming.reviewCount)} reviews</span>
+                    </div>
+                  </div>
+                  <div className="track-confirm-actions">
+                    <button className="btn" onClick={() => setConfirming(null)}>Cancel</button>
+                    <button className="btn btn-accent" onClick={() => addApp(confirming)}>
+                      <IconPlus /> Add app
+                    </button>
+                  </div>
+                </div>
+              ) : addMode === "search" ? (
+                <>
+                  <div className="search">
+                    <IconSearch />
+                    <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search apps to track…" spellCheck={false} />
+                  </div>
+                  <div className="track-add-results">
+                    {searching && <div className="meter-label" style={{ padding: "8px" }}>Searching…</div>}
+                    {!searching && query.trim() && searchResults.length === 0 && (
+                      <div className="meter-label" style={{ padding: "8px" }}>No apps found.</div>
+                    )}
+                    {searchResults.map((a) => (
+                      <button key={a.id} className="track-result" onClick={() => setConfirming(a)}>
+                        <AppAvatar title={a.title} iconUrl={a.iconUrl} />
+                        <div className="track-result-meta">
+                          <div className="t">{a.title}</div>
+                          <div className="s">{a.developer}</div>
+                          <div className="track-result-facts">
+                            <span>{a.category ?? "Uncategorized"}</span>
+                            <span><IconStar /> {a.rating != null ? a.rating.toFixed(1) : "—"}</span>
+                          </div>
+                        </div>
+                        <IconPlus className="add-mark" style={{ width: 15, height: 15 }} />
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="track-url-mode">
+                  <label>App Store or Google Play URL</label>
+                  <div className="track-url-row">
+                    <input
+                      autoFocus
+                      value={urlInput}
+                      onChange={(e) => { setUrlInput(e.target.value); setUrlError(null); }}
+                      onKeyDown={(e) => e.key === "Enter" && resolveUrlAdd()}
+                      placeholder="https://apps.apple.com/.../id123456789"
+                      spellCheck={false}
+                    />
+                    <button className="btn btn-accent" disabled={urlResolving || !urlInput.trim()} onClick={resolveUrlAdd}>
+                      {urlResolving ? "Finding…" : "Resolve"}
+                    </button>
+                  </div>
+                  {urlError && <div className="track-url-error">{urlError}</div>}
+                  <div className="track-url-hints">
+                    <span><IconApple /> apps.apple.com/.../id123456789</span>
+                    <span><IconGooglePlay /> play.google.com/store/apps/details?id=...</span>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -656,6 +818,11 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
                   <IconInfo /> {rankError}. Start the API server and retry.
                 </div>
               )}
+              {keywordError && (
+                <div className="notice" style={{ marginBottom: 12 }}>
+                  <IconInfo /> {keywordError}
+                </div>
+              )}
 
               {activeTab === "rankings" && (rankLoading ? (
                 <div className="opp-list">
@@ -669,6 +836,23 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
                 </div>
               ) : (
                 <>
+                  <form
+                    className="track-custom-keyword"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      addKeyword(selected, customKeyword);
+                    }}
+                  >
+                    <input
+                      value={customKeyword}
+                      onChange={(e) => setCustomKeyword(e.target.value)}
+                      placeholder={`Add keyword in ${rankCountry}`}
+                      spellCheck={false}
+                    />
+                    <button className="btn btn-accent" disabled={!customKeyword.trim() || keywordBusy?.startsWith("add:")}>
+                      <IconPlus /> Add keyword
+                    </button>
+                  </form>
                   <div className="search track-rank-search">
                     <IconSearch />
                     <input value={rankSearch} onChange={(e) => setRankSearch(e.target.value)} placeholder="Search keywords…" spellCheck={false} />
@@ -700,25 +884,48 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
                           </tr>
                         </thead>
                         <tbody>
-                          {visibleRankings.map((row) => (
-                            <tr key={row.keywordId}>
-                              <td>
-                                <button className="kw-ideas-name" onClick={() => navigate(`/dashboard/aso/keywords?q=${encodeURIComponent(row.keyword)}`)}>
-                                  {row.keyword}
-                                </button>
-                              </td>
-                              <td className="num">{row.position == null ? "Not ranked" : `#${row.position}`}</td>
-                              <td><Meter kind="popularity" label="Popularity" value={row.popularity ?? 0} /></td>
-                              <td><Meter kind="difficulty" label="Difficulty" value={row.difficulty ?? 0} /></td>
-                              <td><GrowthBadge growth={row.growth} /></td>
-                              <td><RankingAppsStack apps={row.topApps} /></td>
-                              <td className="kw-ideas-action">
-                                <button className="kw-ideas-expand" title="Open in Keyword Workspace" onClick={() => navigate(`/dashboard/aso/keywords?q=${encodeURIComponent(row.keyword)}`)}>
-                                  <IconExternal />
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
+                          {visibleRankings.map((row) => {
+                            const ideas = similar[row.keyword] ?? [];
+                            return (
+                              <tr key={row.keywordId}>
+                                <td>
+                                  <button className="kw-ideas-name" onClick={() => navigate(`/dashboard/aso/keywords?q=${encodeURIComponent(row.keyword)}`)}>
+                                    {row.keyword}
+                                  </button>
+                                  {ideas.length > 0 && (
+                                    <div className="track-similar-list">
+                                      {ideas.map((idea) => (
+                                        <button
+                                          key={idea}
+                                          type="button"
+                                          onClick={() => addKeyword(selected, idea)}
+                                          disabled={keywordBusy === `add:${idea.toLowerCase()}`}
+                                        >
+                                          <IconPlus /> {idea}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="num">{row.position == null ? "Not ranked" : `#${row.position}`}</td>
+                                <td><Meter kind="popularity" label="Popularity" value={row.popularity ?? 0} /></td>
+                                <td><Meter kind="difficulty" label="Difficulty" value={row.difficulty ?? 0} /></td>
+                                <td><GrowthBadge growth={row.growth} /></td>
+                                <td><RankingAppsStack apps={row.topApps} /></td>
+                                <td className="kw-ideas-action track-row-actions">
+                                  <button className="kw-ideas-expand" title="AI find similar keywords" disabled={keywordBusy === `similar:${row.keyword}`} onClick={() => findSimilar(selected, row.keyword)}>
+                                    <IconSpark />
+                                  </button>
+                                  <button className="kw-ideas-expand" title="Open in Keyword Workspace" onClick={() => navigate(`/dashboard/aso/keywords?q=${encodeURIComponent(row.keyword)}`)}>
+                                    <IconExternal />
+                                  </button>
+                                  <button className="kw-ideas-expand danger" title="Remove keyword" disabled={keywordBusy === `remove:${row.keyword}`} onClick={() => removeKeyword(selected, row.keyword)}>
+                                    <IconTrash />
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
@@ -763,7 +970,7 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
               ) : (
                 <div className="opp-list">
                   {opps.map((kd) => {
-                    const isTracked = selectedKeywords.includes(kd.keyword);
+                    const isTracked = trackedKeywordSet.has(kd.keyword.toLowerCase());
                     return (
                       <div key={kd.keyword} className="opp-row">
                         <span
@@ -778,7 +985,7 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
                         <Meter kind="difficulty" label="Difficulty" value={kd.difficulty} />
                         <Meter kind="popularity" label="Popularity" value={kd.popularity} />
                         <OpportunityBadge score={kd.opportunityScore} />
-                        <button className={`track-btn ${isTracked ? "on" : ""}`} onClick={() => toggleKeyword(selected.id, kd.keyword)}>
+                        <button className={`track-btn ${isTracked ? "on" : ""}`} disabled={isTracked || keywordBusy === `add:${kd.keyword.toLowerCase()}`} onClick={() => addKeyword(selected, kd.keyword)}>
                           {isTracked ? <><IconCheck /> Tracked</> : <><IconPlus /> Track</>}
                         </button>
                       </div>

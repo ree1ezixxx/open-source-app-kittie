@@ -1,4 +1,6 @@
 import {
+  addKeywordForTrackedApp,
+  deleteKeywordForTrackedApp,
   getAppRowById,
   getGeneratedKeywordInputHash,
   getTrackedApp,
@@ -23,7 +25,7 @@ import type { Store } from "@kittie/types";
 
 import { getDb } from "../lib/db.js";
 import { cachedGenerate, generate, hashInput, isGeminiConfigured } from "../lib/gemini.js";
-import { SUPPORTED_MARKETS } from "./keyword-service.js";
+import { getKeywordDifficulty, getRelatedKeywords, SUPPORTED_MARKETS } from "./keyword-service.js";
 
 const GENERATED_KEYWORD_KIND = "tracked_app_keywords";
 const GENERATED_KEYWORD_LIMIT = 250;
@@ -212,6 +214,65 @@ export async function removeTrackedApp(
   country: string,
 ): Promise<void> {
   await dbUntrackApp(getDb(), appId, store, country);
+}
+
+export async function addCustomKeywordToTrackedApp(
+  trackedAppId: string,
+  keyword: string,
+  country: string,
+): Promise<TrackedAppRankingsResult | null> {
+  const normalized = normalizeKeyword(keyword);
+  if (!normalized) throw new Error("keyword is invalid");
+
+  const db = getDb();
+  const tracked = await getTrackedAppById(db, trackedAppId);
+  if (!tracked) return null;
+
+  const market = country.toUpperCase();
+  await getKeywordDifficulty(normalized, market, tracked.store, { forceRefresh: true });
+  await addKeywordForTrackedApp(db, {
+    trackedAppId,
+    appId: tracked.appId,
+    store: tracked.store,
+    country: market,
+    keyword: normalized,
+    inputHash: `custom:${market}`,
+    source: "custom",
+  });
+
+  return listRankingsForTrackedApp(trackedAppId, { country: market, forceRefresh: true });
+}
+
+export async function removeKeywordFromTrackedApp(
+  trackedAppId: string,
+  keyword: string,
+  country: string,
+): Promise<TrackedAppRankingsResult | null> {
+  const normalized = normalizeKeyword(keyword);
+  if (!normalized) throw new Error("keyword is invalid");
+
+  const db = getDb();
+  const tracked = await getTrackedAppById(db, trackedAppId);
+  if (!tracked) return null;
+
+  await deleteKeywordForTrackedApp(db, trackedAppId, normalized);
+  return listRankingsForTrackedApp(trackedAppId, { country: country.toUpperCase() });
+}
+
+export async function findSimilarTrackedAppKeywords(
+  trackedAppId: string,
+  keyword: string,
+  country: string,
+  limit = 8,
+): Promise<string[] | null> {
+  const normalized = normalizeKeyword(keyword);
+  if (!normalized) throw new Error("keyword is invalid");
+
+  const tracked = await getTrackedAppById(getDb(), trackedAppId);
+  if (!tracked) return null;
+
+  const ideas = await getRelatedKeywords(normalized, country.toUpperCase(), tracked.store, limit);
+  return normalizeGeneratedKeywords(ideas, limit).filter((idea) => idea !== normalized);
 }
 
 export interface TrackedAppRankingsResult {
