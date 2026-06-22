@@ -267,6 +267,22 @@ function positionDelta(current: number | null, previous: number | null): number 
   return previous - current;
 }
 
+function dailyRankObservations(
+  rankingRows: Array<{ rank: number | null; observedAt: Date }>,
+): Array<{ rank: number | null; observedAt: Date }> {
+  const latestByDay = new Map<string, { rank: number | null; observedAt: Date }>();
+
+  for (const row of rankingRows) {
+    const key = dayKey(row.observedAt);
+    const current = latestByDay.get(key);
+    if (!current || row.observedAt > current.observedAt) {
+      latestByDay.set(key, row);
+    }
+  }
+
+  return [...latestByDay.values()].sort((a, b) => a.observedAt.getTime() - b.observedAt.getTime());
+}
+
 export function buildPositionHistorySeries(input: {
   generated: GeneratedTrackedAppKeyword[];
   rankingRows: Array<{ keywordId: string; rank: number | null; observedAt: Date }>;
@@ -284,7 +300,7 @@ export function buildPositionHistorySeries(input: {
   return input.generated.map((row) => {
     const rowCountry = market ?? row.country;
     const keywordId = makeKeywordLookupId(row.store, rowCountry, row.keyword);
-    const rows = [...(byKeyword.get(keywordId) ?? [])].sort((a, b) => a.observedAt.getTime() - b.observedAt.getTime());
+    const rows = dailyRankObservations(byKeyword.get(keywordId) ?? []);
     let previousRank: number | null | undefined;
 
     return {

@@ -63,6 +63,25 @@ describe("buildPositionHistorySeries", () => {
     ]);
   });
 
+  it("collapses duplicate same-day observations before computing deltas", () => {
+    const series = buildPositionHistorySeries({
+      generated,
+      rankingRows: [
+        { keywordId: "apple:US:learn spanish", rank: 8, observedAt: new Date("2026-06-20T12:00:00Z") },
+        { keywordId: "apple:US:learn spanish", rank: 4, observedAt: new Date("2026-06-21T09:00:00Z") },
+        { keywordId: "apple:US:learn spanish", rank: 5, observedAt: new Date("2026-06-21T16:00:00Z") },
+        { keywordId: "apple:US:learn spanish", rank: 7, observedAt: new Date("2026-06-22T12:00:00Z") },
+      ],
+      country: "US",
+    });
+
+    expect(series[0]?.points).toEqual([
+      { date: "2026-06-20", position: 8, delta: null },
+      { date: "2026-06-21", position: 5, delta: 3 },
+      { date: "2026-06-22", position: 7, delta: -2 },
+    ]);
+  });
+
   it("keeps one-day data honest with no fabricated delta", () => {
     const series = buildPositionHistorySeries({
       generated,
