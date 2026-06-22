@@ -23,6 +23,12 @@ const ZERO_DECIMAL = new Set([
   "XOF", "XAF", "BIF", "DJF", "VUV", "MGA", "STN", "SOS", "SSP", "KZT", "AMD",
 ]);
 const MAX_PRICES = 4;
+const FEATURES = [
+  "Calculate multiple pricing tiers simultaneously",
+  "Export localized pricing data to JSON",
+  "Copy pricing data directly to clipboard",
+  "Based on real-world purchasing power parity (PPP)",
+];
 
 /** Charm-rounded local price (e.g. $2.99, ₹229, ¥980). */
 function charm(value: number, currency: string): number {
@@ -55,6 +61,8 @@ export function PricingCalculatorPage() {
   const [prices, setPrices] = useState<number[]>([9.99]);
   const [search, setSearch] = useState("");
   const [copied, setCopied] = useState(false);
+  const [view, setView] = useState<"all" | "tabs">("all");
+  const [activePriceIndex, setActivePriceIndex] = useState(0);
 
   const rows = useMemo(() => {
     const needle = search.trim().toLowerCase();
@@ -65,6 +73,8 @@ export function PricingCalculatorPage() {
   }, [search]);
 
   const validPrices = prices.filter((p) => p > 0);
+  const activePrice = validPrices[Math.min(activePriceIndex, Math.max(validPrices.length - 1, 0))];
+  const visiblePrices = view === "tabs" && activePrice ? [activePrice] : validPrices;
 
   function setPrice(i: number, raw: string) {
     const v = parseFloat(raw);
@@ -75,6 +85,7 @@ export function PricingCalculatorPage() {
   }
   function removePrice(i: number) {
     setPrices((p) => (p.length <= 1 ? p : p.filter((_, idx) => idx !== i)));
+    setActivePriceIndex((idx) => Math.max(0, Math.min(idx, prices.length - 2)));
   }
 
   function buildExport() {
@@ -113,21 +124,47 @@ export function PricingCalculatorPage() {
 
   return (
     <main className="main">
-      <StudioHeader
-        icon={<IconCoin style={{ width: 18, height: 18 }} />}
-        title="Pricing Calculator"
-        subtitle={`Purchasing-power-adjusted prices across ${COUNTRIES.length} countries · works offline`}
-        count={COUNTRIES.length}
-      />
-
       <div className="ppp-wrap">
         <div className="ppp-inner">
+          <section className="ppp-hero">
+            <div className="ppp-hero-kicker">Free tool</div>
+            <h1>App Pricing Calculator for Global Markets</h1>
+            <p>
+              Use our free App Pricing Calculator to determine the perfect localized price for your mobile app or SaaS
+              product across 190+ countries. We use a global purchasing power index based on real-world digital product
+              pricing to ensure your app remains affordable and competitive globally. Stop guessing your App Store and
+              Google Play pricing tiers. Input your base US dollar (USD) price, and instantly get proportional, fair
+              pricing for international markets.
+            </p>
+            <div className="ppp-feature-grid" aria-label="Pricing calculator features">
+              {FEATURES.map((feature) => (
+                <div className="ppp-feature" key={feature}>
+                  <IconCheck />
+                  <span>{feature}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <StudioHeader
+            icon={<IconCoin style={{ width: 18, height: 18 }} />}
+            title="Pricing Calculator"
+            subtitle="Calculate localized prices based on global purchasing power"
+            count={COUNTRIES.length}
+          />
+
           {/* ---------------- controls ---------------- */}
           <div className="ppp-controls">
+            <div className="ppp-explain">
+              <strong>How is this calculated?</strong> We use a global purchasing power index based on real-world
+              digital product pricing across different countries. By inputting your standard US price, we calculate a
+              proportionally fair price for every other country and convert it to the local currency.
+            </div>
+            <div className="ppp-section-label">Base Prices (USD)</div>
             <div className="ppp-prices">
               {prices.map((p, i) => (
                 <div className="ppp-price" key={i}>
-                  <label>Base price {prices.length > 1 ? i + 1 : ""}</label>
+                  <label>{prices.length > 1 ? `Price ${i + 1}` : "USD price"}</label>
                   <div className="ppp-price-input">
                     <span className="pre">$</span>
                     <input
@@ -148,7 +185,7 @@ export function PricingCalculatorPage() {
               ))}
               {prices.length < MAX_PRICES && (
                 <button className="btn" onClick={addPrice} style={{ height: 38 }}>
-                  <IconPlus /> Add price
+                  <IconPlus /> Add Price
                 </button>
               )}
             </div>
@@ -169,6 +206,32 @@ export function PricingCalculatorPage() {
           </div>
 
           {/* ---------------- table ---------------- */}
+          <div className="ppp-results-head">
+            <div>
+              <div className="ppp-results-title">Localized Prices</div>
+              <div className="ppp-results-sub">
+                {rows.length} {rows.length === 1 ? "country" : "countries"} · {validPrices.length}{" "}
+                {validPrices.length === 1 ? "base price" : "base prices"}
+              </div>
+            </div>
+            <div className="ppp-view-toggle" aria-label="Price view">
+              <button className={view === "all" ? "on" : ""} onClick={() => setView("all")}>All</button>
+              <button className={view === "tabs" ? "on" : ""} onClick={() => setView("tabs")}>Tabs</button>
+            </div>
+          </div>
+          {view === "tabs" && validPrices.length > 1 && (
+            <div className="ppp-price-tabs" aria-label="Base price tabs">
+              {validPrices.map((base, i) => (
+                <button
+                  key={`${base}-${i}`}
+                  className={i === Math.min(activePriceIndex, validPrices.length - 1) ? "on" : ""}
+                  onClick={() => setActivePriceIndex(i)}
+                >
+                  ${base.toFixed(2)} USD
+                </button>
+              ))}
+            </div>
+          )}
           {validPrices.length === 0 ? (
             <StudioEmptyState
               icon={<IconCoin />}
@@ -182,9 +245,9 @@ export function PricingCalculatorPage() {
               <table className="ppp-table">
                 <thead>
                   <tr>
-                    <th>Country</th>
-                    <th>Currency</th>
-                    {validPrices.map((base, i) => (
+                    <th>COUNTRY</th>
+                    <th>CURRENCY</th>
+                    {visiblePrices.map((base, i) => (
                       <th className="num" key={i}>${base.toFixed(2)} USD</th>
                     ))}
                   </tr>
@@ -201,7 +264,7 @@ export function PricingCalculatorPage() {
                       <td>
                         <span className="ppp-cc">{c.currency}</span>
                       </td>
-                      {validPrices.map((base, i) => {
+                      {visiblePrices.map((base, i) => {
                         const { local } = localize(base, c);
                         return (
                           <td className="num" key={i}>
