@@ -33,6 +33,7 @@ import { getDb } from "../lib/db.js";
 /** Drop in-memory list/sparkline/rank caches so Explore picks up new snapshot days. */
 export function invalidateAppReadCaches(): void {
   cachedMaxDate.clear();
+  cachedCategoryFacets = null;
 }
 
 // Upper bound on apps materialized + scored per /apps request. Explore, Highlights
@@ -53,6 +54,8 @@ const POOL_CAP = 5000;
 // the in-process manual/CLI path.
 const MAX_DATE_TTL_MS = 5 * 60_000;
 const cachedMaxDate = new Map<string, { value: string | null; at: number }>();
+const CATEGORY_FACET_TTL_MS = 30 * 60_000;
+let cachedCategoryFacets: { value: CategoryFacet[]; at: number } | null = null;
 const SNAPSHOT_LOOKBACK_DAYS = 14;
 const MIN_COMPLETE_SNAPSHOT_ROWS = 1000;
 const MIN_COMPLETE_SNAPSHOT_RATIO = 0.8;
@@ -387,6 +390,10 @@ export interface CategoryFacet {
 }
 
 export async function listCategoryFacetsFromDb(): Promise<CategoryFacet[]> {
+  if (cachedCategoryFacets && Date.now() - cachedCategoryFacets.at < CATEGORY_FACET_TTL_MS) {
+    return cachedCategoryFacets.value;
+  }
+
   const rows = await getDb().select({ category: apps.category, store: apps.store }).from(apps);
   const map = new Map<string, Set<Store>>();
   for (const r of rows) {
@@ -395,9 +402,11 @@ export async function listCategoryFacetsFromDb(): Promise<CategoryFacet[]> {
     set.add(r.store as Store);
     map.set(r.category, set);
   }
-  return [...map.entries()]
+  const facets = [...map.entries()]
     .map(([name, stores]) => ({ name, stores: [...stores] }))
     .sort((a, b) => a.name.localeCompare(b.name));
+  cachedCategoryFacets = { value: facets, at: Date.now() };
+  return facets;
 }
 
 export async function getRankDeltasFor(ids: string[], country = "US"): Promise<Map<string, number>> {

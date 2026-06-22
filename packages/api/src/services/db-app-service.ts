@@ -33,6 +33,7 @@ import type {
 import { getDb } from "../lib/db.js";
 import { buildScoredAppRows, listItemFromContext } from "./app-list-scoring.js";
 import {
+  invalidateAppReadCaches as invalidateAppQueryReadCaches,
   getRankDeltasFor,
   getSparklinesFor,
   listCategoryFacetsFromDb,
@@ -40,8 +41,33 @@ import {
 } from "./app-query.js";
 import { matchesSearch, paginateApps, sortApps, hasLiveGrowthFilter } from "./filter-sort.js";
 
-export { invalidateAppReadCaches } from "./app-query.js";
 export type { CategoryFacet } from "./app-query.js";
+
+const APP_SEARCH_CACHE_TTL_MS = 60_000;
+const APP_SEARCH_CACHE_MAX = 100;
+const appSearchCache = new Map<string, { value: PaginatedResponse<AppListItem>; at: number }>();
+
+export function invalidateAppReadCaches(): void {
+  appSearchCache.clear();
+  invalidateAppQueryReadCaches();
+}
+
+function appSearchCacheKey(params: AppSearchParams): string {
+  return JSON.stringify(
+    Object.entries(params)
+      .filter(([, value]) => value !== undefined && value !== null && value !== "")
+      .sort(([a], [b]) => a.localeCompare(b)),
+  );
+}
+
+function rememberAppSearch(key: string, value: PaginatedResponse<AppListItem>): PaginatedResponse<AppListItem> {
+  appSearchCache.set(key, { value, at: Date.now() });
+  if (appSearchCache.size > APP_SEARCH_CACHE_MAX) {
+    const oldest = appSearchCache.keys().next().value;
+    if (oldest) appSearchCache.delete(oldest);
+  }
+  return value;
+}
 
 function toIso(d: Date | null | undefined): string | null {
   return d ? d.toISOString() : null;
@@ -100,9 +126,13 @@ export async function estimateChartEntries(
 }
 
 export async function searchAppsFromDb(params: AppSearchParams): Promise<PaginatedResponse<AppListItem>> {
+  const cacheKey = appSearchCacheKey(params);
+  const cached = appSearchCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < APP_SEARCH_CACHE_TTL_MS) return cached.value;
+
   const period = params.growthPeriod ?? "7d";
   const pool = await searchAppCandidates(params);
-  if (!pool) return { data: [], pagination: { nextCursor: null, totalCount: 0 } };
+  if (!pool) return rememberAppSearch(cacheKey, { data: [], pagination: { nextCursor: null, totalCount: 0 } });
 
   const { totalCount, ids, marketCountry } = pool;
   const rankDeltas = await getRankDeltasFor(ids, marketCountry);
@@ -119,10 +149,10 @@ export async function searchAppsFromDb(params: AppSearchParams): Promise<Paginat
 
   const reportedTotal = hasLiveGrowthFilter(params) ? filtered.length : totalCount;
 
-  return {
+  return rememberAppSearch(cacheKey, {
     data: withSparkline,
     pagination: { nextCursor, totalCount: reportedTotal },
-  };
+  });
 }
 
 function mapRelations(
