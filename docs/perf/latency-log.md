@@ -66,6 +66,32 @@ Suite p95 (mixed) moves 605→562ms only, because the suite also contains the li
 real but concentrated on the SQL-native-desc sorts; the **default `revenue` Explore view
 is unchanged by design** (Rhodri chose the pure-win option, deferring the revenue floor).
 
+## Experiment 4 — precompute revenue at ingest (PROTOTYPE → REVERTED)
+Backfilled `revenue_estimate`/`downloads_estimate`/`growth_score` onto all 1.1M rows of
+`2026-06-19` using the API's exact `buildScoredAppRows` (so persisted == live), added
+`(snapshot_date, revenue_estimate)`, and flipped `sortBy=revenue` to order by the column
++ score-only-page. Two findings killed it:
+
+1. **It regressed latency**: revenue cold **0.41 → 0.67s**, suite p95 562 → **821ms**.
+   The bottleneck for revenue was never the live scoring — it's the **`LIMIT 5000`
+   candidate scan**. Ordering by `revenue_estimate` (+ rating filter → table lookups)
+   scans *worse* than the well-worn `(snapshot_date, review_count)` proxy index, and
+   score-only-page can't compensate because the scan still walks 5000 rows.
+2. **It changed rankings** (parity gate caught it): the true top-50-by-revenue ≠ the old
+   "re-rank the top-5000-by-reviews" approximation — NEW surfaces high-revenue / lower-
+   review apps the old pool excluded. More correct, but a visible change to the default
+   Explore view.
+
+→ Reverted the sort-flip (revenue back to the reviewCount-proxy, 0.41s) and dropped the
+revenue index. The backfill script `packages/api/src/scripts/backfill-estimates.ts` is
+kept as a tool but unwired.
+
+**The actual lever (not yet done):** push pagination INTO SQL — keyset cursor so the
+candidate query is `LIMIT pageSize` (~50), not `LIMIT 5000`. Then the scan is ~50 rows
+for *any* sort column (reviews/rating/revenue), and combined with the revenue precompute
+the default view goes SQL-native + fast. This is a larger refactor (cursor encoding →
+carry the sort value; keyset WHERE) and is the real path to ≤200ms on the default view.
+
 ## Architectural floor (the remaining gap to 200ms)
 Per-sort cold timings are now uniform ~0.4–0.6s — the cost is `buildScoredAppRows`
 loading + scoring the **~5000-row candidate pool**, not any one sort. `reviews`/`rating`
