@@ -1,3 +1,6 @@
+export * from "./provenance.js";
+export * from "./decision-packet.js";
+
 /** Store identifier — one App per store listing. */
 export type Store = "apple" | "google";
 
