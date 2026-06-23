@@ -122,7 +122,7 @@ export function buildAppCanvasGraph(
         { label: "Price", value: app.price != null && app.price > 0 ? formatMoney(app.price) : "Free" },
         { label: "Updated", value: app.updatedAt ? new Date(app.updatedAt).toLocaleDateString() : "—" },
       ],
-      empty: !app.screenshotUrls?.length,
+      empty: !(app.screenshotUrls?.length || app.developer || app.updatedAt),
     },
     reviews: {
       reviews: reviews.slice(0, 3),

@@ -9,7 +9,15 @@ import { CANVAS_PROTOTYPE_APP_IDS } from "../lib/canvasPrototypeApps";
 import { formatCompact, formatMoney } from "../lib/format";
 import type { Theme } from "../lib/theme";
 
-type Card = AppListItem & { loading?: false };
+type Card = AppListItem;
+type GridItem =
+  | { id: string; loading: true }
+  | { id: string; error: true }
+  | Card;
+
+function isLoadedCard(item: GridItem): item is Card {
+  return !("loading" in item) && !("error" in item);
+}
 
 function MiniSparkline({ values }: { values: number[] }) {
   const max = Math.max(...values, 1);
@@ -23,20 +31,23 @@ function MiniSparkline({ values }: { values: number[] }) {
 }
 
 export function CanvasGridPage({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => void }) {
-  const [cards, setCards] = useState<(Card | { id: string; loading: true })[]>(
+  const [cards, setCards] = useState<GridItem[]>(
     CANVAS_PROTOTYPE_APP_IDS.map((id) => ({ id, loading: true as const })),
   );
+  const [gridError, setGridError] = useState<string | null>(null);
 
   useEffect(() => {
     const ac = new AbortController();
-    Promise.all(CANVAS_PROTOTYPE_APP_IDS.map((id) => getApp(id, ac.signal)))
-      .then((apps) => {
-        if (ac.signal.aborted) return;
-        setCards(apps);
-      })
-      .catch(() => {
-        if (!ac.signal.aborted) setCards([]);
+    Promise.allSettled(CANVAS_PROTOTYPE_APP_IDS.map((id) => getApp(id, ac.signal))).then((results) => {
+      if (ac.signal.aborted) return;
+      const next: GridItem[] = results.map((result, i) => {
+        const id = CANVAS_PROTOTYPE_APP_IDS[i]!;
+        if (result.status === "fulfilled") return result.value;
+        return { id, error: true as const };
       });
+      setCards(next);
+      setGridError(next.every((c) => "error" in c && c.error) ? "Could not load any prototype apps. Check the API and retry." : null);
+    });
     return () => ac.abort();
   }, []);
 
@@ -49,11 +60,22 @@ export function CanvasGridPage({ theme, onToggleTheme }: { theme: Theme; onToggl
       onToggleTheme={onToggleTheme}
       bodyClass="canvas-grid-page"
     >
+      {gridError && <div className="error-banner">{gridError}</div>}
       <div className="canvas-prototype-grid">
-        {cards.map((c) =>
-          "loading" in c && c.loading ? (
-            <div key={c.id} className="surface-card surface-card--loading skel" />
-          ) : (
+        {cards.map((c) => {
+          if ("loading" in c && c.loading) {
+            return <div key={c.id} className="surface-card surface-card--loading skel" />;
+          }
+          if ("error" in c && c.error) {
+            return (
+              <div key={c.id} className="surface-card surface-card--error">
+                <p className="surface-card-title">Could not load app</p>
+                <p className="surface-card-sub">{c.id}</p>
+              </div>
+            );
+          }
+          if (!isLoadedCard(c)) return null;
+          return (
             <Link
               key={c.id}
               to={`/dashboard/canvas/${encodeURIComponent(c.id)}`}
@@ -86,8 +108,8 @@ export function CanvasGridPage({ theme, onToggleTheme }: { theme: Theme; onToggl
                 <span className="surface-card-arrow">→</span>
               </footer>
             </Link>
-          ),
-        )}
+          );
+        })}
       </div>
     </PageShell>
   );

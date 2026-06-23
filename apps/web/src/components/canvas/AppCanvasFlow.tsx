@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { ReactFlow, Background, type NodeTypes } from "@xyflow/react";
+import { useEffect, useMemo } from "react";
+import { ReactFlow, Background, useEdgesState, useNodesState, type NodeTypes } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import type { AppDetail, AppListItem, Review } from "@kittie/types";
 import { buildAppCanvasGraph } from "../../lib/buildAppCanvasGraph";
@@ -20,16 +20,25 @@ export function AppCanvasFlow({
   reviews: Review[];
   similar: AppListItem[];
 }) {
-  const { nodes, edges } = useMemo(
+  const graph = useMemo(
     () => buildAppCanvasGraph(app, reviews, similar),
     [app, reviews, similar],
   );
+  const [nodes, setNodes, onNodesChange] = useNodesState(graph.nodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(graph.edges);
+
+  useEffect(() => {
+    setNodes(graph.nodes);
+    setEdges(graph.edges);
+  }, [graph, setNodes, setEdges]);
 
   return (
     <div className="canvas-flow-wrap">
       <ReactFlow
         nodes={nodes}
         edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
         nodeTypes={nodeTypes}
         fitView
         fitViewOptions={{ padding: 0.25, maxZoom: 1 }}

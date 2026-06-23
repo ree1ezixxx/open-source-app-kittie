@@ -1307,6 +1307,12 @@ table.apps tbody tr:hover .col-app .app-title { color: var(--accent-text); }
 .surface-card--interactive:hover .surface-card-shine { opacity: 1; }
 .surface-card--interactive:hover .surface-card-arrow { transform: translateX(3px); color: var(--accent-text); }
 .surface-card--loading { min-height: 220px; }
+.surface-card--error {
+  min-height: 160px;
+  padding: 18px;
+  border-style: dashed;
+  color: var(--text-secondary);
+}
 .surface-card-shine {
   pointer-events: none;
   position: absolute;
