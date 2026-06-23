@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { appStoreUrl, synthesizeOpportunity, type MarketApp } from "./intent.js";
+import { KITTIE_TOOL_NAMES } from "./tools.js";
 
 const apps: MarketApp[] = [
   { id: "apple:389801252", store: "apple", title: "Instagram", rating: 4.7, reviewCount: 28_000_000 },
@@ -58,5 +59,25 @@ describe("synthesizeOpportunity", () => {
     const thin = synthesizeOpportunity({ ...base, apps: apps.slice(0, 1), reviewThemes: null });
     expect(crowded.decision).toMatch(/crowded/);
     expect(crowded.confidence.score).toBeGreaterThan(thin.confidence.score);
+  });
+
+  it("only ever recommends tools that are actually registered (no phantom rails)", () => {
+    const cases: MarketApp[][] = [apps, [], apps.slice(0, 1)];
+    for (const a of cases) {
+      for (const hasBuildContext of [false, true]) {
+        const p = synthesizeOpportunity({ ...base, apps: a, reviewThemes: null, hasBuildContext });
+        expect(p.recommendedActions.length).toBeGreaterThan(0);
+        for (const action of p.recommendedActions) {
+          expect(KITTIE_TOOL_NAMES).toContain(action.tool);
+        }
+      }
+    }
+  });
+
+  it("only steers to start_mobile_build when no build context exists yet", () => {
+    const fresh = synthesizeOpportunity({ ...base, apps, reviewThemes: null, hasBuildContext: false });
+    const ongoing = synthesizeOpportunity({ ...base, apps, reviewThemes: null, hasBuildContext: true });
+    expect(fresh.recommendedActions.some((a) => a.tool === "start_mobile_build")).toBe(true);
+    expect(ongoing.recommendedActions.some((a) => a.tool === "start_mobile_build")).toBe(false);
   });
 });

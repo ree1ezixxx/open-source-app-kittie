@@ -5,7 +5,7 @@
  * build context. Honesty: every observed claim carries a store URL; blocked
  * sources are named in `coverage.missing`, never fabricated.
  */
-import type { DecisionPacket, Evidence } from "@kittie/types";
+import type { DecisionPacket, Evidence, RecommendedAction } from "@kittie/types";
 import { buildDecisionPacket } from "@kittie/intelligence";
 
 /** The subset of a market-app row the synthesis needs. */
@@ -33,6 +33,8 @@ export interface OpportunityInput {
   /** ISO-8601 instant the data was observed. */
   observedAt: string;
   snapshotId: string;
+  /** Whether a `.kittie/` build context already exists — drives the next-tool rails. */
+  hasBuildContext?: boolean;
 }
 
 /** Threshold above which a niche is treated as crowded. */
@@ -44,7 +46,7 @@ const SATURATED_AT = 20;
  * declared gap (blocked source); review themes are a gap until mined.
  */
 export function synthesizeOpportunity(input: OpportunityInput): DecisionPacket {
-  const { niche, apps, reviewThemes, observedAt, snapshotId } = input;
+  const { niche, apps, reviewThemes, observedAt, snapshotId, hasBuildContext = false } = input;
 
   const top = [...apps].sort((a, b) => b.reviewCount - a.reviewCount).slice(0, 5);
   const evidence: Evidence[] = top.map((app) => ({
@@ -79,6 +81,45 @@ export function synthesizeOpportunity(input: OpportunityInput): DecisionPacket {
   const unknowns = count === 0 ? ["actual user demand for this niche"] : [];
   const score = Math.min(0.9, 0.3 + count * 0.03);
 
+  // Next-tool rails — every `tool` MUST be a real registered Kittie tool (see
+  // tools.ts; an invariant test enforces this). Persist the idea first when no
+  // build context exists yet, so the loop can start accumulating.
+  const recommendedActions: RecommendedAction[] = [];
+  if (!hasBuildContext) {
+    recommendedActions.push({
+      tool: "start_mobile_build",
+      reason: "Persist this idea so every later Kittie call shares the same project context.",
+      estimatedCost: 0,
+    });
+  }
+  if (count === 0) {
+    recommendedActions.push(
+      {
+        tool: "search_apps",
+        reason: "Broaden the search — this phrasing may be too narrow; confirm whether competitors exist at all.",
+        estimatedCost: 0.02,
+      },
+      {
+        tool: "get_related_keywords",
+        reason: "Gauge whether there is real search demand for this niche before committing.",
+        estimatedCost: 0.03,
+      },
+    );
+  } else {
+    recommendedActions.push(
+      {
+        tool: "get_app_reviews",
+        reason: "Pull a top competitor's reviews to turn their complaints into a feature backlog.",
+        estimatedCost: 0.05,
+      },
+      {
+        tool: "get_related_keywords",
+        reason: "Find winnable ASO keywords for the niche, then score them with batch_keyword_difficulty.",
+        estimatedCost: 0.03,
+      },
+    );
+  }
+
   return buildDecisionPacket({
     decision,
     evidence,
@@ -88,10 +129,7 @@ export function synthesizeOpportunity(input: OpportunityInput): DecisionPacket {
     },
     assumptions: [],
     unknowns,
-    recommendedActions: [
-      { tool: "mine_reviews", reason: "Turn competitor complaints into a feature backlog", estimatedCost: 0.05 },
-      { tool: "aso_keywords", reason: "Find winnable keywords before naming the app", estimatedCost: 0.03 },
-    ],
+    recommendedActions,
     snapshotId,
     missing,
   });
