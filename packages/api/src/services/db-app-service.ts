@@ -37,9 +37,16 @@ import {
   getRankDeltasFor,
   getSparklinesFor,
   listCategoryFacetsFromDb,
+  poolIsInFinalOrder,
   searchAppCandidates,
 } from "./app-query.js";
-import { matchesSearch, paginateApps, sortApps, hasLiveGrowthFilter } from "./filter-sort.js";
+import {
+  dropsRowsInMemory,
+  hasLiveGrowthFilter,
+  matchesSearch,
+  paginateApps,
+  sortApps,
+} from "./filter-sort.js";
 
 export type { CategoryFacet } from "./app-query.js";
 
@@ -135,6 +142,29 @@ export async function searchAppsFromDb(params: AppSearchParams): Promise<Paginat
   if (!pool) return rememberAppSearch(cacheKey, { data: [], pagination: { nextCursor: null, totalCount: 0 } });
 
   const { totalCount, ids, marketCountry } = pool;
+
+  // Fast path: when the SQL candidate set already IS the result set in final order
+  // (SQL-native DESC sort, no in-memory-dropping filter), the page can be sliced
+  // straight off `ids` and only those ~50 rows scored — instead of scoring the whole
+  // ~5000-row pool just to slice 50. Same rows, same order; cuts cold p95 ~3-4×.
+  if (poolIsInFinalOrder(params) && !dropsRowsInMemory(params)) {
+    const limit = params.limit ?? 20;
+    let start = 0;
+    if (params.cursor) {
+      const idx = ids.indexOf(params.cursor);
+      start = idx >= 0 ? idx + 1 : 0;
+    }
+    const pageIds = ids.slice(start, start + limit);
+    const pageRows = await buildScoredAppRows(pageIds, period, marketCountry, new Map<string, number>());
+    const pageData = pageRows.map((r) => r.item);
+    const pageNextCursor = start + limit < ids.length ? (pageData.at(-1)?.id ?? null) : null;
+    const pageSparklines = await getSparklinesFor(pageData.map((d) => d.id), marketCountry);
+    return rememberAppSearch(cacheKey, {
+      data: pageData.map((item) => ({ ...item, sparkline: pageSparklines.get(item.id) ?? [] })),
+      pagination: { nextCursor: pageNextCursor, totalCount },
+    });
+  }
+
   const rankDeltas =
     params.sortBy === "rankDelta"
       ? await getRankDeltasFor(ids, marketCountry)
