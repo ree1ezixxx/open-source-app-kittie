@@ -7,7 +7,10 @@ import type {
   Store,
   TextSearchField,
 } from "@kittie/types";
+import { sevenDayReleasedAfterEpoch } from "@kittie/types";
 import { formatCompact, formatMoney } from "./format";
+
+export { sevenDayReleasedAfterEpoch };
 
 export type SearchScope = "all" | TextSearchField;
 
@@ -170,12 +173,8 @@ const daysAgoEpoch = (d?: number) =>
 
 /** Default Explore `/apps` params (empty URL) — prefetch must match or cache misses. */
 export function defaultExploreApiParams(): AppSearchParams {
+  // Field-for-field aligned with defaultExploreAppQuery in @kittie/types (API warm-cache).
   return toApiParams(EMPTY_FILTERS);
-}
-
-/** Shared 7-day release cutoff for Pulse / Highlights prefetch keys. */
-export function sevenDayReleasedAfterEpoch(): number {
-  return Math.floor((Date.now() - 7 * 86_400_000) / 1000);
 }
 
 /** Map filter state to the REST `/apps` query params. */

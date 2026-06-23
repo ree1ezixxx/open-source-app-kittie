@@ -2,18 +2,14 @@ import { Link } from "react-router-dom";
 import { PageShell } from "../components/PageShell";
 import { Widget } from "../components/Widget";
 import { RankList } from "../components/RankList";
-import { useApps } from "../hooks/useApps";
-import { sevenDayReleasedAfterEpoch } from "../lib/exploreFilters";
+import { usePulseBriefing } from "../hooks/usePulseBriefing";
 import { IconTrending } from "../icons";
 import { formatCompact } from "../lib/format";
 import type { Theme } from "../lib/theme";
 
 /** Proactive briefing — surfaces “what moved” from existing snapshot data. */
 export function PulsePage({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => void }) {
-  const releasedAfter = sevenDayReleasedAfterEpoch();
-  const bigHits = useApps({ sortBy: "reviews", sortOrder: "desc", releasedAfter });
-  const gainers = useApps({ sortBy: "rankDelta", sortOrder: "desc" });
-  const losers = useApps({ sortBy: "rankDelta", sortOrder: "asc" });
+  const { bigHits, gainers, losers } = usePulseBriefing();
 
   const topDelta = gainers.apps[0]?.rankDelta;
   const sub =

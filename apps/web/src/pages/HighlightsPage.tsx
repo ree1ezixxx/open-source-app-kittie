@@ -5,6 +5,7 @@ import { PageShell } from "../components/PageShell";
 import { Widget } from "../components/Widget";
 import { RankList } from "../components/RankList";
 import { useApps } from "../hooks/useApps";
+import { sevenDayReleasedAfterEpoch } from "../lib/exploreFilters";
 import { IconSpark } from "../icons";
 import type { Theme } from "../lib/theme";
 
@@ -39,7 +40,7 @@ export function HighlightsPage({ theme, onToggleTheme }: { theme: Theme; onToggl
     appleOn && !googleOn ? "apple" : googleOn && !appleOn ? "google" : undefined;
 
   // New Big Hits — newly released apps by review volume (truth: reviews/desc/7d).
-  const releasedAfter = useMemo(() => Math.floor((Date.now() - 7 * 86_400_000) / 1000), []);
+  const releasedAfter = useMemo(() => sevenDayReleasedAfterEpoch(), []);
   const bigHits = useApps({ sortBy: "reviews", sortOrder: "desc", source, releasedAfter });
   // Top Gainers / Losers — ranked by real chart-rank movement between the two
   // latest snapshot days (the "1D" delta). Nulls sink server-side, so desc

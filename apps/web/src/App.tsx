@@ -25,9 +25,7 @@ import { HotIdeasPage } from "./pages/HotIdeasPage";
 import { IdeaDetailPage } from "./pages/IdeaDetailPage";
 import { PricingCalculatorPage } from "./pages/PricingCalculatorPage";
 import { useTheme } from "./lib/theme";
-import { listCategories, listCharts } from "./lib/api";
-import { defaultExploreApiParams, sevenDayReleasedAfterEpoch } from "./lib/exploreFilters";
-import { prefetchApps } from "./hooks/useApps";
+import { prefetchForRoute } from "./lib/routePrefetch";
 
 function RedirectWithSearch({ to }: { to: string }) {
   const { search } = useLocation();
@@ -41,41 +39,7 @@ export function App() {
   const { pathname } = useLocation();
   const studio = pathname.startsWith("/studio");
 
-  // Route-scoped prefetch: only warm what the current page needs immediately.
-  useEffect(() => {
-    const releasedAfter = sevenDayReleasedAfterEpoch();
-    const onPulse = pathname.startsWith("/dashboard/pulse") || pathname === "/";
-    const onExplore = pathname.startsWith("/dashboard/explore");
-    const onTrending = pathname.startsWith("/dashboard/trending");
-
-    if (onPulse) {
-      prefetchApps({ sortBy: "reviews", sortOrder: "desc", releasedAfter });
-      prefetchApps({ sortBy: "rankDelta", sortOrder: "desc" });
-      prefetchApps({ sortBy: "rankDelta", sortOrder: "asc" });
-    } else if (onExplore) {
-      prefetchApps(defaultExploreApiParams());
-      listCategories().catch(() => {});
-    }
-
-    const warmSecondary = () => {
-      if (!onExplore) prefetchApps(defaultExploreApiParams());
-      if (!onPulse) {
-        prefetchApps({ sortBy: "reviews", sortOrder: "desc", releasedAfter });
-        prefetchApps({ sortBy: "rankDelta", sortOrder: "desc" });
-        prefetchApps({ sortBy: "rankDelta", sortOrder: "asc" });
-      }
-      if (onTrending) {
-        listCharts({ store: "apple", type: "free", country: "US", limit: 100 }).catch(() => {});
-      }
-    };
-
-    if (typeof requestIdleCallback !== "undefined") {
-      const id = requestIdleCallback(warmSecondary, { timeout: 5000 });
-      return () => cancelIdleCallback(id);
-    }
-    const t = setTimeout(warmSecondary, 2500);
-    return () => clearTimeout(t);
-  }, [pathname]);
+  useEffect(() => prefetchForRoute(pathname), [pathname]);
 
   return (
     <div className={studio ? "app-shell studio" : "app-shell"}>
@@ -125,7 +89,7 @@ export function App() {
         <Route path="/settings/api-keys" element={<ApiKeysPage theme={theme} onToggleTheme={toggleTheme} />} />
         <Route path="/docs" element={<DocsPage theme={theme} onToggleTheme={toggleTheme} />} />
 
-        <Route path="*" element={<Navigate to="/dashboard/explore" replace />} />
+        <Route path="*" element={<Navigate to="/dashboard/pulse" replace />} />
       </Routes>
     </div>
   );
