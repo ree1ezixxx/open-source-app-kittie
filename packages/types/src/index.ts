@@ -103,7 +103,11 @@ export interface AppSearchParams {
   languages?: string;
   developer?: string;
   releasedAfter?: number;
+  /** Epoch seconds — only apps released on/before this date. Pairs with releasedAfter for a range. */
+  releasedBefore?: number;
   updatedAfter?: number;
+  /** Epoch seconds — only apps updated on/before this date. Pairs with updatedAfter for a range. */
+  updatedBefore?: number;
   sortBy?: AppSortField;
   sortOrder?: SortOrder;
   limit?: number;
@@ -255,3 +259,11 @@ export interface PaginatedResponse<T> {
     totalCount: number;
   };
 }
+
+export {
+  defaultExploreAppQuery,
+  landingWarmQueries,
+  pulseAppQueries,
+  releasedAfterDaysAgo,
+  sevenDayReleasedAfterEpoch,
+} from "./landing-queries.js";

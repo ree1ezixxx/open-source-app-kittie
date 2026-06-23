@@ -50,6 +50,7 @@ export const apps = sqliteTable(
     index("apps_last_snapshot_idx").on(t.lastSnapshotDate),
     // Cold-tier fairness order: least-recently-attempted first (NULLs first).
     index("apps_last_attempted_idx").on(t.lastAttemptedAt),
+    index("apps_released_at_idx").on(t.releasedAt),
   ],
 );
 

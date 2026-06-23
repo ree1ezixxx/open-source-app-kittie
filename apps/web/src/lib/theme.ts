@@ -5,7 +5,8 @@ const KEY = "kittie-theme";
 
 function read(): Theme {
   const saved = localStorage.getItem(KEY);
-  return saved === "dark" ? "dark" : "light";
+  // Redesign showcase is dark-first ("Signal" terminal); light stays available via toggle.
+  return saved === "light" ? "light" : "dark";
 }
 
 export function useTheme(): [Theme, () => void] {

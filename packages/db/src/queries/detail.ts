@@ -106,7 +106,25 @@ export async function appsWithAppleAds(db: Db): Promise<Set<string>> {
   return new Set(rows.map((r) => r.appId));
 }
 
+export async function appsWithAppleAdsForIds(db: Db, ids: string[]): Promise<Set<string>> {
+  if (!ids.length) return new Set();
+  const rows = await db
+    .select({ appId: appleSearchAds.appId })
+    .from(appleSearchAds)
+    .where(inArray(appleSearchAds.appId, ids));
+  return new Set(rows.map((r) => r.appId));
+}
+
 export async function appsWithCreators(db: Db): Promise<Set<string>> {
   const rows = await db.select({ appId: creators.appId }).from(creators);
+  return new Set(rows.map((r) => r.appId));
+}
+
+export async function appsWithCreatorsForIds(db: Db, ids: string[]): Promise<Set<string>> {
+  if (!ids.length) return new Set();
+  const rows = await db
+    .select({ appId: creators.appId })
+    .from(creators)
+    .where(inArray(creators.appId, ids));
   return new Set(rows.map((r) => r.appId));
 }

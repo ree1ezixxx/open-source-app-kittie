@@ -7,7 +7,10 @@ import type {
   Store,
   TextSearchField,
 } from "@kittie/types";
+import { sevenDayReleasedAfterEpoch } from "@kittie/types";
 import { formatCompact, formatMoney } from "./format";
+
+export { sevenDayReleasedAfterEpoch };
 
 export type SearchScope = "all" | TextSearchField;
 
@@ -32,8 +35,10 @@ export interface ExploreFilters {
   source?: Store;
   cats: string[];
   price: PriceType;
-  rel?: number; // released within N days
+  rel?: number; // released within N days (after-bound / most recent)
+  relBefore?: number; // released at least N days ago (before-bound / oldest) — Custom Range/Before
   upd?: number; // updated within N days
+  updBefore?: number; // updated at least N days ago — Custom Range/Before
   ratingMin?: number;
   ratingMax?: number;
   reviewsMin?: number;
@@ -77,14 +82,33 @@ export function parseFilters(sp: URLSearchParams): ExploreFilters {
     const v = sp.get(k);
     return v != null && v !== "" ? Number(v) : undefined;
   };
+
+  // AppKittie / Rising handoff — `releasedAfter=custom&releasedAfterDate=YYYY-MM-DD`.
+  // Only derive `rel` when the URL has no explicit `rel` param; otherwise preset pills,
+  // the date dialog, and chip clears would be overridden by stale handoff keys.
+  const relRaw = sp.get("rel");
+  let rel = relRaw != null && relRaw !== "" ? Number(relRaw) : undefined;
+  if (rel == null && sp.get("releasedAfter") === "custom") {
+    const d = sp.get("releasedAfterDate");
+    if (d) {
+      const ms = Date.now() - new Date(`${d}T00:00:00`).getTime();
+      if (ms > 0) rel = Math.max(1, Math.round(ms / 86_400_000));
+    }
+  }
+
+  const excludedCats = sp.get("excludedCategories")?.split(",").filter(Boolean) ?? [];
+  const includedCats = sp.get("cats")?.split(",").filter(Boolean) ?? [];
+
   return {
     q: sp.get("q") ?? "",
     scope: parseScope(sp.get("scope")),
     source: (sp.get("source") as Store) || undefined,
-    cats: sp.get("cats") ? sp.get("cats")!.split(",").filter(Boolean) : [],
+    cats: includedCats.length ? includedCats : excludedCats,
     price: (sp.get("price") as PriceType) || "all",
-    rel: num("rel"),
+    rel,
+    relBefore: num("relBefore"),
     upd: num("upd"),
+    updBefore: num("updBefore"),
     ratingMin: num("ratingMin"),
     ratingMax: num("ratingMax"),
     reviewsMin: num("reviewsMin"),
@@ -121,7 +145,9 @@ export function writeFilters(f: ExploreFilters): URLSearchParams {
   if (f.cats.length) sp.set("cats", f.cats.join(","));
   if (f.price !== "all") sp.set("price", f.price);
   setN("rel", f.rel);
+  setN("relBefore", f.relBefore);
   setN("upd", f.upd);
+  setN("updBefore", f.updBefore);
   setN("ratingMin", f.ratingMin);
   setN("ratingMax", f.ratingMax);
   setN("reviewsMin", f.reviewsMin);
@@ -145,6 +171,12 @@ export function writeFilters(f: ExploreFilters): URLSearchParams {
 const daysAgoEpoch = (d?: number) =>
   d != null ? Math.floor((Date.now() - d * 86_400_000) / 1000) : undefined;
 
+/** Default Explore `/apps` params (empty URL) — prefetch must match or cache misses. */
+export function defaultExploreApiParams(): AppSearchParams {
+  // Field-for-field aligned with defaultExploreAppQuery in @kittie/types (API warm-cache).
+  return toApiParams(EMPTY_FILTERS);
+}
+
 /** Map filter state to the REST `/apps` query params. */
 export function toApiParams(f: ExploreFilters): AppSearchParams {
   return {
@@ -154,7 +186,9 @@ export function toApiParams(f: ExploreFilters): AppSearchParams {
     categories: f.cats.length ? f.cats.join(",") : undefined,
     priceType: f.price !== "all" ? f.price : undefined,
     releasedAfter: daysAgoEpoch(f.rel),
+    releasedBefore: daysAgoEpoch(f.relBefore),
     updatedAfter: daysAgoEpoch(f.upd),
+    updatedBefore: daysAgoEpoch(f.updBefore),
     minRating: f.ratingMin,
     maxRating: f.ratingMax,
     minReviews: f.reviewsMin,
@@ -181,8 +215,8 @@ export function activeCount(f: ExploreFilters): number {
   if (f.source) n++;
   if (f.cats.length) n++;
   if (f.price !== "all") n++;
-  if (f.rel != null) n++;
-  if (f.upd != null) n++;
+  if (f.rel != null || f.relBefore != null) n++;
+  if (f.upd != null || f.updBefore != null) n++;
   if (f.ratingMin != null || f.ratingMax != null) n++;
   if (f.reviewsMin != null || f.reviewsMax != null) n++;
   if (f.dlMin != null || f.dlMax != null) n++;
@@ -211,6 +245,14 @@ function rangeLabel(name: string, min: number | undefined, max: number | undefin
 
 const star = (n: number) => `${n}★`;
 
+/** Time-window chip label. `within` = released within N days (recent bound),
+ *  `atLeast` = older bound (≥ M days ago). Either or both may be set (Custom Range). */
+function relWindowLabel(name: string, within?: number, atLeast?: number): string {
+  if (within != null && atLeast != null) return `${name} ${within}–${atLeast}d ago`;
+  if (atLeast != null) return `${name} ≥ ${atLeast}d ago`;
+  return `${name} ≤ ${within}d`;
+}
+
 /** The removable chips shown above the table. */
 export function activeChips(f: ExploreFilters): Chip[] {
   const c: Chip[] = [];
@@ -219,8 +261,10 @@ export function activeChips(f: ExploreFilters): Chip[] {
   if (f.cats.length)
     c.push({ id: "cats", label: f.cats.length === 1 ? f.cats[0]! : `${f.cats.length} categories`, clear: { cats: [] } });
   if (f.price !== "all") c.push({ id: "price", label: f.price === "free" ? "Free" : "Paid", clear: { price: "all" } });
-  if (f.rel != null) c.push({ id: "rel", label: `Released ≤ ${f.rel}d`, clear: { rel: undefined } });
-  if (f.upd != null) c.push({ id: "upd", label: `Updated ≤ ${f.upd}d`, clear: { upd: undefined } });
+  if (f.rel != null || f.relBefore != null)
+    c.push({ id: "rel", label: relWindowLabel("Released", f.rel, f.relBefore), clear: { rel: undefined, relBefore: undefined } });
+  if (f.upd != null || f.updBefore != null)
+    c.push({ id: "upd", label: relWindowLabel("Updated", f.upd, f.updBefore), clear: { upd: undefined, updBefore: undefined } });
   if (f.ratingMin != null || f.ratingMax != null)
     c.push({ id: "rating", label: rangeLabel("Rating", f.ratingMin, f.ratingMax, star), clear: { ratingMin: undefined, ratingMax: undefined } });
   if (f.reviewsMin != null || f.reviewsMax != null)

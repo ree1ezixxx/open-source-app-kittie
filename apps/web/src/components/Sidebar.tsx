@@ -7,11 +7,10 @@ import {
   IconTrending,
   IconRising,
   IconStar,
-  IconDownload,
-  IconSparkles,
   IconGrid,
   IconSearch,
   IconImage,
+  IconVideo,
   IconGlobe,
   IconMessage,
   IconBulb,
@@ -26,57 +25,58 @@ import {
 type Item = { to: string; label: string; icon: typeof IconDatabase; badge?: "total" };
 type Group = { label: string; items: Item[]; collapsible?: boolean };
 
-// Information architecture organised by the user's JOB, not the feature list.
-// Trending / Rising / Highlights are sorted views of the same app database, so
-// they sit together under Discover. Low-frequency clusters (Studio, Developers)
-// are collapsible and collapsed by default to keep the default surface calm.
+// Information architecture mirrors the live appkittie.com left-nav exactly (groups,
+// order, labels). Brand aside, the clone matches truth's taxonomy 1:1. Clone-only
+// surfaces with no truth equivalent (Builder, App Engine) are kept as routes but
+// omitted from the nav so the sidebar is a faithful clone.
 const PRIMARY: Group[] = [
   {
-    label: "Discover",
+    label: "Explore",
     items: [
+      { to: "/dashboard/pulse", label: "Pulse", icon: IconTrending },
       { to: "/dashboard/explore", label: "Apps", icon: IconDatabase, badge: "total" },
+      { to: "/dashboard/ads", label: "Ads", icon: IconImage },
+      { to: "/dashboard/organic", label: "Organic", icon: IconVideo },
       { to: "/dashboard/highlights", label: "Highlights", icon: IconSpark },
       { to: "/dashboard/trending", label: "Trending", icon: IconTrending },
       { to: "/dashboard/rising", label: "Rising", icon: IconRising },
     ],
   },
   {
-    label: "Research",
-    items: [
-      { to: "/dashboard/ads", label: "Ads Library", icon: IconImage },
-      { to: "/dashboard/reviews", label: "Reviews", icon: IconMessage },
-      { to: "/dashboard/aso/keywords", label: "Keyword Explorer", icon: IconSearch },
-    ],
+    label: "Your apps",
+    items: [{ to: "/dashboard/favorites", label: "Favorites", icon: IconStar }],
   },
   {
-    label: "Watchlist",
+    label: "ASO",
     items: [
-      { to: "/dashboard/favorites", label: "Favorites", icon: IconStar },
       { to: "/dashboard/aso/apps", label: "App Tracking", icon: IconGrid },
-    ],
-  },
-  {
-    label: "Studio",
-    collapsible: true,
-    items: [
-      { to: "/dashboard/hot-ideas", label: "Hot Ideas", icon: IconBulb },
-      { to: "/dashboard/builder", label: "Builder", icon: IconSparkles },
-      { to: "/dashboard/app-engine", label: "App Engine", icon: IconDownload },
+      { to: "/dashboard/aso/keywords", label: "Keyword Explorer", icon: IconSearch },
       { to: "/dashboard/aso/screenshots", label: "Screenshots", icon: IconImage },
       { to: "/dashboard/aso/screenshot-translation", label: "Translations", icon: IconGlobe },
-      { to: "/tools/pricing-calculator", label: "Pricing Calculator", icon: IconCoin },
     ],
+  },
+  {
+    label: "Analytics",
+    items: [{ to: "/dashboard/reviews", label: "Reviews", icon: IconMessage }],
+  },
+  {
+    label: "App ideas",
+    items: [{ to: "/dashboard/hot-ideas", label: "Hot ideas", icon: IconBulb }],
   },
 ];
 
 const DEVELOPERS: Group = {
-  label: "Developers",
-  collapsible: true,
+  label: "API",
   items: [
     { to: "/settings/api-keys", label: "API Keys", icon: IconKey },
     { to: "/mcp", label: "MCP", icon: IconTerminal },
     { to: "/docs", label: "API Docs", icon: IconBook },
   ],
+};
+
+const TOOLS: Group = {
+  label: "Tools",
+  items: [{ to: "/tools/pricing-calculator", label: "Pricing Calculator", icon: IconCoin }],
 };
 
 const NAV_OPEN_KEY = "kittie-nav-open";
@@ -164,9 +164,10 @@ export function Sidebar({ total = 0 }: { total?: number }) {
       </button>
 
       {PRIMARY.map(renderGroup)}
+      {renderGroup(DEVELOPERS)}
+      {renderGroup(TOOLS)}
 
       <div className="sidebar-foot">
-        {renderGroup(DEVELOPERS)}
         {renderItem({ to: "/settings", label: "Settings", icon: IconSettings })}
         <FreshnessFooter />
       </div>

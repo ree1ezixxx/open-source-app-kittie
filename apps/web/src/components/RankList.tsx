@@ -50,7 +50,7 @@ export function RankList({
   emptyTitle?: string;
   emptySub?: string;
 }) {
-  if (loading) {
+  if (loading && apps.length === 0) {
     return (
       <>
         {Array.from({ length: Math.min(limit, 6) }).map((_, i) => (
@@ -85,7 +85,7 @@ export function RankList({
         const d = deltaOf(a);
         return (
           <Link className="rank-row" key={a.id} to={appHref(a)}>
-            <span className="rk">{i + 1}</span>
+            <span className="rk">#{i + 1}</span>
             {delta && (
               <span style={{ width: DELTA_W, flexShrink: 0 }}>
                 {d != null ? (

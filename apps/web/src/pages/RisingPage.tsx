@@ -5,7 +5,6 @@ import { PageShell } from "../components/PageShell";
 import { Segmented } from "../components/Segmented";
 import { EmptyState } from "../components/EmptyState";
 import { useApps } from "../hooks/useApps";
-import { EMPTY_FILTERS, writeFilters } from "../lib/exploreFilters";
 import { AppIcon } from "../components/AppIcon";
 import { formatCompact, formatMoney } from "../lib/format";
 import { IconRising, IconChart, IconCheck, IconClose, IconFilter, IconRefresh } from "../icons";
@@ -16,13 +15,6 @@ type Signal = "2W" | "1M" | "3M";
 
 const LAUNCH_DAYS: Record<Launched, number> = { "3M": 90, "6M": 180, "1Y": 365 };
 const SIGNAL_PERIOD: Record<Signal, GrowthPeriod> = { "2W": "14d", "1M": "30d", "3M": "90d" };
-
-// Markets we actually hold per-country snapshots for (ADR 0007). Today the
-// catalog is 100% US; add codes here as E-aso's per-country ingest lands and the
-// picker enables them automatically. Other markets stay selectable-but-disabled
-// (honest: don't offer a market filter that has no data to return).
-const MARKETS_WITH_DATA = new Set<string>(["US"]);
-const NO_MARKET_DATA_TIP = "Not available yet — this market hasn't been ingested.";
 
 /** Live parity — country picker entries shown as "🇨🇳 China (Chinese (Simplified))". */
 const COUNTRIES: { code: string; flag: string; name: string; language: string }[] = [
@@ -65,13 +57,15 @@ const CATEGORIES: { name: string; emoji: string }[] = [
 interface RisingState {
   launched: Launched;
   signal: Signal;
-  store: Store;
-  countries: string[];
-  cats: string[];
+  /** Absent = both stores combined (truth default). Set = filter to one store. */
+  store?: Store;
+  /** Truth parity — filters EXCLUDE selected markets/categories, not narrow to them. */
+  excludedCountries: string[];
+  excludedCats: string[];
 }
 
-const DEFAULT_STATE: RisingState = { launched: "6M", signal: "1M", store: "apple", countries: [], cats: [] };
-const LS_KEY = "kittie.rising.filters.v1";
+const DEFAULT_STATE: RisingState = { launched: "6M", signal: "1M", excludedCountries: [], excludedCats: [] };
+const LS_KEY = "kittie.rising.filters.v2";
 
 /** Live parity — "Filters apply to all data and persist across sessions". */
 function loadState(): RisingState {
@@ -82,9 +76,13 @@ function loadState(): RisingState {
     return {
       launched: p.launched === "3M" || p.launched === "1Y" ? p.launched : "6M",
       signal: p.signal === "2W" || p.signal === "3M" ? p.signal : "1M",
-      store: p.store === "google" ? "google" : "apple",
-      countries: Array.isArray(p.countries) ? p.countries.filter((c) => COUNTRIES.some((x) => x.code === c) && MARKETS_WITH_DATA.has(c)) : [],
-      cats: Array.isArray(p.cats) ? p.cats.filter((c) => CATEGORIES.some((x) => x.name === c)) : [],
+      store: p.store === "google" ? "google" : p.store === "apple" ? "apple" : undefined,
+      excludedCountries: Array.isArray(p.excludedCountries)
+        ? p.excludedCountries.filter((c) => COUNTRIES.some((x) => x.code === c))
+        : [],
+      excludedCats: Array.isArray(p.excludedCats)
+        ? p.excludedCats.filter((c) => CATEGORIES.some((x) => x.name === c))
+        : [],
     };
   } catch {
     return DEFAULT_STATE;
@@ -158,7 +156,7 @@ export function RisingPage({ theme, onToggleTheme }: { theme: Theme; onToggleThe
   const nav = useNavigate();
   const [state, setState] = useState<RisingState>(loadState);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const { launched, signal, store, countries, cats } = state;
+  const { launched, signal, store, excludedCountries, excludedCats } = state;
 
   useEffect(() => {
     try {
@@ -169,7 +167,7 @@ export function RisingPage({ theme, onToggleTheme }: { theme: Theme; onToggleThe
   }, [state]);
 
   const patch = (p: Partial<RisingState>) => setState((s) => ({ ...s, ...p }));
-  const toggleIn = (key: "countries" | "cats", id: string) =>
+  const toggleIn = (key: "excludedCountries" | "excludedCats", id: string) =>
     setState((s) => ({
       ...s,
       [key]: s[key].includes(id) ? s[key].filter((x) => x !== id) : [...s[key], id],
@@ -180,13 +178,6 @@ export function RisingPage({ theme, onToggleTheme }: { theme: Theme; onToggleThe
     [launched],
   );
 
-  // Country now narrows the query (ADR 0007: chart_country dimension). Only send
-  // markets we actually hold data for, so a stale persisted pick can't blank the list.
-  const activeCountries = countries.filter((c) => MARKETS_WITH_DATA.has(c));
-  // Sort by REVENUE (MRR), not growth — truth's Rising is "top 100 apps by monthly
-  // recurring revenue" within the recent-launch + positive-growth set, so #1 is the
-  // highest-MRR rising app, not the highest-growth one. growthType="positive" is what
-  // makes the set "rising"; the sort orders that set by money. (Parity fix.)
   const { apps, total, loading, refresh } = useApps({
     sortBy: "revenue",
     growthType: "positive",
@@ -194,26 +185,28 @@ export function RisingPage({ theme, onToggleTheme }: { theme: Theme; onToggleThe
     growthPeriod: SIGNAL_PERIOD[signal],
     source: store,
     releasedAfter,
-    categories: cats.length ? cats.join(",") : undefined,
-    countries: activeCountries.length ? activeCountries.join(",") : undefined,
+    excludedCategories: excludedCats.length ? excludedCats.join(",") : undefined,
+    excludedCountries: excludedCountries.length ? excludedCountries.join(",") : undefined,
+    limit: 100,
   });
 
-  // Count/show only markets that actually narrow the query (activeCountries), so a
-  // selected-but-dataless market can't render a filter chip that does nothing.
-  const activeFilterCount = activeCountries.length + cats.length;
+  const activeFilterCount = excludedCountries.length + excludedCats.length;
 
   const exploreHref = useMemo(() => {
-    const sp = writeFilters({
-      ...EMPTY_FILTERS,
-      sort: "revenue",
-      gtype: "positive",
-      period: SIGNAL_PERIOD[signal],
-      source: store,
-      rel: LAUNCH_DAYS[launched],
-      cats,
-    });
+    const sp = new URLSearchParams();
+    sp.set("sortBy", "revenue");
+    sp.set("sortOrder", "desc");
+    sp.set("secondarySortBy", "growth");
+    sp.set("secondarySortOrder", "desc");
+    sp.set("growthPeriod", SIGNAL_PERIOD[signal]);
+    sp.set("gtype", "positive");
+    sp.set("releasedAfter", "custom");
+    sp.set("releasedAfterDate", new Date(releasedAfter * 1000).toISOString().slice(0, 10));
+    if (store) sp.set("source", store);
+    if (excludedCountries.length) sp.set("excludedCountries", excludedCountries.join(","));
+    if (excludedCats.length) sp.set("excludedCategories", excludedCats.join(","));
     return `/dashboard/explore?${sp.toString()}`;
-  }, [signal, store, launched, cats]);
+  }, [signal, store, releasedAfter, excludedCountries, excludedCats]);
 
   const toolbar = (
     <div className="toolbar">
@@ -222,7 +215,22 @@ export function RisingPage({ theme, onToggleTheme }: { theme: Theme; onToggleThe
       <span className="filter-label" style={{ alignSelf: "center" }}>Growth signal</span>
       <Segmented<Signal> value={signal} onChange={(v) => patch({ signal: v })} options={[{ id: "2W", label: "2W" }, { id: "1M", label: "1M" }, { id: "3M", label: "3M" }]} />
       <div className="toolbar-divider" />
-      <Segmented<Store> value={store} onChange={(v) => patch({ store: v })} options={[{ id: "apple", label: "Apple Store" }, { id: "google", label: "Google Play" }]} />
+      <div className="segmented">
+        <button
+          type="button"
+          className={store === "apple" ? "on" : ""}
+          onClick={() => patch({ store: store === "apple" ? undefined : "apple" })}
+        >
+          Apple Store
+        </button>
+        <button
+          type="button"
+          className={store === "google" ? "on" : ""}
+          onClick={() => patch({ store: store === "google" ? undefined : "google" })}
+        >
+          Google Play
+        </button>
+      </div>
 
       <div style={{ position: "relative" }}>
         <button className="btn" onClick={() => setFiltersOpen((o) => !o)} aria-expanded={filtersOpen}>
@@ -269,18 +277,16 @@ export function RisingPage({ theme, onToggleTheme }: { theme: Theme; onToggleThe
               }}
             >
               <FilterList
-                label="Country"
+                label="Country (exclude)"
                 items={COUNTRIES.map((c) => ({ id: c.code, label: `${c.flag} ${c.name} (${c.language})` }))}
-                selected={countries}
-                onToggle={(id) => toggleIn("countries", id)}
-                disabledIds={new Set(COUNTRIES.filter((c) => !MARKETS_WITH_DATA.has(c.code)).map((c) => c.code))}
-                disabledTitle={NO_MARKET_DATA_TIP}
+                selected={excludedCountries}
+                onToggle={(id) => toggleIn("excludedCountries", id)}
               />
               <FilterList
-                label="Category"
+                label="Category (exclude)"
                 items={CATEGORIES.map((c) => ({ id: c.name, label: `${c.emoji} ${c.name}` }))}
-                selected={cats}
-                onToggle={(id) => toggleIn("cats", id)}
+                selected={excludedCats}
+                onToggle={(id) => toggleIn("excludedCats", id)}
               />
             </div>
           </>
@@ -300,25 +306,25 @@ export function RisingPage({ theme, onToggleTheme }: { theme: Theme; onToggleThe
 
       {activeFilterCount > 0 && (
         <div className="active-filters" style={{ flexBasis: "100%" }}>
-          {activeCountries.map((code) => {
+          {excludedCountries.map((code) => {
             const c = COUNTRIES.find((x) => x.code === code)!;
             return (
-              <button key={code} className="achip" onClick={() => toggleIn("countries", code)}>
-                {c.flag} {c.name} ({c.language})
+              <button key={code} className="achip" onClick={() => toggleIn("excludedCountries", code)}>
+                {c.name} ({c.language})
                 <IconClose />
               </button>
             );
           })}
-          {cats.map((name) => {
+          {excludedCats.map((name) => {
             const c = CATEGORIES.find((x) => x.name === name)!;
             return (
-              <button key={name} className="achip" onClick={() => toggleIn("cats", name)}>
-                {c.emoji} {c.name}
+              <button key={name} className="achip" onClick={() => toggleIn("excludedCats", name)}>
+                {c.name}
                 <IconClose />
               </button>
             );
           })}
-          <button className="achip-clear" onClick={() => patch({ countries: [], cats: [] })}>
+          <button className="achip-clear" onClick={() => patch({ excludedCountries: [], excludedCats: [] })}>
             Clear all
           </button>
         </div>
@@ -374,7 +380,9 @@ export function RisingPage({ theme, onToggleTheme }: { theme: Theme; onToggleThe
                         <AppIcon url={a.iconUrl} title={a.title} />
                         <div className="app-meta">
                           <div className="app-title" title={a.title}>{a.title}</div>
-                          <div className="app-dev">{a.developer}</div>
+                          <div className="app-dev">
+                            {a.category ? `${a.category} · ${a.developer}` : a.developer}
+                          </div>
                         </div>
                       </div>
                     </td>

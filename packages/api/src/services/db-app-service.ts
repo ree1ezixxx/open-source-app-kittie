@@ -43,7 +43,7 @@ import { matchesSearch, paginateApps, sortApps, hasLiveGrowthFilter } from "./fi
 
 export type { CategoryFacet } from "./app-query.js";
 
-const APP_SEARCH_CACHE_TTL_MS = 60_000;
+const APP_SEARCH_CACHE_TTL_MS = 300_000;
 const APP_SEARCH_CACHE_MAX = 100;
 const appSearchCache = new Map<string, { value: PaginatedResponse<AppListItem>; at: number }>();
 
@@ -135,7 +135,10 @@ export async function searchAppsFromDb(params: AppSearchParams): Promise<Paginat
   if (!pool) return rememberAppSearch(cacheKey, { data: [], pagination: { nextCursor: null, totalCount: 0 } });
 
   const { totalCount, ids, marketCountry } = pool;
-  const rankDeltas = await getRankDeltasFor(ids, marketCountry);
+  const rankDeltas =
+    params.sortBy === "rankDelta"
+      ? await getRankDeltasFor(ids, marketCountry)
+      : new Map<string, number>();
   const rows = await buildScoredAppRows(ids, period, marketCountry, rankDeltas);
   const filtered = rows.filter((row) => matchesSearch(row, params));
   const sorted = sortApps(filtered, params);

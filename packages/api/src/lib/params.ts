@@ -52,7 +52,9 @@ const searchParamsSchema = z.object({
   languages: z.string().optional(),
   developer: z.string().optional(),
   releasedAfter: z.coerce.number().optional(),
+  releasedBefore: z.coerce.number().optional(),
   updatedAfter: z.coerce.number().optional(),
+  updatedBefore: z.coerce.number().optional(),
   sortBy: z
     .enum([
       "growth",
