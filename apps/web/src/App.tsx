@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { Sidebar } from "./components/Sidebar";
+import { CanvasGridPage } from "./pages/CanvasGridPage";
+import { AppCanvasTreePage } from "./pages/AppCanvasTreePage";
 import { ExplorePage } from "./pages/ExplorePage";
 import { AppDetailPage } from "./pages/AppDetailPage";
 import { AdsLibraryPage } from "./pages/AdsLibraryPage";
@@ -42,6 +44,14 @@ export function App() {
         <Route path="/studio" element={<BuilderPage theme={theme} onToggleTheme={toggleTheme} />} />
         <Route path="/studio/:id" element={<BuilderPage theme={theme} onToggleTheme={toggleTheme} />} />
         <Route path="/" element={<Navigate to="/dashboard/explore" replace />} />
+        <Route
+          path="/dashboard/canvas"
+          element={<CanvasGridPage theme={theme} onToggleTheme={toggleTheme} />}
+        />
+        <Route
+          path="/dashboard/canvas/:appId"
+          element={<AppCanvasTreePage theme={theme} onToggleTheme={toggleTheme} />}
+        />
         <Route
           path="/dashboard/explore"
           element={<ExplorePage theme={theme} onToggleTheme={toggleTheme} onTotal={setTotal} />}

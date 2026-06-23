@@ -178,6 +178,10 @@ _Avoid_: Cron job, scheduler (implies external infra)
 
 **Explore data priority** — **snapshots cadence first**: daily day-over-day snapshots so Growth 7d, sparklines, and period filters behave like truth before chasing catalog scale or filter-rail UI polish.
 
+**App Canvas**:
+An interactive, spatial view of one App's intelligence — the App at the root of a hub-and-spoke tree, with spokes for listing media, estimated metrics, reviews, similar apps, ads, creators, keywords, and other signals currently spread across sidebar surfaces. The **generalist view** shows a small curated set of Apps as cards; selecting one opens that App's **canvas tree**. Empty spokes stay honest when ingest has not populated that signal yet. Distinct from the scroll-based App detail page and from table-first Explore.
+_Avoid_: Canvas (unqualified — ambiguous in a dev repo); Workflow (implies user-authored automation, not read-only intelligence layout)
+
 ## Example dialogue
 
 **Dev**: "This app is trending — should we flag it as a first mover?"

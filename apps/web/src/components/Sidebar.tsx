@@ -34,6 +34,7 @@ const PRIMARY: Group[] = [
   {
     label: "Discover",
     items: [
+      { to: "/dashboard/canvas", label: "App Canvas", icon: IconGrid },
       { to: "/dashboard/explore", label: "Apps", icon: IconDatabase, badge: "total" },
       { to: "/dashboard/highlights", label: "Highlights", icon: IconSpark },
       { to: "/dashboard/trending", label: "Trending", icon: IconTrending },
