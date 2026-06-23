@@ -119,6 +119,35 @@ export function hasLiveGrowthFilter(params: AppSearchParams): boolean {
   );
 }
 
+/** True when matchesSearch could drop pool rows in JS — on a modelled estimate
+ *  (downloads/revenue/growth), a relation/meta flag (ads/creators/email/website), or a
+ *  field not 1:1 with the SQL candidate filters (free-text search, languages, price,
+ *  released/updated windows). When NONE of these are set, the SQL candidate set already
+ *  IS the result set, so the page can be sliced from the SQL order without scoring the
+ *  whole pool. (minRating/maxRating, min/maxReviews, categories, source, developer are
+ *  applied identically in SQL and re-checked consistently here — they don't disqualify.) */
+export function dropsRowsInMemory(params: AppSearchParams): boolean {
+  return (
+    params.search != null ||
+    params.minDownloads != null ||
+    params.maxDownloads != null ||
+    params.minRevenue != null ||
+    params.maxRevenue != null ||
+    hasLiveGrowthFilter(params) ||
+    params.hasMetaAds != null ||
+    params.hasAppleAds != null ||
+    params.hasCreators != null ||
+    params.hasEmails != null ||
+    params.hasWebsite != null ||
+    params.languages != null ||
+    params.priceType != null ||
+    params.releasedAfter != null ||
+    params.releasedBefore != null ||
+    params.updatedAfter != null ||
+    params.updatedBefore != null
+  );
+}
+
 function sortValue(item: AppListItem, sortBy: AppSearchParams["sortBy"]): number | string | null {
   switch (sortBy) {
     case "growth":

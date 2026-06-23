@@ -285,6 +285,15 @@ function sqlSortColumn(sortBy: AppSearchParams["sortBy"]): AnyColumn | null {
   }
 }
 
+/** True when the candidate pool is already in the final display order — i.e. the sort
+ *  is a real SQL column (not a live-modelled estimate) and DESC (SQLite sinks NULLs to
+ *  the bottom of a DESC scan, matching sortApps' null-sink; ASC would diverge at the
+ *  NULL boundary). Lets searchAppsFromDb score only the requested page, not the whole
+ *  ~5000-row pool. */
+export function poolIsInFinalOrder(params: AppSearchParams): boolean {
+  return sqlSortColumn(params.sortBy) !== null && (params.sortOrder ?? "desc") === "desc";
+}
+
 async function countMatches(c: AppConditions): Promise<number> {
   const db = getDb();
   // No snapshot-metric filter AND no explicit market → the count is decided by the

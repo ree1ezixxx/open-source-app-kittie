@@ -44,6 +44,28 @@ day's ~1.1M rows. ASC variants share the cost. This dominates the filter+sort p9
 Committed: one covering index `(snapshot_date, rating, app_id)` + the count-fix. filter+sort
 p95 **1612→605ms**, search ~420ms, charts ~60ms. typecheck + db/api tests (10+80) green.
 
+## Experiment 3 — score-only-the-page (pure win, no tradeoff)
+For a SQL-native DESC sort (`reviews`/`rating`/`updated`/`released`) with no in-memory
+filter (`dropsRowsInMemory` false), the SQL candidate set already IS the result set in
+final order — so `searchAppsFromDb` slices the page off `ids` and scores only those ~50
+rows instead of the whole ~5000-row pool. Guards: `poolIsInFinalOrder` (SQL column +
+DESC, so SQLite's null-last matches the JS null-sink) + `dropsRowsInMemory` (excludes
+search / modelled-estimate / meta / window filters that could drop rows in JS).
+
+**Proven equivalent:** captured page-1/2 ids + total + nextCursor for 4 queries (incl.
+the tail-sensitive unfiltered `sortBy=rating desc` and a category filter) — `diff`
+fast-path vs full-path = **byte-identical**. typecheck + api tests (80) green.
+
+| query | before | after |
+|---|---|---|
+| `sortBy=reviews desc` cold | 470ms | **117ms** |
+| `sortBy=rating desc` cold | 640ms | 345ms |
+
+Suite p95 (mixed) moves 605→562ms only, because the suite also contains the live-scored
+`revenue`/`growth` and `asc`/`rankDelta` sorts (the accepted floor below). The win is
+real but concentrated on the SQL-native-desc sorts; the **default `revenue` Explore view
+is unchanged by design** (Rhodri chose the pure-win option, deferring the revenue floor).
+
 ## Architectural floor (the remaining gap to 200ms)
 Per-sort cold timings are now uniform ~0.4–0.6s — the cost is `buildScoredAppRows`
 loading + scoring the **~5000-row candidate pool**, not any one sort. `reviews`/`rating`
