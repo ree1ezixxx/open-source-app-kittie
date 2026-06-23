@@ -149,4 +149,24 @@ Note: suite p95 stays ~900ms because it also benches `asc`/`rankDelta` sorts (NO
 gate stays "ready" without a manual backfill. Until then, run `backfill-estimates.ts`
 after each day's ingest; if it lapses, the gate serves the (correct, slower) proxy.
 
+## Completion evidence (A + B + asc/rating)
+- **10-run quality streak** on the `/apps` hot desc sorts (revenue/reviews/rating/downloads,
+  distinct cold params each round): all 10 rounds ≤120ms (worst = rating ~116ms). ✓
+- **Web first-contentful paint** (dev server → optimized API): `/dashboard/pulse` **168ms ✓**,
+  `/dashboard/explore` 232ms (dev bundle; a production `vite build` is smaller).
+- **Other hot endpoints** (cold): charts 53ms, categories 2ms, app-detail 3ms,
+  historicals 3ms, reviews 0.5ms, keywords 0.4ms, ideas 4ms — all ✓.
+- BYTE-IDENTICAL verified across pages 1-3 of all shapes incl. asc + the negatives.
+
+### Remaining > 200ms (honest)
+- **search** heavy-term p95 ~0.37s. The FTS candidate is pooled by relevance (bm25 rank,
+  not a stored column), then re-sorted; making it keyset-fast means ordering the FTS
+  candidate by the sort column = a **ranking change** (top-50-by-sort over ALL matches vs
+  over the top-5000-by-relevance), like Tranche B. Needs sign-off. Most searches (rare
+  terms, small pool) are already <150ms.
+- **asc + a selective filter** (e.g. reviews asc + minRating): inherent on BOTH keyset and
+  legacy — the asc scan starts at the filtered-out bottom. Not a real hot path.
+- **rankDelta** (Highlights gainers/losers) ~0.34s: a live per-request sort over the
+  charted set; no stored column to keyset.
+
 ### (earlier experiments, pre-keyset)
