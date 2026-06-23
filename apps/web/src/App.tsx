@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { Sidebar } from "./components/Sidebar";
 import { ExplorePage } from "./pages/ExplorePage";
@@ -6,6 +6,7 @@ import { AppDetailPage } from "./pages/AppDetailPage";
 import { AdsLibraryPage } from "./pages/AdsLibraryPage";
 import { OrganicPage } from "./pages/OrganicPage";
 import { HighlightsPage } from "./pages/HighlightsPage";
+import { PulsePage } from "./pages/PulsePage";
 import { TrendingPage } from "./pages/TrendingPage";
 import { RisingPage } from "./pages/RisingPage";
 import { FavoritesPage } from "./pages/FavoritesPage";
@@ -24,6 +25,7 @@ import { HotIdeasPage } from "./pages/HotIdeasPage";
 import { IdeaDetailPage } from "./pages/IdeaDetailPage";
 import { PricingCalculatorPage } from "./pages/PricingCalculatorPage";
 import { useTheme } from "./lib/theme";
+import { prefetchForRoute } from "./lib/routePrefetch";
 
 function RedirectWithSearch({ to }: { to: string }) {
   const { search } = useLocation();
@@ -34,7 +36,10 @@ export function App() {
   const [theme, toggleTheme] = useTheme();
   const [total, setTotal] = useState(0);
   // /studio/* runs the Builder full-bleed, outside the Kittie dashboard chrome.
-  const studio = useLocation().pathname.startsWith("/studio");
+  const { pathname } = useLocation();
+  const studio = pathname.startsWith("/studio");
+
+  useEffect(() => prefetchForRoute(pathname), [pathname]);
 
   return (
     <div className={studio ? "app-shell studio" : "app-shell"}>
@@ -42,7 +47,8 @@ export function App() {
       <Routes>
         <Route path="/studio" element={<BuilderPage theme={theme} onToggleTheme={toggleTheme} />} />
         <Route path="/studio/:id" element={<BuilderPage theme={theme} onToggleTheme={toggleTheme} />} />
-        <Route path="/" element={<Navigate to="/dashboard/explore" replace />} />
+        <Route path="/" element={<Navigate to="/dashboard/pulse" replace />} />
+        <Route path="/dashboard/pulse" element={<PulsePage theme={theme} onToggleTheme={toggleTheme} />} />
         <Route
           path="/dashboard/explore"
           element={<ExplorePage theme={theme} onToggleTheme={toggleTheme} onTotal={setTotal} />}
@@ -83,7 +89,7 @@ export function App() {
         <Route path="/settings/api-keys" element={<ApiKeysPage theme={theme} onToggleTheme={toggleTheme} />} />
         <Route path="/docs" element={<DocsPage theme={theme} onToggleTheme={toggleTheme} />} />
 
-        <Route path="*" element={<Navigate to="/dashboard/explore" replace />} />
+        <Route path="*" element={<Navigate to="/dashboard/pulse" replace />} />
       </Routes>
     </div>
   );

@@ -199,6 +199,7 @@ export function RisingPage({ theme, onToggleTheme }: { theme: Theme; onToggleThe
     sp.set("secondarySortBy", "growth");
     sp.set("secondarySortOrder", "desc");
     sp.set("growthPeriod", SIGNAL_PERIOD[signal]);
+    sp.set("gtype", "positive");
     sp.set("releasedAfter", "custom");
     sp.set("releasedAfterDate", new Date(releasedAfter * 1000).toISOString().slice(0, 10));
     if (store) sp.set("source", store);

@@ -42,6 +42,24 @@ export function invalidateAppReadCaches(): void {
 // ~1.1M apps in memory — what this path used to do — OOMs the heap.
 const POOL_CAP = 5000;
 
+/** Narrow the scored pool when filters already shrink the candidate universe. */
+function effectivePoolCap(params: AppSearchParams): number {
+  let cap = POOL_CAP;
+  const now = Math.floor(Date.now() / 1000);
+  if (params.releasedAfter != null) {
+    const days = Math.max(1, (now - params.releasedAfter) / 86_400);
+    if (days <= 14) cap = Math.min(cap, 400);
+    else if (days <= 90) cap = Math.min(cap, 1_200);
+    else if (days <= 400) cap = Math.min(cap, 2_500);
+  }
+  if (params.releasedBefore != null) cap = Math.min(cap, 2_500);
+  if (params.growthType === "positive" || params.growthType === "negative") {
+    cap = Math.min(cap, params.releasedAfter != null ? 1_800 : 2_500);
+  }
+  if (params.categories || params.excludedCategories) cap = Math.min(cap, 2_500);
+  return cap;
+}
+
 // Latest snapshot day PER MARKET; apps are listed from their row on this day for
 // the requested market (≈99% have one). Per-country so a market that ingests on a
 // later day than US can't blank the US-pinned view (and vice-versa).
@@ -52,7 +70,7 @@ const POOL_CAP = 5000;
 // without it, Explore would pin yesterday's day until an API restart, silently
 // re-introducing staleness. `invalidateAppReadCaches()` still force-clears it for
 // the in-process manual/CLI path.
-const MAX_DATE_TTL_MS = 5 * 60_000;
+const MAX_DATE_TTL_MS = 30 * 60_000;
 const cachedMaxDate = new Map<string, { value: string | null; at: number }>();
 const CATEGORY_FACET_TTL_MS = 30 * 60_000;
 let cachedCategoryFacets: { value: CategoryFacet[]; at: number } | null = null;
@@ -85,14 +103,19 @@ async function latestSnapshotDate(country = "US"): Promise<string | null> {
   const hit = cachedMaxDate.get(country);
   if (hit && Date.now() - hit.at < MAX_DATE_TTL_MS) return hit.value;
 
+  // Derive the latest *complete* snapshot day from apps.last_snapshot_date — O(catalog)
+  // not app_snapshots — O(snapshots). Same chooseLatestCompleteSnapshotDate logic,
+  // ~100× faster on a 1.1M-row snapshot table.
   const rows = await getDb()
-    .select({ d: appSnapshots.snapshotDate, c: count() })
-    .from(appSnapshots)
-    .where(eq(appSnapshots.chartCountry, country))
-    .groupBy(appSnapshots.snapshotDate)
-    .orderBy(desc(appSnapshots.snapshotDate))
+    .select({ d: apps.lastSnapshotDate, c: count() })
+    .from(apps)
+    .where(sql`${apps.lastSnapshotDate} IS NOT NULL`)
+    .groupBy(apps.lastSnapshotDate)
+    .orderBy(desc(apps.lastSnapshotDate))
     .limit(SNAPSHOT_LOOKBACK_DAYS);
-  const d = chooseLatestCompleteSnapshotDate(rows);
+  const d = chooseLatestCompleteSnapshotDate(
+    rows.filter((r): r is SnapshotDateCount => r.d != null).map((r) => ({ d: r.d!, c: r.c })),
+  );
   cachedMaxDate.set(country, { value: d, at: Date.now() });
   return d;
 }
@@ -262,6 +285,15 @@ function sqlSortColumn(sortBy: AppSearchParams["sortBy"]): AnyColumn | null {
   }
 }
 
+/** True when the candidate pool is already in the final display order — i.e. the sort
+ *  is a real SQL column (not a live-modelled estimate) and DESC (SQLite sinks NULLs to
+ *  the bottom of a DESC scan, matching sortApps' null-sink; ASC would diverge at the
+ *  NULL boundary). Lets searchAppsFromDb score only the requested page, not the whole
+ *  ~5000-row pool. */
+export function poolIsInFinalOrder(params: AppSearchParams): boolean {
+  return sqlSortColumn(params.sortBy) !== null && (params.sortOrder ?? "desc") === "desc";
+}
+
 async function countMatches(c: AppConditions): Promise<number> {
   const db = getDb();
   // No snapshot-metric filter AND no explicit market → the count is decided by the
@@ -279,8 +311,21 @@ async function countMatches(c: AppConditions): Promise<number> {
     const [row] = await db.select({ c: count() }).from(apps).where(and(...c.appCols));
     return row?.c ?? 0;
   }
-  // A snapshot-metric filter or an explicit market is present → the join is unavoidable.
-  // countDistinct(apps.id) so an app charting in several requested markets is counted once.
+  // A snapshot-metric filter (or explicit market) forced us past the apps-only count.
+  // When there are NO apps-table column filters, the apps join only re-derives the
+  // app_id the snapshot row already carries — count distinct app_id straight off
+  // app_snapshots. The (snapshot_date, rating, app_id) covering index serves a minRating
+  // count index-only (~8× faster: ~0.15s vs ~1.2s on a 1.1M-row day).
+  if (c.appCols.length === 0) {
+    const [row] = await db
+      .select({ c: countDistinct(appSnapshots.appId) })
+      .from(appSnapshots)
+      .where(and(...c.snapPin, ...c.snapMetricCols));
+    return row?.c ?? 0;
+  }
+  // An apps-column filter (category/source/developer/…) is also present → the join is
+  // unavoidable. countDistinct(apps.id) so an app charting in several requested markets
+  // is counted once.
   const [row] = await db
     .select({ c: countDistinct(apps.id) })
     .from(apps)
@@ -307,13 +352,49 @@ async function selectCandidateIds(c: AppConditions, params: AppSearchParams): Pr
       .innerJoin(appSnapshots, eq(appSnapshots.appId, apps.id))
       .where(and(...conds))
       .orderBy(asc(appSnapshots.chartRank), apps.id)
-      .limit(POOL_CAP);
+      .limit(effectivePoolCap(params));
     // Dedupe: an app charting in several requested markets yields one row per market.
     return [...new Set(rows.map((r) => r.id))];
   }
 
   const col = sqlSortColumn(params.sortBy) ?? appSnapshots.reviewCount;
   const dir = (params.sortOrder ?? "desc") === "asc" ? asc : desc;
+  const cap = effectivePoolCap(params);
+
+  // Selective app-column filters (releasedAt window, category, …) can match ≪1% of
+  // the catalog. Joining snapshot-first scans every row on the latest day (~1.1M);
+  // apps-first + inArray keeps the join bounded to the filtered id set.
+  if (c.appCols.length > 0 && c.snapMetricCols.length === 0) {
+    const db = getDb();
+    const [countRow] = await db.select({ c: count() }).from(apps).where(and(...c.appCols));
+    const matchCount = countRow?.c ?? 0;
+    if (matchCount > 0 && matchCount <= cap * 3) {
+      const narrowed = await db.select({ id: apps.id }).from(apps).where(and(...c.appCols));
+      const narrowIds = narrowed.map((r) => r.id);
+      const rows = await db
+        .select({ id: apps.id })
+        .from(apps)
+        .innerJoin(appSnapshots, eq(appSnapshots.appId, apps.id))
+        .where(and(...c.snapPin, inArray(apps.id, narrowIds)))
+        .orderBy(dir(col), apps.id)
+        .limit(cap);
+      return [...new Set(rows.map((r) => r.id))];
+    }
+    // Large app-only filter (e.g. Rising 6M window) — probe top snapshot rows by the
+    // sort proxy, then apply app predicates, avoiding a full 1M-row join+filter.
+    if (matchCount > cap * 3) {
+      const probe = Math.min(2_500, cap * 2);
+      const rows = await db
+        .select({ id: apps.id })
+        .from(appSnapshots)
+        .innerJoin(apps, eq(appSnapshots.appId, apps.id))
+        .where(and(...c.snapPin, ...c.appCols))
+        .orderBy(dir(col), apps.id)
+        .limit(probe);
+      return [...new Set(rows.map((r) => r.id))];
+    }
+  }
+
   // No `col IS NULL` term: SQLite already sorts NULLs to the bottom of a DESC scan,
   // and sortApps applies the authoritative null-sink to the pool afterwards. Keeping
   // the order a plain column lets the (snapshot_date, review_count) index serve it
@@ -324,7 +405,7 @@ async function selectCandidateIds(c: AppConditions, params: AppSearchParams): Pr
     .innerJoin(appSnapshots, eq(appSnapshots.appId, apps.id))
     .where(and(...conds))
     .orderBy(dir(col), apps.id)
-    .limit(POOL_CAP);
+    .limit(cap);
   return [...new Set(rows.map((r) => r.id))];
 }
 
@@ -334,7 +415,7 @@ async function selectCandidateIds(c: AppConditions, params: AppSearchParams): Pr
  * Applying the filters DURING selection — not just in matchesSearch afterward — keeps
  * filtered matches that rank beyond POOL_CAP, which a text-only FTS pool would drop.
  */
-async function ftsCandidateIds(match: string, filter: SQL): Promise<string[]> {
+async function ftsCandidateIds(match: string, filter: SQL, cap: number): Promise<string[]> {
   const rows = await getDb().all<{ id: string }>(sql`
     SELECT apps.id AS id
     FROM apps_fts
@@ -342,7 +423,7 @@ async function ftsCandidateIds(match: string, filter: SQL): Promise<string[]> {
     JOIN app_snapshots ON app_snapshots.app_id = apps.id
     WHERE apps_fts MATCH ${match} AND ${filter}
     ORDER BY apps_fts.rank, apps.id
-    LIMIT ${POOL_CAP}
+    LIMIT ${cap}
   `);
   // Dedupe: the snapshot join yields one row per market for multi-market requests.
   return [...new Set(rows.map((r) => r.id))];
@@ -379,7 +460,8 @@ export async function searchAppCandidates(params: AppSearchParams): Promise<AppC
   let ids: string[];
   if (ftsMatch) {
     const filter = and(...allConditions(conds))!;
-    [totalCount, ids] = await Promise.all([ftsCount(ftsMatch, filter), ftsCandidateIds(ftsMatch, filter)]);
+    const cap = effectivePoolCap(params);
+    [totalCount, ids] = await Promise.all([ftsCount(ftsMatch, filter), ftsCandidateIds(ftsMatch, filter, cap)]);
   } else {
     [totalCount, ids] = await Promise.all([countMatches(conds), selectCandidateIds(conds, params)]);
   }

@@ -7,7 +7,10 @@ import type {
   Store,
   TextSearchField,
 } from "@kittie/types";
+import { sevenDayReleasedAfterEpoch } from "@kittie/types";
 import { formatCompact, formatMoney } from "./format";
+
+export { sevenDayReleasedAfterEpoch };
 
 export type SearchScope = "all" | TextSearchField;
 
@@ -81,8 +84,11 @@ export function parseFilters(sp: URLSearchParams): ExploreFilters {
   };
 
   // AppKittie / Rising handoff — `releasedAfter=custom&releasedAfterDate=YYYY-MM-DD`.
-  let rel = num("rel");
-  if (sp.get("releasedAfter") === "custom") {
+  // Only derive `rel` when the URL has no explicit `rel` param; otherwise preset pills,
+  // the date dialog, and chip clears would be overridden by stale handoff keys.
+  const relRaw = sp.get("rel");
+  let rel = relRaw != null && relRaw !== "" ? Number(relRaw) : undefined;
+  if (rel == null && sp.get("releasedAfter") === "custom") {
     const d = sp.get("releasedAfterDate");
     if (d) {
       const ms = Date.now() - new Date(`${d}T00:00:00`).getTime();
@@ -164,6 +170,12 @@ export function writeFilters(f: ExploreFilters): URLSearchParams {
 
 const daysAgoEpoch = (d?: number) =>
   d != null ? Math.floor((Date.now() - d * 86_400_000) / 1000) : undefined;
+
+/** Default Explore `/apps` params (empty URL) — prefetch must match or cache misses. */
+export function defaultExploreApiParams(): AppSearchParams {
+  // Field-for-field aligned with defaultExploreAppQuery in @kittie/types (API warm-cache).
+  return toApiParams(EMPTY_FILTERS);
+}
 
 /** Map filter state to the REST `/apps` query params. */
 export function toApiParams(f: ExploreFilters): AppSearchParams {

@@ -40,7 +40,9 @@ export function DatePickerDialog({
   const initMode: DateMode =
     within != null && atLeast != null ? "range" : atLeast != null ? "before" : "after";
   const [mode, setMode] = useState<DateMode>(initMode);
-  const [start, setStart] = useState<Date | null>(within != null ? fromDaysAgo(within) : null);
+  const [start, setStart] = useState<Date | null>(() =>
+    within != null ? fromDaysAgo(within) : atLeast != null ? fromDaysAgo(atLeast) : null,
+  );
   const [end, setEnd] = useState<Date | null>(atLeast != null ? fromDaysAgo(atLeast) : null);
   const [view, setView] = useState<Date>(() => {
     const seed = within != null ? fromDaysAgo(within) : atLeast != null ? fromDaysAgo(atLeast) : new Date();

@@ -6,6 +6,7 @@ import { getDb } from "./lib/db.js";
 import { installPreviewShutdownHooks, startPreviewReaper } from "./lib/preview.js";
 import { startRunEventSweeper } from "./lib/run-events.js";
 import { startFreshness } from "./services/freshness-service.js";
+import { warmLandingReadCaches } from "./services/warm-cache.js";
 import { registerAllSweeps } from "./sweeps.js";
 import { seedAppEngine } from "./scripts/seed-app-engine.js";
 
@@ -30,6 +31,7 @@ startRunEventSweeper();
 
 serve({ fetch: app.fetch, port: env.PORT }, (info) => {
   console.log(`Kittie API listening on http://localhost:${info.port}`);
+  warmLandingReadCaches();
   // Background freshness sweeps run only on the single designated writer. Booting
   // with RUN_SWEEPS=0 serves reads WITHOUT the snapshot-bulk boot catch-up, which
   // materialises the full catalog and OOMs the heap (see boot-catchup memory +

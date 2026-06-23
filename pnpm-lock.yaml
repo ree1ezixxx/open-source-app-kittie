@@ -24,7 +24,7 @@ importers:
         specifier: ^5.8.3
         version: 5.9.3
 
-  apps/mcp:
+  apps/eval:
     dependencies:
       '@kittie/types':
         specifier: workspace:*
@@ -42,6 +42,34 @@ importers:
       typescript:
         specifier: ^5.8.3
         version: 5.9.3
+
+  apps/mcp:
+    dependencies:
+      '@kittie/build-context':
+        specifier: workspace:*
+        version: link:../../packages/build-context
+      '@kittie/intelligence':
+        specifier: workspace:*
+        version: link:../../packages/intelligence
+      '@kittie/types':
+        specifier: workspace:*
+        version: link:../../packages/types
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.12.1
+        version: 1.29.0(zod@3.25.76)
+    devDependencies:
+      '@types/node':
+        specifier: ^22.15.21
+        version: 22.19.20
+      tsx:
+        specifier: ^4.19.4
+        version: 4.22.4
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.8
+        version: 4.1.8(@types/node@22.19.20)(vite@6.4.3(@types/node@22.19.20)(tsx@4.22.4))
 
   apps/web:
     dependencies:
@@ -144,6 +172,41 @@ importers:
         specifier: ^4.1.8
         version: 4.1.8(@types/node@22.19.20)(vite@6.4.3(@types/node@22.19.20)(tsx@4.22.4))
 
+  packages/billing:
+    dependencies:
+      '@libsql/client':
+        specifier: ^0.17.3
+        version: 0.17.3
+    devDependencies:
+      '@types/node':
+        specifier: ^22.15.21
+        version: 22.19.20
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.8
+        version: 4.1.8(@types/node@22.19.20)(vite@6.4.3(@types/node@22.19.20)(tsx@4.22.4))
+
+  packages/build-context:
+    dependencies:
+      '@kittie/core':
+        specifier: workspace:*
+        version: link:../core
+      '@kittie/types':
+        specifier: workspace:*
+        version: link:../types
+    devDependencies:
+      '@types/node':
+        specifier: ^22.15.21
+        version: 22.19.20
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.8
+        version: 4.1.8(@types/node@22.19.20)(vite@6.4.3(@types/node@22.19.20)(tsx@4.22.4))
+
   packages/clone-engine:
     dependencies:
       '@kittie/types':
@@ -175,6 +238,9 @@ importers:
       typescript:
         specifier: ^5.8.3
         version: 5.9.3
+      vitest:
+        specifier: ^4.1.8
+        version: 4.1.8(@types/node@22.19.20)(vite@6.4.3(@types/node@22.19.20)(tsx@4.22.4))
 
   packages/db:
     dependencies:
@@ -240,6 +306,9 @@ importers:
 
   packages/intelligence:
     dependencies:
+      '@kittie/core':
+        specifier: workspace:*
+        version: link:../core
       '@kittie/db':
         specifier: workspace:*
         version: link:../db
@@ -262,6 +331,28 @@ importers:
       typescript:
         specifier: ^5.8.3
         version: 5.9.3
+
+  packages/visual:
+    dependencies:
+      '@kittie/core':
+        specifier: workspace:*
+        version: link:../core
+      '@kittie/db':
+        specifier: workspace:*
+        version: link:../db
+      '@kittie/types':
+        specifier: workspace:*
+        version: link:../types
+    devDependencies:
+      '@types/node':
+        specifier: ^22.15.21
+        version: 22.19.20
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.8
+        version: 4.1.8(@types/node@22.19.20)(vite@6.4.3(@types/node@22.19.20)(tsx@4.22.4))
 
 packages:
 
