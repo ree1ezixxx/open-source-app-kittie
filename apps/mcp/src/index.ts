@@ -25,16 +25,49 @@ async function apiPost<T>(path: string, body: unknown): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+// Server-wide instructions: tell the connected agent WHEN and WHY to reach for
+// Kittie across tools, so it self-invokes at the right moments (L5 hardening).
+const KITTIE_INSTRUCTIONS = [
+  "Kittie is the market-awareness layer for building a mobile app. Use it BEFORE",
+  "and DURING a build to ground product decisions in real App Store evidence —",
+  "never guess the market.",
+  "",
+  "Reach for it when you: validate whether an app idea is worth building, choose",
+  "which feature to implement next, name/position the app for ASO, study what real",
+  "users of competitors complain about, or check momentum in a niche.",
+  "",
+  "Honesty: download/revenue figures are MODELLED ESTIMATES (labelled). Blocked or",
+  "un-fetched sources return empty with a reason — never fabricated. Treat an empty",
+  "result as 'not collected', not as a market fact (e.g. no Meta ads != no demand).",
+].join("\n");
+
 const server = new Server(
-  { name: "kittie", version: "0.2.0" },
-  { capabilities: { tools: {} } },
+  { name: "kittie", version: "0.3.0" },
+  { capabilities: { tools: {} }, instructions: KITTIE_INSTRUCTIONS },
 );
 
 // NOTE on data honesty (true across every tool): download and revenue figures are
 // MODELLED ESTIMATES, labelled as such — not ground truth. Blocked sources (e.g. Meta
 // ads) return empty, never fabricated. App ids look like `apple:123456789` / `google:com.x`.
-server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: [
+/** MCP safety annotations (L5 hardening). Every read tool queries live external
+ *  app-store data and is safe to repeat; only `clone_ios_app` writes output. */
+type ToolHints = {
+  readOnlyHint?: boolean;
+  destructiveHint?: boolean;
+  idempotentHint?: boolean;
+  openWorldHint?: boolean;
+};
+const READ_ONLY: ToolHints = { readOnlyHint: true, idempotentHint: true, openWorldHint: true };
+const TOOL_ANNOTATIONS: Record<string, ToolHints> = {
+  clone_ios_app: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+};
+
+const BASE_TOOLS = [
     {
       name: "search_apps",
       description:
@@ -226,7 +259,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         required: ["appId"],
       },
     },
-  ],
+];
+
+server.setRequestHandler(ListToolsRequestSchema, async () => ({
+  tools: BASE_TOOLS.map((tool) => ({
+    ...tool,
+    annotations: TOOL_ANNOTATIONS[tool.name] ?? READ_ONLY,
+  })),
 }));
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
