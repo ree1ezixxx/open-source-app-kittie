@@ -163,7 +163,12 @@ export async function replaceGeneratedKeywordsForTrackedApp(
   await db.transaction(async (tx) => {
     await tx
       .delete(trackedAppKeywords)
-      .where(eq(trackedAppKeywords.trackedAppId, input.trackedAppId));
+      .where(
+        and(
+          eq(trackedAppKeywords.trackedAppId, input.trackedAppId),
+          eq(trackedAppKeywords.source, "ai"),
+        ),
+      );
 
     if (input.keywords.length > 0) {
       await tx.insert(trackedAppKeywords).values(
@@ -181,9 +186,14 @@ export async function replaceGeneratedKeywordsForTrackedApp(
       );
     }
 
+    const rows = await tx
+      .select({ id: trackedAppKeywords.id })
+      .from(trackedAppKeywords)
+      .where(eq(trackedAppKeywords.trackedAppId, input.trackedAppId));
+
     await tx
       .update(trackedApps)
-      .set({ generatedKeywordCount: input.keywords.length })
+      .set({ generatedKeywordCount: rows.length })
       .where(eq(trackedApps.id, input.trackedAppId));
   });
 }

@@ -397,6 +397,10 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
     return () => ctrl.abort();
   }, [loadRankings, rankCountry, selected?.id]);
 
+  useEffect(() => {
+    setSimilar({});
+  }, [rankCountry]);
+
   function applySyncDone(done: TrackedAppSyncDone) {
     setTracked((prev) => {
       const without = prev.filter((t) => t.id !== done.tracked.id);

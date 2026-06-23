@@ -12,6 +12,7 @@ import {
   keywordIdsForGeneratedKeywords,
   latestRankObservations,
   listGeneratedKeywordsForTrackedApp,
+  replaceGeneratedKeywordsForTrackedApp,
 } from "./tracked-apps.js";
 
 const tempDirs: string[] = [];
@@ -234,5 +235,53 @@ describe("tracked app keyword market scope", () => {
     expect(filtered.map((row) => `${row.source}:${row.country}:${row.keyword}`)).toEqual([
       "ai:US:habit tracker",
     ]);
+  });
+});
+
+describe("replaceGeneratedKeywordsForTrackedApp", () => {
+  it("replaces AI keywords without deleting custom market keywords", async () => {
+    const db = await createTrackedKeywordDb();
+    await addKeywordForTrackedApp(db, {
+      trackedAppId: "ta_1",
+      appId: "app_1",
+      store: "apple",
+      country: "GB",
+      keyword: "custom phrase",
+      inputHash: "custom:GB",
+      source: "custom",
+    });
+    await replaceGeneratedKeywordsForTrackedApp(db, {
+      trackedAppId: "ta_1",
+      appId: "app_1",
+      store: "apple",
+      country: "US",
+      inputHash: "hash:v2",
+      keywords: ["ai keyword one", "ai keyword two"],
+    });
+
+    const rows = await listGeneratedKeywordsForTrackedApp(db, "ta_1");
+    expect(rows.map((row) => `${row.source}:${row.country}:${row.keyword}`).sort()).toEqual([
+      "ai:US:ai keyword one",
+      "ai:US:ai keyword two",
+      "custom:GB:custom phrase",
+    ]);
+  });
+});
+
+describe("deleteKeywordForTrackedApp", () => {
+  it("deletes AI keywords by stored country even when caller passes another market", async () => {
+    const db = await createTrackedKeywordDb();
+    await replaceGeneratedKeywordsForTrackedApp(db, {
+      trackedAppId: "ta_1",
+      appId: "app_1",
+      store: "apple",
+      country: "US",
+      inputHash: "hash:v1",
+      keywords: ["habit tracker"],
+    });
+
+    await deleteKeywordForTrackedApp(db, "ta_1", "US", "habit tracker");
+    const rows = await listGeneratedKeywordsForTrackedApp(db, "ta_1");
+    expect(rows).toEqual([]);
   });
 });

@@ -75,6 +75,13 @@ export function buildKeywordGenerationInput(app: AppKeywordMetadata): string {
   });
 }
 
+export class InvalidKeywordError extends Error {
+  constructor(message = "keyword is invalid") {
+    super(message);
+    this.name = "InvalidKeywordError";
+  }
+}
+
 function normalizeKeyword(raw: string): string | null {
   const keyword = raw
     .toLowerCase()
@@ -217,13 +224,18 @@ export async function removeTrackedApp(
   await dbUntrackApp(getDb(), appId, store, country);
 }
 
+function requireNormalizedKeyword(raw: string): string {
+  const normalized = normalizeKeyword(raw);
+  if (!normalized) throw new InvalidKeywordError();
+  return normalized;
+}
+
 export async function addCustomKeywordToTrackedApp(
   trackedAppId: string,
   keyword: string,
   country: string,
 ): Promise<TrackedAppRankingsResult | null> {
-  const normalized = normalizeKeyword(keyword);
-  if (!normalized) throw new Error("keyword is invalid");
+  const normalized = requireNormalizedKeyword(keyword);
 
   const db = getDb();
   const tracked = await getTrackedAppById(db, trackedAppId);
@@ -254,15 +266,19 @@ export async function removeKeywordFromTrackedApp(
   keyword: string,
   country: string,
 ): Promise<TrackedAppRankingsResult | null> {
-  const normalized = normalizeKeyword(keyword);
-  if (!normalized) throw new Error("keyword is invalid");
+  const normalized = requireNormalizedKeyword(keyword);
 
   const db = getDb();
   const tracked = await getTrackedAppById(db, trackedAppId);
   if (!tracked) return null;
 
-  await deleteKeywordForTrackedApp(db, trackedAppId, country.toUpperCase(), normalized);
-  return listRankingsForTrackedApp(trackedAppId, { country: country.toUpperCase() });
+  const market = country.toUpperCase();
+  const generated = await listGeneratedKeywordsForTrackedApp(db, trackedAppId);
+  const row = generated.find((entry) => entry.keyword === normalized);
+  if (row) {
+    await deleteKeywordForTrackedApp(db, trackedAppId, row.country, normalized);
+  }
+  return listRankingsForTrackedApp(trackedAppId, { country: market });
 }
 
 export async function findSimilarTrackedAppKeywords(
@@ -271,8 +287,7 @@ export async function findSimilarTrackedAppKeywords(
   country: string,
   limit = 8,
 ): Promise<string[] | null> {
-  const normalized = normalizeKeyword(keyword);
-  if (!normalized) throw new Error("keyword is invalid");
+  const normalized = requireNormalizedKeyword(keyword);
 
   const tracked = await getTrackedAppById(getDb(), trackedAppId);
   if (!tracked) return null;
