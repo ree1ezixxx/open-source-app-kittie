@@ -7,6 +7,8 @@ import type { Theme } from "../lib/theme";
 import { categoryColor, pillStyle } from "../lib/palette";
 import { formatCompact, formatMoney, formatRating, formatDate } from "../lib/format";
 import { MetricBar } from "../components/MetricBar";
+import { Segmented } from "../components/Segmented";
+import { TeardownCanvas } from "../components/teardown/TeardownCanvas";
 import { DetailCard, EmptyCard, Fact } from "../components/DetailCard";
 import { TrendPanel, type ChartMetric } from "../components/TrendPanel";
 import { SimilarApps } from "../components/SimilarApps";
@@ -45,6 +47,15 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
   const [error, setError] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<number | null>(null);
   const [chartMetric, setChartMetric] = useState<ChartMetric>("downloadsEstimate");
+  const [view, setView] = useState<"classic" | "teardown">(() =>
+    typeof sessionStorage !== "undefined" && sessionStorage.getItem("kittie-app-view") === "teardown"
+      ? "teardown"
+      : "classic",
+  );
+  // persist the chosen view so re-rooting (navigating to a competitor) keeps the canvas
+  useEffect(() => {
+    if (typeof sessionStorage !== "undefined") sessionStorage.setItem("kittie-app-view", view);
+  }, [view]);
   const [media, setMedia] = useState<{ status: "probing" | "ready"; working: string[] }>({
     status: "probing",
     working: [],
@@ -70,11 +81,15 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
   }, [id]);
 
   // Canonicalize the URL to the live-format slug (/app/app-<title>-id<storeAppId>).
+  // Guard on app.id === id: during a re-root navigation to a *different* app's /apps/:id,
+  // `app` is briefly the stale previous app — without this guard the effect (which re-runs
+  // because React Router recreates `navigate` on location change) would bounce the URL back
+  // to the stale app's canonical and the re-root would never land.
   useEffect(() => {
-    if (!app) return;
+    if (!app || app.id !== id) return;
     const canonical = `/app/${encodeURIComponent(appSlug(app))}`;
     if (window.location.pathname !== canonical) navigate(canonical, { replace: true });
-  }, [app, navigate]);
+  }, [app, navigate, id]);
 
   // SEO title (live parity).
   useEffect(() => {
@@ -126,6 +141,16 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
         <button className="btn" onClick={() => navigate(-1)}>
           <IconArrowLeft /> Back
         </button>
+        {app && (
+          <Segmented
+            value={view}
+            options={[
+              { id: "classic", label: "Classic" },
+              { id: "teardown", label: "Teardown" },
+            ]}
+            onChange={setView}
+          />
+        )}
         <div className="topbar-spacer" />
         {app && (
           <FavoriteToggle
@@ -150,6 +175,9 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
         </button>
       </div>
 
+      {view === "teardown" && app && !error && !loading ? (
+        <TeardownCanvas app={app} reviews={reviews} />
+      ) : (
       <div className="detail-scroll" ref={scrollRef}>
         {error ? (
           <div className="center-state">
@@ -425,6 +453,7 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
           </div>
         )}
       </div>
+      )}
 
       {app && lightbox !== null && media.working.length > 0 && (
         <Lightbox
