@@ -5,7 +5,9 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import type { AppSearchParams } from "@kittie/types";
+import type { AppSearchParams, Store } from "@kittie/types";
+import { createBuildContextManager, type ProfileUserValues } from "@kittie/build-context";
+import { synthesizeOpportunity, type MarketApp } from "./intent.js";
 
 const API_BASE = process.env.KITTIE_API_URL ?? "http://localhost:3009";
 
@@ -65,7 +67,26 @@ const TOOL_ANNOTATIONS: Record<string, ToolHints> = {
     idempotentHint: false,
     openWorldHint: false,
   },
+  // Intent layer: start_mobile_build writes the local build context; get reads it.
+  start_mobile_build: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+  get_build_context: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
 };
+
+/** Schema fragment for tools that return a DecisionPacket (L2). */
+const DECISION_PACKET_SCHEMA = {
+  type: "object",
+  properties: {
+    decision: { type: "string" },
+    evidence: { type: "array", items: { type: "object" } },
+    confidence: { type: "object" },
+    coverage: { type: "object" },
+    assumptions: { type: "array", items: { type: "string" } },
+    unknowns: { type: "array", items: { type: "string" } },
+    recommendedActions: { type: "array", items: { type: "object" } },
+    snapshotId: { type: "string" },
+  },
+  required: ["decision", "evidence", "confidence", "coverage", "snapshotId"],
+} as const;
 
 const BASE_TOOLS = [
     {
@@ -259,6 +280,56 @@ const BASE_TOOLS = [
         required: ["appId"],
       },
     },
+    {
+      name: "research_market_opportunity",
+      description:
+        "Validate an app idea/niche against the live market: pulls the competitors, ranks them, and returns " +
+        "a DECISION PACKET — a verdict (build / differentiate / unvalidated) backed by observed competitor " +
+        "evidence (each with a store URL), a confidence score, what's missing (e.g. ad data), and the " +
+        "recommended next tools. The first call a build agent should make for a new app.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          niche: { type: "string", description: "The app idea or niche, e.g. 'meditation for shift workers'." },
+          source: { type: "string", enum: ["apple", "google"], description: "Limit to one store." },
+          country: { type: "string", description: "ISO market (default US)." },
+          limit: { type: "number", description: "Max competitors to scan (≤50, default 25)." },
+        },
+        required: ["niche"],
+      },
+      outputSchema: DECISION_PACKET_SCHEMA,
+    },
+    {
+      name: "start_mobile_build",
+      description:
+        "Open a persistent build context for a new app and return its digest. Records the idea, audience, " +
+        "platforms, markets, monetisation and constraints to a portable `.kittie/` folder so every later " +
+        "Kittie call shares the same project understanding. Returns a `contextId` to pass onward.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          idea: { type: "string" },
+          audience: { type: "string" },
+          platforms: { type: "array", items: { type: "string", enum: ["apple", "google"] } },
+          markets: { type: "array", items: { type: "string" } },
+          monetisation: { type: "string" },
+          constraints: { type: "array", items: { type: "string" } },
+        },
+        required: ["idea"],
+      },
+    },
+    {
+      name: "get_build_context",
+      description:
+        "Read the current build context as a compact digest: phase, project profile, merged preferences, " +
+        "open unknowns and recent decisions. Pass include=['decisions'] or ['full'] to drill down.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          include: { type: "array", items: { type: "string", enum: ["decisions", "full"] } },
+        },
+      },
+    },
 ];
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
@@ -394,6 +465,71 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!appId) throw new Error("appId is required");
         result = await apiPost("/api/v1/clone/ios", { appId });
         break;
+      }
+      case "research_market_opportunity": {
+        const { niche, source, country = "US", limit = 25 } = (args ?? {}) as {
+          niche?: string;
+          source?: string;
+          country?: string;
+          limit?: number;
+        };
+        if (!niche) throw new Error("niche is required");
+        const qs = new URLSearchParams({ search: niche, countries: country, limit: String(Math.min(limit, 50)) });
+        if (source) qs.set("source", source);
+        const res = await apiGet<{ data?: MarketApp[] }>(`/api/v1/apps?${qs}`);
+        const apps = (res.data ?? []).map((a) => ({
+          id: a.id,
+          store: a.store,
+          title: a.title,
+          rating: a.rating,
+          reviewCount: a.reviewCount,
+        }));
+        const packet = synthesizeOpportunity({
+          niche,
+          apps,
+          reviewThemes: null,
+          observedAt: new Date().toISOString(),
+          snapshotId: `snap_${Date.now()}`,
+        });
+        return {
+          content: [{ type: "text", text: JSON.stringify(packet, null, 2) }],
+          structuredContent: packet as unknown as Record<string, unknown>,
+        };
+      }
+      case "start_mobile_build": {
+        const a = (args ?? {}) as {
+          idea?: string;
+          audience?: string;
+          platforms?: string[];
+          markets?: string[];
+          monetisation?: string;
+          constraints?: string[];
+        };
+        if (!a.idea) throw new Error("idea is required");
+        const profile: Partial<ProfileUserValues> = { idea: a.idea };
+        if (a.audience != null) profile.audience = a.audience;
+        if (a.platforms) profile.platforms = a.platforms as Store[];
+        if (a.markets) profile.markets = a.markets;
+        if (a.monetisation != null) profile.monetisation = a.monetisation;
+        if (a.constraints) profile.constraints = a.constraints;
+        const mgr = createBuildContextManager();
+        if (mgr.exists()) mgr.update({ profile });
+        else mgr.create({ profile });
+        const digest = mgr.get();
+        return {
+          content: [{ type: "text", text: JSON.stringify(digest, null, 2) }],
+          structuredContent: digest as unknown as Record<string, unknown>,
+        };
+      }
+      case "get_build_context": {
+        const { include } = (args ?? {}) as { include?: Array<"decisions" | "full"> };
+        const mgr = createBuildContextManager();
+        if (!mgr.exists()) throw new Error("No build context yet — call start_mobile_build first.");
+        const digest = mgr.get({ include });
+        return {
+          content: [{ type: "text", text: JSON.stringify(digest, null, 2) }],
+          structuredContent: digest as unknown as Record<string, unknown>,
+        };
       }
       default:
         throw new Error(`Unknown tool: ${name}`);
