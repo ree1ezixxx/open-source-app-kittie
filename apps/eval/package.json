@@ -1,0 +1,24 @@
+{
+  "name": "@kittie/eval",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "kittie-eval": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsx src/index.ts",
+    "eval": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@kittie/types": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.12.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.21",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}

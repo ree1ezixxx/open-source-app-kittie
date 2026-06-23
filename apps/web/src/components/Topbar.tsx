@@ -59,7 +59,7 @@ export function Topbar({
             <IconGrid style={{ width: 18, height: 18 }} />
           </div>
           <div>
-            <div className="page-title">{title}</div>
+            <h1 className="page-title">{title}</h1>
             <div className="page-sub">{subtitle}</div>
           </div>
           <span className="count-chip" title={`${total.toLocaleString()} apps`}>

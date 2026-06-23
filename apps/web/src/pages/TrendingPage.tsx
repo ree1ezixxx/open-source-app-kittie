@@ -5,7 +5,7 @@ import { AppIcon } from "../components/AppIcon";
 import { PageShell } from "../components/PageShell";
 import { Segmented } from "../components/Segmented";
 import { EmptyState } from "../components/EmptyState";
-import { listCharts } from "../lib/api";
+import { listCharts, peekCharts } from "../lib/api";
 import { categoryColor, pillStyle } from "../lib/palette";
 import { formatCompact, formatMoney } from "../lib/format";
 import { IconTrending, IconChart } from "../icons";
@@ -70,17 +70,22 @@ export function TrendingPage({ theme, onToggleTheme }: { theme: Theme; onToggleT
 
   useEffect(() => {
     const ac = new AbortController();
-    setLoading(true);
-    listCharts(
-      {
-        store,
-        type: chart,
-        country,
-        category: category === "All categories" ? undefined : category,
-        limit: 100,
-      },
-      ac.signal,
-    )
+    const req = {
+      store,
+      type: chart,
+      country,
+      category: category === "All categories" ? undefined : category,
+      limit: 100,
+    } as const;
+    const cached = peekCharts(req);
+    if (cached) {
+      setResult(cached);
+      setLoading(false);
+    } else {
+      setResult(null);
+      setLoading(true);
+    }
+    listCharts(req, ac.signal)
       .then((r) => setResult(r))
       .catch((e) => {
         if (e?.name !== "AbortError") setResult(null);
@@ -147,7 +152,7 @@ export function TrendingPage({ theme, onToggleTheme }: { theme: Theme; onToggleT
         <span>{entries.length} {entries.length === 1 ? "app" : "apps"}</span>
       </div>
       <div className="table-scroll">
-        {loading ? (
+        {loading && entries.length === 0 ? (
           <EmptyState icon={<IconChart />} title="Loading rankings…" />
         ) : !entries.length ? (
           <EmptyState

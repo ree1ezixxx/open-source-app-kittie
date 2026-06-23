@@ -9,8 +9,11 @@ import type {
   Store,
   TopChartsResult,
 } from "@kittie/types";
+import { createQueryCache } from "./queryCache";
 
 const BASE = "/api/v1";
+const categoriesCache = createQueryCache<CategoryFacet[]>(30 * 60_000, 1);
+const chartsCache = createQueryCache<TopChartsResult>(5 * 60_000);
 
 /**
  * List row plus Explore-only extras the list endpoint attaches:
@@ -41,11 +44,27 @@ export async function listApps(
 /** Category + which stores it appears in — powers the Explore category popover. */
 export type CategoryFacet = { name: string; stores: Store[] };
 
+export function peekCategories(): CategoryFacet[] | undefined {
+  return categoriesCache.get("all");
+}
+
+let categoriesInflight: Promise<CategoryFacet[]> | null = null;
+
 export async function listCategories(signal?: AbortSignal): Promise<CategoryFacet[]> {
-  const res = await fetch(`${BASE}/apps/categories`, { signal });
-  if (!res.ok) throw new Error(`Failed to load categories (${res.status})`);
-  const body = (await res.json()) as { data: CategoryFacet[] };
-  return body.data;
+  const cached = categoriesCache.get("all");
+  if (cached) return cached;
+  if (!categoriesInflight) {
+    categoriesInflight = (async () => {
+      const res = await fetch(`${BASE}/apps/categories`, { signal });
+      if (!res.ok) throw new Error(`Failed to load categories (${res.status})`);
+      const body = (await res.json()) as { data: CategoryFacet[] };
+      categoriesCache.set("all", body.data);
+      return body.data;
+    })().finally(() => {
+      categoriesInflight = null;
+    });
+  }
+  return categoriesInflight;
 }
 
 export async function getApp(id: string, signal?: AbortSignal): Promise<AppDetail> {
@@ -64,10 +83,19 @@ export async function getAppHistoricals(id: string, signal?: AbortSignal): Promi
 }
 
 /** Trending "Store Rankings" — real top charts with day-over-day rank deltas. */
+export function peekCharts(
+  params: { store: Store; type: ChartType; country?: string; category?: string; limit?: number },
+): TopChartsResult | undefined {
+  return chartsCache.get(JSON.stringify(params));
+}
+
 export async function listCharts(
   params: { store: Store; type: ChartType; country?: string; category?: string; limit?: number },
   signal?: AbortSignal,
 ): Promise<TopChartsResult> {
+  const key = JSON.stringify(params);
+  const cached = chartsCache.get(key);
+  if (cached) return cached;
   const q = new URLSearchParams();
   q.set("store", params.store);
   q.set("type", params.type);
@@ -77,6 +105,7 @@ export async function listCharts(
   const res = await fetch(`${BASE}/charts?${q.toString()}`, { signal });
   if (!res.ok) throw new Error(`Failed to load charts (${res.status})`);
   const body = (await res.json()) as { data: TopChartsResult };
+  chartsCache.set(key, body.data);
   return body.data;
 }
 

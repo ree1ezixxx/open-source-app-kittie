@@ -7,7 +7,7 @@ import { ExploreFilterRail, type CategoryMode } from "../components/ExploreFilte
 import { ActiveFilters } from "../components/ActiveFilters";
 import { Pagination } from "../components/Pagination";
 import { useApps } from "../hooks/useApps";
-import { listCategories, type CategoryFacet } from "../lib/api";
+import { listCategories, peekCategories, type CategoryFacet } from "../lib/api";
 import {
   activeChips,
   EMPTY_FILTERS,
@@ -37,8 +37,13 @@ export function ExplorePage({
 
   // Rail extras that live outside ExploreFilters (URL stays the single source
   // of truth): category include/exclude mode + app-language multi-select.
-  const catMode: CategoryMode = sp.get("catmode") === "exclude" ? "exclude" : "include";
+  const catMode: CategoryMode =
+    sp.get("catmode") === "exclude" || sp.has("excludedCategories") ? "exclude" : "include";
   const langs = useMemo(() => sp.get("langs")?.split(",").filter(Boolean) ?? [], [spStr]);
+  const excludedCountries = useMemo(
+    () => sp.get("excludedCountries")?.split(",").filter(Boolean) ?? [],
+    [spStr],
+  );
 
   const apiParams = useMemo(() => {
     const base = toApiParams(filters);
@@ -46,19 +51,26 @@ export function ExplorePage({
       base.excludedCategories = base.categories;
       base.categories = undefined;
     }
-    if (langs.length) base.languages = langs.join(",");
+    if (excludedCountries.length) base.excludedCountries = excludedCountries.join(",");
+    if (langs.length) {
+      const expanded = new Set(langs.map((l) => l.toLowerCase()));
+      for (const l of langs) {
+        if (l === "zh-cn" || l === "zh-tw") expanded.add("zh");
+      }
+      base.languages = [...expanded].join(",");
+    }
     return base;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [spStr]);
 
   const [searchInput, setSearchInput] = useState(filters.q);
-  const [categories, setCategories] = useState<CategoryFacet[]>([]);
+  const [categories, setCategories] = useState<CategoryFacet[]>(() => peekCategories() ?? []);
 
   // apply a partial filter change → URL (replace, so filter tweaks don't spam history).
   // functional updater reads the *latest* params, so rapid successive clicks compose
   // instead of clobbering each other. writeFilters only knows ExploreFilters keys, so
   // the extra rail params are carried over from prev (or overridden via `extras`).
-  const EXTRA_KEYS = ["catmode", "langs"] as const;
+  const EXTRA_KEYS = ["catmode", "langs", "excludedCountries", "excludedCategories", "releasedAfter", "releasedAfterDate", "secondarySortBy", "secondarySortOrder"] as const;
   function patch(
     p: Partial<ExploreFilters>,
     extras?: Partial<Record<(typeof EXTRA_KEYS)[number], string | undefined>>,
@@ -66,9 +78,24 @@ export function ExplorePage({
     setSp(
       (prev) => {
         const next = writeFilters({ ...parseFilters(prev), ...p });
+        const autoExtras: Partial<Record<(typeof EXTRA_KEYS)[number], string | undefined>> = {};
+        if ("rel" in p || "relBefore" in p) {
+          autoExtras.releasedAfter = undefined;
+          autoExtras.releasedAfterDate = undefined;
+        }
+        if ("cats" in p && (p.cats?.length ?? 0) === 0) {
+          autoExtras.excludedCategories = undefined;
+          autoExtras.catmode = undefined;
+        }
+        const merged = { ...autoExtras, ...extras };
         for (const k of EXTRA_KEYS) {
-          const v = extras && k in extras ? extras[k] : (prev.get(k) ?? undefined);
-          if (v) next.set(k, v);
+          if (merged && k in merged) {
+            const v = merged[k];
+            if (v) next.set(k, v);
+          } else {
+            const v = prev.get(k);
+            if (v) next.set(k, v);
+          }
         }
         return next;
       },
@@ -136,7 +163,7 @@ export function ExplorePage({
 
   function clearChip(chip: Chip) {
     if (chip.id === "langs") return patch({}, { langs: undefined });
-    if (chip.id === "cats") return patch(chip.clear, { catmode: undefined });
+    if (chip.id === "cats") return patch(chip.clear, { catmode: undefined, excludedCategories: undefined });
     patch(chip.clear);
   }
 

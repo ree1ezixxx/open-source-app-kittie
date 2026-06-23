@@ -45,7 +45,7 @@ function growthPct(a: AppListItem): number | null {
 
 /** Inline mini sparkline — renders whatever points exist; 1 point = flat line. */
 function Sparkline({ points, up }: { points: number[]; up: boolean }) {
-  const w = 56;
+  const w = 44;
   const h = 18;
   const pad = 2;
   if (points.length === 0) return null;
@@ -182,7 +182,7 @@ export function AppTable({
         </tr>
       </thead>
       <tbody>
-        {loading
+        {loading && apps.length === 0
           ? Array.from({ length: 12 }).map((_, i) => <SkeletonRow key={i} />)
           : apps.map((a, i) => {
               const cColor = categoryColor(a.category);

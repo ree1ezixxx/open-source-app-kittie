@@ -225,7 +225,7 @@ export function AdsLibraryPage({
               <IconImage style={{ width: 18, height: 18 }} />
             </div>
             <div>
-              <div className="page-title">Ads Library</div>
+              <h1 className="page-title">Ads Library</h1>
               <div className="page-sub">Search and filter creatives</div>
             </div>
             <span className="count-chip">{total.toLocaleString()}</span>

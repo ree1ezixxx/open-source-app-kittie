@@ -18,3 +18,4 @@ data/
 .ab-review/
 generated-workspaces/
 coordinator/.cache/
+tmp/
