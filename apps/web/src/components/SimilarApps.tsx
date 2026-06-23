@@ -7,7 +7,16 @@ import { EmptyCard } from "./DetailCard";
 import { IconGrid } from "../icons";
 
 /** Top apps in the same category — sourced from our own DB. */
-export function SimilarApps({ category, excludeId }: { category: string | null; excludeId: string }) {
+export function SimilarApps({
+  category,
+  excludeId,
+  onPick,
+}: {
+  category: string | null;
+  excludeId: string;
+  /** When provided, cards become buttons calling this instead of <Link> navigation. */
+  onPick?: (id: string) => void;
+}) {
   const [apps, setApps] = useState<AppListItem[] | null>(null);
 
   useEffect(() => {
@@ -43,21 +52,32 @@ export function SimilarApps({ category, excludeId }: { category: string | null; 
 
   return (
     <div className="similar-grid">
-      {apps.map((a) => (
-        <Link key={a.id} to={`/apps/${encodeURIComponent(a.id)}`} className="similar-card">
-          {a.iconUrl ? (
-            <img src={a.iconUrl} alt="" referrerPolicy="no-referrer" loading="lazy" />
-          ) : (
-            <div className="similar-ph">{a.title.charAt(0)}</div>
-          )}
-          <div className="similar-meta">
-            <div className="similar-title" title={a.title}>
-              {a.title}
+      {apps.map((a) => {
+        const body = (
+          <>
+            {a.iconUrl ? (
+              <img src={a.iconUrl} alt="" referrerPolicy="no-referrer" loading="lazy" />
+            ) : (
+              <div className="similar-ph">{a.title.charAt(0)}</div>
+            )}
+            <div className="similar-meta">
+              <div className="similar-title" title={a.title}>
+                {a.title}
+              </div>
+              <div className="similar-sub">{formatMoney(a.revenueEstimate30d)}/mo</div>
             </div>
-            <div className="similar-sub">{formatMoney(a.revenueEstimate30d)}/mo</div>
-          </div>
-        </Link>
-      ))}
+          </>
+        );
+        return onPick ? (
+          <button key={a.id} type="button" className="similar-card" onClick={() => onPick(a.id)}>
+            {body}
+          </button>
+        ) : (
+          <Link key={a.id} to={`/apps/${encodeURIComponent(a.id)}`} className="similar-card">
+            {body}
+          </Link>
+        );
+      })}
     </div>
   );
 }
