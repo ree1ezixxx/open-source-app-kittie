@@ -21,6 +21,7 @@ import { ApiKeysPage } from "./pages/ApiKeysPage";
 import { DocsPage } from "./pages/DocsPage";
 import { ScreenshotGeneratorPage } from "./pages/ScreenshotGeneratorPage";
 import { HotIdeasPage } from "./pages/HotIdeasPage";
+import { RoadmapPage } from "./pages/RoadmapPage";
 import { IdeaDetailPage } from "./pages/IdeaDetailPage";
 import { PricingCalculatorPage } from "./pages/PricingCalculatorPage";
 import { useTheme } from "./lib/theme";
@@ -56,6 +57,7 @@ export function App() {
         <Route path="/dashboard/trending" element={<TrendingPage theme={theme} onToggleTheme={toggleTheme} />} />
         <Route path="/dashboard/rising" element={<RisingPage theme={theme} onToggleTheme={toggleTheme} />} />
         <Route path="/dashboard/app-engine" element={<AppEnginePage theme={theme} onToggleTheme={toggleTheme} />} />
+        <Route path="/dashboard/roadmap" element={<RoadmapPage theme={theme} onToggleTheme={toggleTheme} />} />
         <Route path="/dashboard/builder" element={<BuilderPage theme={theme} onToggleTheme={toggleTheme} />} />
         <Route path="/dashboard/builder/:id" element={<BuilderPage theme={theme} onToggleTheme={toggleTheme} />} />
         <Route path="/dashboard/favorites" element={<FavoritesPage theme={theme} onToggleTheme={toggleTheme} />} />

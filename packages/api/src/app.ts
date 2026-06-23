@@ -12,6 +12,7 @@ import { freshnessRouter } from "./routes/freshness.js";
 import { ideasRouter } from "./routes/ideas.js";
 import { keywordsRouter } from "./routes/keywords.js";
 import { reviewsRouter } from "./routes/reviews.js";
+import { roadmapRouter } from "./routes/roadmap.js";
 import { discoveryIndex, openapiDocument } from "./lib/openapi.js";
 
 export function createApp() {
@@ -45,6 +46,7 @@ export function createApp() {
   v1.route("/ideas", ideasRouter);
   v1.route("/keywords", keywordsRouter);
   v1.route("/reviews", reviewsRouter);
+  v1.route("/roadmap", roadmapRouter);
   app.route("/api/v1", v1);
 
   return app;

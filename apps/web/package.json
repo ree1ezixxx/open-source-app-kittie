@@ -12,6 +12,8 @@
   },
   "dependencies": {
     "@kittie/types": "workspace:*",
+    "@xyflow/react": "^12.11.1",
+    "dagre": "^0.8.5",
     "html-to-image": "^1.11.13",
     "jszip": "^3.10.1",
     "react": "^19.1.0",
@@ -19,6 +21,7 @@
     "react-router-dom": "^7.17.0"
   },
   "devDependencies": {
+    "@types/dagre": "^0.7.54",
     "@types/react": "^19.1.6",
     "@types/react-dom": "^19.1.5",
     "@vitejs/plugin-react": "^4.5.2",

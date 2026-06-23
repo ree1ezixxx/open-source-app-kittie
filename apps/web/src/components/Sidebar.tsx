@@ -60,7 +60,10 @@ const PRIMARY: Group[] = [
   },
   {
     label: "App ideas",
-    items: [{ to: "/dashboard/hot-ideas", label: "Hot ideas", icon: IconBulb }],
+    items: [
+      { to: "/dashboard/hot-ideas", label: "Hot ideas", icon: IconBulb },
+      { to: "/dashboard/roadmap", label: "Roadmap", icon: IconRising },
+    ],
   },
 ];
 
