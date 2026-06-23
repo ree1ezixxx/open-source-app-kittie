@@ -50,7 +50,7 @@ export function RankList({
   emptyTitle?: string;
   emptySub?: string;
 }) {
-  if (loading) {
+  if (loading && apps.length === 0) {
     return (
       <>
         {Array.from({ length: Math.min(limit, 6) }).map((_, i) => (

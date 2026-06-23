@@ -182,7 +182,7 @@ export function AppTable({
         </tr>
       </thead>
       <tbody>
-        {loading
+        {loading && apps.length === 0
           ? Array.from({ length: 12 }).map((_, i) => <SkeletonRow key={i} />)
           : apps.map((a, i) => {
               const cColor = categoryColor(a.category);

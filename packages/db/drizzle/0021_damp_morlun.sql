@@ -1,0 +1,1 @@
+CREATE INDEX `apps_released_at_idx` ON `apps` (`released_at`);

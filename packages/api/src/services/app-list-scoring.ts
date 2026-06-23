@@ -1,6 +1,6 @@
 import {
-  appsWithAppleAds,
-  appsWithCreators,
+  appsWithAppleAdsForIds,
+  appsWithCreatorsForIds,
   buildSnapshotContextsForApps,
   parseJsonArray,
   type SnapshotContext,
@@ -87,8 +87,8 @@ export async function buildScoredAppRows(
   const db = getDb();
   const [contexts, appleAdApps, creatorApps] = await Promise.all([
     buildSnapshotContextsForApps(db, { appIds: ids, period, chartCountry: country }),
-    appsWithAppleAds(db),
-    appsWithCreators(db),
+    appsWithAppleAdsForIds(db, ids),
+    appsWithCreatorsForIds(db, ids),
   ]);
 
   const rows: ScoredAppRow[] = [];

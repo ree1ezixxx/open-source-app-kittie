@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { Sidebar } from "./components/Sidebar";
 import { ExplorePage } from "./pages/ExplorePage";
@@ -24,6 +24,8 @@ import { HotIdeasPage } from "./pages/HotIdeasPage";
 import { IdeaDetailPage } from "./pages/IdeaDetailPage";
 import { PricingCalculatorPage } from "./pages/PricingCalculatorPage";
 import { useTheme } from "./lib/theme";
+import { listCategories, listCharts } from "./lib/api";
+import { prefetchApps } from "./hooks/useApps";
 
 function RedirectWithSearch({ to }: { to: string }) {
   const { search } = useLocation();
@@ -35,6 +37,16 @@ export function App() {
   const [total, setTotal] = useState(0);
   // /studio/* runs the Builder full-bleed, outside the Kittie dashboard chrome.
   const studio = useLocation().pathname.startsWith("/studio");
+
+  // Warm the default Explore query + category facets so the first paint isn't a cold ~1s wait.
+  useEffect(() => {
+    prefetchApps({ sortBy: "revenue", sortOrder: "desc" });
+    listCategories().catch(() => {});
+    prefetchApps({ sortBy: "reviews", sortOrder: "desc", releasedAfter: Math.floor((Date.now() - 7 * 86_400_000) / 1000) });
+    prefetchApps({ sortBy: "rankDelta", sortOrder: "desc" });
+    prefetchApps({ sortBy: "rankDelta", sortOrder: "asc" });
+    listCharts({ store: "apple", type: "free", country: "US", limit: 100 }).catch(() => {});
+  }, []);
 
   return (
     <div className={studio ? "app-shell studio" : "app-shell"}>
