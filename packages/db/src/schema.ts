@@ -84,6 +84,11 @@ export const appSnapshots = sqliteTable(
     // Serves the /apps list: order the latest-day partition by review count
     // (the default sort + every live-metric proxy) without a temp b-tree sort.
     index("snapshots_date_reviews_idx").on(t.snapshotDate, t.reviewCount),
+    // Covering index for the filtered "X of Y" count AND the `sortBy=rating` /
+    // `minRating` paths: count(distinct app_id) WHERE snapshot_date=? AND rating>=?
+    // is served index-only (no apps join, no table I/O) — ~0.15s vs ~1.2s on a
+    // 1.1M-row day. (snapshot_date, rating, app_id) also orders the rating sort.
+    index("snapshots_date_rating_app_idx").on(t.snapshotDate, t.rating, t.appId),
     // Serves the Trending charts query. Chart-ranked rows are ~0.3% of the table
     // (~8k of 3M); without this, finding them meant starting from every app of a
     // store (~500k) and seeking each one's snapshots — a ~20s full traversal.

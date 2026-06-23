@@ -302,8 +302,21 @@ async function countMatches(c: AppConditions): Promise<number> {
     const [row] = await db.select({ c: count() }).from(apps).where(and(...c.appCols));
     return row?.c ?? 0;
   }
-  // A snapshot-metric filter or an explicit market is present → the join is unavoidable.
-  // countDistinct(apps.id) so an app charting in several requested markets is counted once.
+  // A snapshot-metric filter (or explicit market) forced us past the apps-only count.
+  // When there are NO apps-table column filters, the apps join only re-derives the
+  // app_id the snapshot row already carries — count distinct app_id straight off
+  // app_snapshots. The (snapshot_date, rating, app_id) covering index serves a minRating
+  // count index-only (~8× faster: ~0.15s vs ~1.2s on a 1.1M-row day).
+  if (c.appCols.length === 0) {
+    const [row] = await db
+      .select({ c: countDistinct(appSnapshots.appId) })
+      .from(appSnapshots)
+      .where(and(...c.snapPin, ...c.snapMetricCols));
+    return row?.c ?? 0;
+  }
+  // An apps-column filter (category/source/developer/…) is also present → the join is
+  // unavoidable. countDistinct(apps.id) so an app charting in several requested markets
+  // is counted once.
   const [row] = await db
     .select({ c: countDistinct(apps.id) })
     .from(apps)
