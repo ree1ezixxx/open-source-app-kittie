@@ -24,6 +24,25 @@ importers:
         specifier: ^5.8.3
         version: 5.9.3
 
+  apps/eval:
+    dependencies:
+      '@kittie/types':
+        specifier: workspace:*
+        version: link:../../packages/types
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.12.1
+        version: 1.29.0(zod@3.25.76)
+    devDependencies:
+      '@types/node':
+        specifier: ^22.15.21
+        version: 22.19.20
+      tsx:
+        specifier: ^4.19.4
+        version: 4.22.4
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+
   apps/mcp:
     dependencies:
       '@kittie/types':
