@@ -129,6 +129,24 @@ parity vs current behavior (perf-only; no ranking/pagination change), proven by 
 |---|---|---|---|
 | A | **Keyset pagination** for SQL-native DESC sorts (reviews, rating w/ minRating>0). Candidate query paginates with a `(sortValue, app_id)` boundary + `LIMIT pageSize` instead of the 5000-row POOL_CAP pool. New covering index `(snapshot_date, review_count, app_id)`. Cursor carries the candidate scan's column value (not the scored item's — that diverges on a partial newer snapshot day and re-emits rows). | reviews-desc cold **0.47→0.10s**; rating-desc 0.57→0.29s (large rating tie-groups cap the tiebreaker). **BYTE-IDENTICAL** to legacy across pages 1-3 of 8 query shapes incl. negatives (verified by capture+diff `scripts/capture-pages.mjs`). typecheck + api/db tests (80+10) green. | **keep** |
 
-Note: suite p95 stays ~900ms because it also benches `asc`/`revenue`/`rankDelta` sorts (NOT keyset-eligible — unchanged legacy path). The win is per-shape on the real hot paths (reviews/rating desc). Search stays on the FTS pool path (~350ms). Default `revenue` → Tranche B below.
+Note: suite p95 stays ~900ms because it also benches `asc`/`rankDelta` sorts (NOT keyset-eligible — unchanged legacy path). The win is per-shape on the real hot paths.
+
+| B | **Revenue/downloads precompute → keyset.** `backfill-estimates.ts` persists revenue/downloads/growth on every row of the pinned complete day; new indexes `(snapshot_date, revenue_estimate, app_id)` + downloads. `sqlSortColumn(revenue\|downloads)` returns the stored column when the day is fully backfilled (`revenueColumnReady` gate — zero-null check, cached; falls back to the reviewCount proxy otherwise, so a missing/partial backfill is correct-but-slower, never wrong). revenue/downloads then flow through the Tranche-A keyset path automatically. | **default `revenue` view cold 0.37→0.10s**, downloads 0.44→0.10s. Verified BYTE-IDENTICAL to the proxy across pages 1-3 of all shapes (the top-revenue apps are all high-review, so the old top-5000-by-reviews proxy was already exact at the top — Experiment-4's apparent delta was the partial-day artifact, gone in steady state). New order is monotonic on revenue_estimate. typecheck + api/db tests green. | **keep** |
+
+### Hot-path summary (cold p95, after A+B)
+| shape | before | after |
+|---|---|---|
+| **revenue desc (default Explore)** | 0.37s | **0.10s ✓** |
+| reviews desc | 0.47s | **0.10s ✓** |
+| downloads desc | 0.44s | **0.10s ✓** |
+| rating desc (minRating>0) | 0.57s | 0.29s (large rating tie-groups cap the tiebreaker) |
+| charts | 0.05s | 0.05s ✓ |
+| search (FTS) | 0.37s | 0.37s (FTS rank can't be keyset; unchanged) |
+| asc / rankDelta sorts | ~0.4s | ~0.4s (not keyset; not real hot paths) |
+
+**Production follow-up (cross-lane):** the backfill is a script — the snapshot worker
+(`packages/ingest`) should write revenue/downloads/growth at snapshot-write time so the
+gate stays "ready" without a manual backfill. Until then, run `backfill-estimates.ts`
+after each day's ingest; if it lapses, the gate serves the (correct, slower) proxy.
 
 ### (earlier experiments, pre-keyset)

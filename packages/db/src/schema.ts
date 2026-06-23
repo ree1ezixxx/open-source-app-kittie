@@ -93,6 +93,12 @@ export const appSnapshots = sqliteTable(
     // is served index-only (no apps join, no table I/O) — ~0.15s vs ~1.2s on a
     // 1.1M-row day. (snapshot_date, rating, app_id) also orders the rating sort.
     index("snapshots_date_rating_app_idx").on(t.snapshotDate, t.rating, t.appId),
+    // Serves the default Explore `sortBy=revenue` keyset once the day's revenue estimates
+    // are precomputed (backfill-estimates / snapshot worker): orders the candidate pool by
+    // the stored revenue with the (revenue_estimate, app_id) cursor tiebreaker index-only.
+    index("snapshots_date_revenue_app_idx").on(t.snapshotDate, t.revenueEstimate, t.appId),
+    // Same, for the `sortBy=downloads` keyset.
+    index("snapshots_date_downloads_app_idx").on(t.snapshotDate, t.downloadsEstimate, t.appId),
     // Serves the Trending charts query. Chart-ranked rows are ~0.3% of the table
     // (~8k of 3M); without this, finding them meant starting from every app of a
     // store (~500k) and seeking each one's snapshots — a ~20s full traversal.

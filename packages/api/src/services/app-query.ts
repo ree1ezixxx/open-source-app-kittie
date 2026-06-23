@@ -34,6 +34,7 @@ import { getDb } from "../lib/db.js";
 /** Drop in-memory list/sparkline/rank caches so Explore picks up new snapshot days. */
 export function invalidateAppReadCaches(): void {
   cachedMaxDate.clear();
+  cachedRevenueReady.clear();
   cachedCategoryFacets = null;
 }
 
@@ -100,6 +101,32 @@ export function chooseLatestCompleteSnapshotDate(
   return rows.find((r) => r.c >= threshold)?.d ?? newest;
 }
 
+// Whether the pinned day's revenue/downloads estimates are FULLY precomputed for a
+// market — gates sqlSortColumn(revenue|downloads) onto the real column vs the reviewCount
+// proxy. Refreshed (with the same TTL) whenever latestSnapshotDate recomputes the day.
+// Defaults false → proxy, so a missing/partial backfill silently serves the slower-but-
+// correct proxy order rather than ordering by a mostly-NULL column.
+const cachedRevenueReady = new Map<string, { value: boolean; at: number }>();
+
+function revenueColumnReady(country: string): boolean {
+  return cachedRevenueReady.get(country)?.value ?? false;
+}
+
+async function refreshRevenueReady(country: string, maxDate: string | null): Promise<void> {
+  if (!maxDate) {
+    cachedRevenueReady.set(country, { value: false, at: Date.now() });
+    return;
+  }
+  // Ready iff the pinned day has ZERO null revenue_estimate rows (a half-backfilled day
+  // would order revenue by a mostly-null column). The (snapshot_date, revenue_estimate,
+  // app_id) index makes the NULL range an index-only count.
+  const [row] = await getDb()
+    .select({ n: count() })
+    .from(appSnapshots)
+    .where(and(eq(appSnapshots.snapshotDate, maxDate), eq(appSnapshots.chartCountry, country), isNull(appSnapshots.revenueEstimate)));
+  cachedRevenueReady.set(country, { value: (row?.n ?? 1) === 0, at: Date.now() });
+}
+
 async function latestSnapshotDate(country = "US"): Promise<string | null> {
   const hit = cachedMaxDate.get(country);
   if (hit && Date.now() - hit.at < MAX_DATE_TTL_MS) return hit.value;
@@ -118,6 +145,7 @@ async function latestSnapshotDate(country = "US"): Promise<string | null> {
     rows.filter((r): r is SnapshotDateCount => r.d != null).map((r) => ({ d: r.d!, c: r.c })),
   );
   cachedMaxDate.set(country, { value: d, at: Date.now() });
+  await refreshRevenueReady(country, d);
   return d;
 }
 
@@ -265,8 +293,8 @@ function allConditions(c: AppConditions): SQL[] {
  * column — selectCandidateIds proxies them by review count (busiest apps ≈ where the
  * top earners / movers are) and sortApps re-orders the pool by the exact live value.
  */
-function sqlSortColumn(sortBy: AppSearchParams["sortBy"]): AnyColumn | null {
-  switch (sortBy) {
+function sqlSortColumn(params: AppSearchParams): AnyColumn | null {
+  switch (params.sortBy) {
     case "reviews":
       return appSnapshots.reviewCount;
     case "rating":
@@ -276,11 +304,18 @@ function sqlSortColumn(sortBy: AppSearchParams["sortBy"]): AnyColumn | null {
     case "released":
     case "newest":
       return apps.releasedAt;
-    // downloads/revenue/growth/trending are MODELLED live at read time — the stored
-    // estimate columns are null for ~99.7% of snapshots, so ordering the pool by them
-    // yields an arbitrary (rowid) slice. Fall through to the reviewCount proxy (a real
-    // popularity correlate); sortApps then applies the true live order in memory.
-    // Proper fix would require persisting the estimates at snapshot time.
+    // revenue/downloads are modelled live, BUT the snapshot worker/backfill now persists
+    // them onto every row of the pinned complete day. When that day is fully backfilled
+    // (revenueColumnReady), order by the stored column directly — the candidate pool
+    // becomes the true top-N revenue/downloads (more accurate than the old reviewCount
+    // proxy: it surfaces high-revenue/low-review apps the proxy pool excluded), and the
+    // keyset path makes it a LIMIT-50 scan. Unbackfilled day → proxy (correct, slower).
+    case "revenue":
+      return revenueColumnReady(marketCountryOf(params)) ? appSnapshots.revenueEstimate : null;
+    case "downloads":
+      return revenueColumnReady(marketCountryOf(params)) ? appSnapshots.downloadsEstimate : null;
+    // growth/trending stay live: sortApps recomputes growthScore at read time (period-
+    // dependent), so the stored growth_score column would not match the display order.
     default:
       return null;
   }
@@ -292,7 +327,7 @@ function sqlSortColumn(sortBy: AppSearchParams["sortBy"]): AnyColumn | null {
  *  NULL boundary). Lets searchAppsFromDb score only the requested page, not the whole
  *  ~5000-row pool. */
 export function poolIsInFinalOrder(params: AppSearchParams): boolean {
-  return sqlSortColumn(params.sortBy) !== null && (params.sortOrder ?? "desc") === "desc";
+  return sqlSortColumn(params) !== null && (params.sortOrder ?? "desc") === "desc";
 }
 
 async function countMatches(c: AppConditions): Promise<number> {
@@ -358,7 +393,7 @@ async function selectCandidateIds(c: AppConditions, params: AppSearchParams): Pr
     return [...new Set(rows.map((r) => r.id))];
   }
 
-  const col = sqlSortColumn(params.sortBy) ?? appSnapshots.reviewCount;
+  const col = sqlSortColumn(params) ?? appSnapshots.reviewCount;
   const dir = (params.sortOrder ?? "desc") === "asc" ? asc : desc;
   const cap = effectivePoolCap(params);
 
@@ -492,9 +527,9 @@ export function keysetColumn(params: AppSearchParams): AnyColumn | null {
     case "rating":
       return params.minRating != null && params.minRating > 0 ? appSnapshots.rating : null;
     case "revenue":
-      return sqlSortColumn(params.sortBy) === appSnapshots.revenueEstimate ? appSnapshots.revenueEstimate : null;
+      return sqlSortColumn(params) === appSnapshots.revenueEstimate ? appSnapshots.revenueEstimate : null;
     case "downloads":
-      return sqlSortColumn(params.sortBy) === appSnapshots.downloadsEstimate ? appSnapshots.downloadsEstimate : null;
+      return sqlSortColumn(params) === appSnapshots.downloadsEstimate ? appSnapshots.downloadsEstimate : null;
     default:
       return null;
   }

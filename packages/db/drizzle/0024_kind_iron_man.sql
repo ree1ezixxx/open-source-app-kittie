@@ -1,0 +1,2 @@
+CREATE INDEX `snapshots_date_revenue_app_idx` ON `app_snapshots` (`snapshot_date`,`revenue_estimate`,`app_id`);--> statement-breakpoint
+CREATE INDEX `snapshots_date_downloads_app_idx` ON `app_snapshots` (`snapshot_date`,`downloads_estimate`,`app_id`);
