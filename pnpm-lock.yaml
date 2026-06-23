@@ -253,6 +253,9 @@ importers:
 
   packages/intelligence:
     dependencies:
+      '@kittie/core':
+        specifier: workspace:*
+        version: link:../core
       '@kittie/db':
         specifier: workspace:*
         version: link:../db

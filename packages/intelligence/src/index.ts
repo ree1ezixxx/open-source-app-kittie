@@ -21,6 +21,17 @@ export type {
   KeywordDifficultyInput,
 } from "./types.js";
 export { GROWTH_PERIOD_DAYS } from "./types.js";
+export {
+  buildDecisionPacket,
+  DecisionPacketError,
+  type BuildDecisionInput,
+} from "./decision-packet.js";
+export {
+  computeDemandSignal,
+  type DemandSignal,
+  type DemandSignalInput,
+  type DemandComponent,
+} from "./demand.js";
 
 import type { AppListItem } from "@kittie/types";
 import { computeGrowthPct, computeGrowthScore, isFirstMover, reviewGrowth7d } from "./growth.js";
