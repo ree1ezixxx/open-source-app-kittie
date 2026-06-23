@@ -1528,3 +1528,161 @@ table.apps tbody tr:hover td:first-child { box-shadow: inset 2px 0 0 0 var(--acc
   .detail-stats > *:nth-child(5) { animation-delay: 0.16s; }
   .detail-stats > *:nth-child(6) { animation-delay: 0.2s; }
 }
+
+/* ---- Pass 4: app-detail editorial ---- */
+
+/* breadcrumb — mono trail above hero */
+.breadcrumb {
+  display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.02em;
+  color: var(--text-faint); margin-bottom: 20px;
+}
+.breadcrumb a { color: var(--text-tertiary); text-decoration: none; transition: color var(--dur-fast) var(--ease); }
+.breadcrumb a:hover { color: var(--accent-text); }
+.breadcrumb .current {
+  color: var(--text-secondary); max-width: 340px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* hero — editorial lockup with signal icon glow */
+.hero {
+  margin-bottom: 0;
+  padding: 4px 0 2px;
+}
+.hero-icon {
+  width: 96px; height: 96px; border-radius: 22px;
+  box-shadow:
+    0 0 0 1px var(--border-soft),
+    0 12px 32px -12px rgba(0, 0, 0, 0.55),
+    0 0 40px -12px var(--accent-glow);
+}
+.hero-dev {
+  font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--text-tertiary); margin-top: 6px;
+}
+.hero-tags { margin-top: 14px; gap: 7px; }
+
+/* stat cards — editorial eyebrow + serif headline */
+.detail-stats { margin-top: 22px; gap: 12px; }
+.stat-card {
+  position: relative; overflow: hidden;
+  padding: 14px 16px;
+}
+.stat-card::before {
+  content: ""; position: absolute; inset: 0 0 auto 0; height: 2px;
+  background: linear-gradient(90deg, var(--accent), transparent 70%);
+  opacity: 0; transition: opacity var(--dur) var(--ease);
+}
+.stat-card:hover::before { opacity: 1; }
+.stat-card-label {
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em;
+}
+.stat-card-value { color: var(--text); }
+
+/* metric bar — tighter editorial rhythm below stats */
+.detail-inner > .detail-stats + .metric-bar { margin-top: 14px; }
+
+/* trend panel — signal-framed chart card */
+.tp-card {
+  box-shadow: var(--elev-1);
+  border-top: 2px solid color-mix(in srgb, var(--accent) 35%, var(--border-soft));
+  transition: box-shadow var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.tp-card:hover { box-shadow: var(--elev-2); }
+.tp-headval {
+  font-family: var(--font-display); font-size: 20px; font-weight: 400;
+  color: var(--text); letter-spacing: 0;
+}
+.tp-toggle button.on { box-shadow: 0 4px 14px -6px var(--accent-glow); }
+
+/* detail cards — section titles in display */
+.dcard-title { font-family: var(--font-ui); font-weight: 600; letter-spacing: -0.01em; }
+
+/* AI summary — signal-tagged editorial block */
+.ai-about {
+  margin-bottom: 14px; padding: 14px 16px;
+  background: var(--surface); border: 1px solid var(--border-soft);
+  border-radius: var(--radius); border-left: 3px solid var(--accent);
+}
+.ai-about-tag {
+  display: inline-block; margin-bottom: 8px;
+  font-family: var(--font-mono); font-size: 10px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--accent-text); padding: 2px 8px; border-radius: 99px;
+  background: var(--accent-soft);
+}
+.ai-about .desc { margin: 0; font-size: 13.5px; line-height: 1.65; color: var(--text-secondary); }
+
+/* media gallery — stronger hover lift */
+.media-thumb {
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+.media-thumb:hover {
+  box-shadow: var(--elev-2);
+  transform: translateY(-2px);
+}
+
+/* intel grid cards inherit dcard hover; tighten section rhythm */
+.detail-inner > .hero + .detail-stats { margin-top: 18px; }
+.detail-inner > .dcard + .dcard { /* spacing handled by margin-top on .dcard */ }
+
+/* detail loading skeleton — mirrors editorial layout */
+.detail-skel-stats {
+  display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-top: 22px;
+}
+.detail-skel-stats .skel { height: 68px; border-radius: var(--radius-lg); }
+@media (max-width: 900px) {
+  .detail-skel-stats { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 540px) {
+  .detail-skel-stats { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ---- Pass 6: signal shimmer + micro-interactions ---- */
+.skel {
+  background: linear-gradient(
+    90deg,
+    var(--surface) 0%,
+    color-mix(in srgb, var(--accent) 6%, var(--surface-2)) 45%,
+    var(--surface) 90%
+  );
+  background-size: 320% 100%;
+  animation: signal-shimmer 1.6s var(--ease) infinite;
+}
+@keyframes signal-shimmer {
+  0% { background-position: 120% 0; }
+  100% { background-position: -120% 0; }
+}
+
+/* table row + rank list — subtle press feedback */
+@media (prefers-reduced-motion: no-preference) {
+  table.apps tbody tr:active td { background: var(--surface-hover); }
+  .rank-row:active { transform: scale(0.995); }
+  .similar-card:active { transform: scale(0.98); }
+}
+
+/* focus rings — keyboard nav parity */
+.nav-item:focus-visible,
+.metric-seg:focus-visible,
+.btn:focus-visible,
+.icon-btn:focus-visible,
+.media-thumb:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---- Pass 7: widgets + reviews polish ---- */
+.widget-title {
+  font-family: var(--font-display); font-weight: 400; font-size: 15px; letter-spacing: 0;
+}
+.rank-row .rk { font-family: var(--font-mono); font-size: 11px; font-weight: 600; }
+.rank-row:hover .rk { color: var(--accent-text); }
+.review {
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+.review:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--elev-1);
+}
+.review-title { font-family: var(--font-ui); font-weight: 600; }
+.intel-grid .dcard { min-height: 140px; }

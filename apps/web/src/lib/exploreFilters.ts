@@ -81,8 +81,11 @@ export function parseFilters(sp: URLSearchParams): ExploreFilters {
   };
 
   // AppKittie / Rising handoff — `releasedAfter=custom&releasedAfterDate=YYYY-MM-DD`.
-  let rel = num("rel");
-  if (sp.get("releasedAfter") === "custom") {
+  // Only derive `rel` when the URL has no explicit `rel` param; otherwise preset pills,
+  // the date dialog, and chip clears would be overridden by stale handoff keys.
+  const relRaw = sp.get("rel");
+  let rel = relRaw != null && relRaw !== "" ? Number(relRaw) : undefined;
+  if (rel == null && sp.get("releasedAfter") === "custom") {
     const d = sp.get("releasedAfterDate");
     if (d) {
       const ms = Date.now() - new Date(`${d}T00:00:00`).getTime();

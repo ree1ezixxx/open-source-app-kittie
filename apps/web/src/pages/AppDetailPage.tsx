@@ -508,16 +508,22 @@ function LinkRow({ icon, label, value }: { icon: ReactNode; label: string; value
 function DetailSkeleton() {
   return (
     <div className="detail-inner">
+      <div className="skel" style={{ width: 180, height: 12, marginBottom: 18, borderRadius: 4 }} />
       <div className="hero">
-        <div className="skel" style={{ width: 88, height: 88, borderRadius: 20 }} />
+        <div className="skel" style={{ width: 96, height: 96, borderRadius: 22, flexShrink: 0 }} />
         <div style={{ flex: 1 }}>
-          <div className="skel" style={{ width: "40%", height: 26, marginBottom: 10 }} />
-          <div className="skel" style={{ width: "25%", height: 13, marginBottom: 14 }} />
-          <div className="skel" style={{ width: "55%", height: 22 }} />
+          <div className="skel" style={{ width: "48%", height: 34, marginBottom: 10 }} />
+          <div className="skel" style={{ width: "28%", height: 12, marginBottom: 14 }} />
+          <div className="skel" style={{ width: "62%", height: 24 }} />
         </div>
       </div>
-      <div className="skel" style={{ height: 76, borderRadius: 14, marginTop: 16 }} />
-      <div className="skel" style={{ height: 372, borderRadius: 14, marginTop: 16 }} />
+      <div className="detail-skel-stats">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="skel" />
+        ))}
+      </div>
+      <div className="skel" style={{ height: 88, borderRadius: 18, marginTop: 14 }} />
+      <div className="skel" style={{ height: 372, borderRadius: 18, marginTop: 16 }} />
     </div>
   );
 }
