@@ -74,7 +74,7 @@ describe("roadmapLayout", () => {
 
   it("never dims a node with no dependencies", () => {
     const { nodes } = roadmapLayout(template([node({ key: "root", stage: "idea" })]));
-    expect((nodes[0].data as { dimmed: boolean }).dimmed).toBe(false);
+    expect((nodes[0]!.data as { dimmed: boolean }).dimmed).toBe(false);
   });
 
   it("emits one edge per dependency", () => {
