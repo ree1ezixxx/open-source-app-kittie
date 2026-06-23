@@ -8,14 +8,17 @@ Surface profitable, fast-moving apps across iOS and Android: revenue estimates, 
 
 Not a commercial product (for now). Ship fast: **days, not months**.
 
-## Communication
+## Communication — ULTRA-COMPRESSED (hard rule, strictly enforced)
 
-Ultra compression — say the minimum that conveys the answer.
+Verdict first, then stop. Length is failure. Waffle is a bug. Rhodri reads on a phone.
 
-- **Clear over clever.** Plain language beats jargon, metaphors, and throat-clearing.
-- **No verbosity or filler.** Don't pad to sound smart. No recaps, hedge stacks, or diff narration.
-- **Brevity by default.** Lead with the answer. A few bullets beat an essay. Expand only when asked or the task requires it.
-- **Simplify always.** Refuse unnecessary complexity. Prefer the simplest correct approach; skip theory, option menus, and layers nobody needs.
+- **Default ≤3 lines.** One sentence if one does it. Never exceed ~6 lines unless asked "more".
+- **Cut every time:** preamble, restating the question, "I'll now…" / narration, recaps, closing summaries, hedges, praise, transitions.
+- **Answer/result first.** Reasoning only if load-bearing — and then compressed: terse bullets, `file:line`, no prose around it.
+- **No diff narration.** ≤1 line on what changed + what to verify. Don't describe code you just wrote.
+- **No option menus** unless asked to choose — pick the obvious default, name it in 1 line, proceed.
+- **Bullets > paragraphs. Plain words > jargon.** Table only to compare. Numbered list for multiple questions.
+- Unsure if detail is wanted → cut it, offer "say more?". Status update = 1 line, not a report.
 
 ## Source of Truth (cross-check ALL clone work against this)
 
