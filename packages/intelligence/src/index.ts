@@ -32,6 +32,12 @@ export {
   type DemandSignalInput,
   type DemandComponent,
 } from "./demand.js";
+export {
+  synthesizeOpportunity,
+  appStoreUrl,
+  type MarketApp,
+  type OpportunityInput,
+} from "./opportunity.js";
 
 import type { AppListItem } from "@kittie/types";
 import { computeGrowthPct, computeGrowthScore, isFirstMover, reviewGrowth7d } from "./growth.js";

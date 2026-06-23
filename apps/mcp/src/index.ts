@@ -7,7 +7,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import type { AppSearchParams, Store } from "@kittie/types";
 import { createBuildContextManager, type ProfileUserValues } from "@kittie/build-context";
-import { synthesizeOpportunity, type MarketApp } from "./intent.js";
+import { synthesizeOpportunity, type MarketApp } from "@kittie/intelligence";
 import { listTools } from "./tools.js";
 
 const API_BASE = process.env.KITTIE_API_URL ?? "http://localhost:3009";
