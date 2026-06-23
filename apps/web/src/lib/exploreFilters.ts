@@ -168,6 +168,16 @@ export function writeFilters(f: ExploreFilters): URLSearchParams {
 const daysAgoEpoch = (d?: number) =>
   d != null ? Math.floor((Date.now() - d * 86_400_000) / 1000) : undefined;
 
+/** Default Explore `/apps` params (empty URL) — prefetch must match or cache misses. */
+export function defaultExploreApiParams(): AppSearchParams {
+  return toApiParams(EMPTY_FILTERS);
+}
+
+/** Shared 7-day release cutoff for Pulse / Highlights prefetch keys. */
+export function sevenDayReleasedAfterEpoch(): number {
+  return Math.floor((Date.now() - 7 * 86_400_000) / 1000);
+}
+
 /** Map filter state to the REST `/apps` query params. */
 export function toApiParams(f: ExploreFilters): AppSearchParams {
   return {

@@ -33,6 +33,7 @@ const PRIMARY: Group[] = [
   {
     label: "Explore",
     items: [
+      { to: "/dashboard/pulse", label: "Pulse", icon: IconTrending },
       { to: "/dashboard/explore", label: "Apps", icon: IconDatabase, badge: "total" },
       { to: "/dashboard/ads", label: "Ads", icon: IconImage },
       { to: "/dashboard/organic", label: "Organic", icon: IconVideo },

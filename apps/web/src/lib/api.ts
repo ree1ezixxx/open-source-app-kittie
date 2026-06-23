@@ -48,14 +48,23 @@ export function peekCategories(): CategoryFacet[] | undefined {
   return categoriesCache.get("all");
 }
 
+let categoriesInflight: Promise<CategoryFacet[]> | null = null;
+
 export async function listCategories(signal?: AbortSignal): Promise<CategoryFacet[]> {
   const cached = categoriesCache.get("all");
   if (cached) return cached;
-  const res = await fetch(`${BASE}/apps/categories`, { signal });
-  if (!res.ok) throw new Error(`Failed to load categories (${res.status})`);
-  const body = (await res.json()) as { data: CategoryFacet[] };
-  categoriesCache.set("all", body.data);
-  return body.data;
+  if (!categoriesInflight) {
+    categoriesInflight = (async () => {
+      const res = await fetch(`${BASE}/apps/categories`, { signal });
+      if (!res.ok) throw new Error(`Failed to load categories (${res.status})`);
+      const body = (await res.json()) as { data: CategoryFacet[] };
+      categoriesCache.set("all", body.data);
+      return body.data;
+    })().finally(() => {
+      categoriesInflight = null;
+    });
+  }
+  return categoriesInflight;
 }
 
 export async function getApp(id: string, signal?: AbortSignal): Promise<AppDetail> {

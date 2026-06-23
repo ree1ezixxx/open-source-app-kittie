@@ -6,31 +6,60 @@ import { createQueryCache } from "../lib/queryCache";
 const PAGE = 50;
 const CACHE_TTL_MS = 5 * 60_000;
 const appsCache = createQueryCache<PaginatedResponse<AppListItem>>(CACHE_TTL_MS);
+const appsInflight = new Map<string, Promise<PaginatedResponse<AppListItem>>>();
+
+function cacheKeyFor(paramsKey: string, page: number): string {
+  return `${paramsKey}::${page}`;
+}
+
+/** Deduped fetch — concurrent prefetch + useApps share one in-flight request per key. */
+function loadAppsPage(
+  paramsKey: string,
+  page: number,
+  params: AppSearchParams,
+  cursor?: string,
+): Promise<PaginatedResponse<AppListItem>> {
+  const cacheKey = cacheKeyFor(paramsKey, page);
+  const cached = appsCache.get(cacheKey);
+  if (cached) return Promise.resolve(cached);
+
+  let inflight = appsInflight.get(cacheKey);
+  if (!inflight) {
+    inflight = listApps({ ...params, limit: params.limit ?? PAGE, cursor })
+      .then((res) => {
+        appsCache.set(cacheKey, res);
+        return res;
+      })
+      .finally(() => {
+        appsInflight.delete(cacheKey);
+      });
+    appsInflight.set(cacheKey, inflight);
+  }
+  return inflight;
+}
 
 /**
  * Page-based fetching for the apps table. The REST API is cursor-paginated, so we
  * keep a cursor-per-page stack (cursorsRef) built up as the user pages forward —
  * enough for Prev/Next + "page x of y" without needing offset support server-side.
  *
- * Responses are cached client-side (5 min) so tab switches and back-navigation
- * show the last result instantly while revalidating in the background.
+ * Responses are cached client-side (5 min). Cache hits skip the network entirely.
  */
 export function useApps(params: AppSearchParams) {
-  const [apps, setApps] = useState<AppListItem[]>([]);
-  const [total, setTotal] = useState(0);
+  const key = JSON.stringify(params);
+  const initial = appsCache.get(cacheKeyFor(key, 0));
+
+  const [apps, setApps] = useState<AppListItem[]>(() => initial?.data ?? []);
+  const [total, setTotal] = useState(() => initial?.pagination.totalCount ?? 0);
   const [page, setPage] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !initial);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
 
   const cursorsRef = useRef<(string | undefined)[]>([undefined]);
   const keyRef = useRef("");
-  const abortRef = useRef<AbortController | null>(null);
-
-  const key = JSON.stringify(params);
 
   useEffect(() => {
-    // reset pagination when the query changes; re-run at page 0
     if (keyRef.current !== key) {
       keyRef.current = key;
       cursorsRef.current = [undefined];
@@ -40,25 +69,22 @@ export function useApps(params: AppSearchParams) {
       }
     }
 
-    const cacheKey = `${key}::${page}`;
+    const cacheKey = cacheKeyFor(key, page);
     const cached = appsCache.get(cacheKey);
     if (cached) {
       setApps(cached.data);
       setTotal(cached.pagination.totalCount);
       setLoading(false);
       setError(null);
-    } else {
-      setLoading(true);
+      return;
     }
 
-    abortRef.current?.abort();
-    const ac = new AbortController();
-    abortRef.current = ac;
+    setLoading(true);
+    let cancelled = false;
 
-    listApps({ ...params, limit: params.limit ?? PAGE, cursor: cursorsRef.current[page] }, ac.signal)
+    loadAppsPage(key, page, params, cursorsRef.current[page])
       .then((res) => {
-        if (ac.signal.aborted) return;
-        appsCache.set(cacheKey, res);
+        if (cancelled) return;
         setApps(res.data);
         setTotal(res.pagination.totalCount);
         if (res.pagination.nextCursor && cursorsRef.current[page + 1] === undefined) {
@@ -68,12 +94,14 @@ export function useApps(params: AppSearchParams) {
         setError(null);
       })
       .catch((e: unknown) => {
-        if (ac.signal.aborted || (e as Error).name === "AbortError") return;
+        if (cancelled) return;
         setError(e instanceof Error ? e.message : "Failed to load");
         setLoading(false);
       });
 
-    return () => ac.abort();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, page, tick]);
 
@@ -95,6 +123,7 @@ export function useApps(params: AppSearchParams) {
     prev: useCallback(() => setPage((p) => (p > 0 ? p - 1 : p)), []),
     refresh: useCallback(() => {
       appsCache.clear();
+      appsInflight.clear();
       setTick((t) => t + 1);
     }, []),
   };
@@ -102,9 +131,7 @@ export function useApps(params: AppSearchParams) {
 
 export function prefetchApps(params: AppSearchParams, page = 0): void {
   const key = JSON.stringify(params);
-  const cacheKey = `${key}::${page}`;
-  if (appsCache.get(cacheKey)) return;
-  listApps({ ...params, limit: params.limit ?? PAGE, cursor: undefined })
-    .then((res) => appsCache.set(cacheKey, res))
-    .catch(() => {});
+  const cacheKey = cacheKeyFor(key, page);
+  if (appsCache.get(cacheKey) || appsInflight.has(cacheKey)) return;
+  void loadAppsPage(key, page, params).catch(() => {});
 }

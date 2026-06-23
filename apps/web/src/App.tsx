@@ -6,6 +6,7 @@ import { AppDetailPage } from "./pages/AppDetailPage";
 import { AdsLibraryPage } from "./pages/AdsLibraryPage";
 import { OrganicPage } from "./pages/OrganicPage";
 import { HighlightsPage } from "./pages/HighlightsPage";
+import { PulsePage } from "./pages/PulsePage";
 import { TrendingPage } from "./pages/TrendingPage";
 import { RisingPage } from "./pages/RisingPage";
 import { FavoritesPage } from "./pages/FavoritesPage";
@@ -25,6 +26,7 @@ import { IdeaDetailPage } from "./pages/IdeaDetailPage";
 import { PricingCalculatorPage } from "./pages/PricingCalculatorPage";
 import { useTheme } from "./lib/theme";
 import { listCategories, listCharts } from "./lib/api";
+import { defaultExploreApiParams, sevenDayReleasedAfterEpoch } from "./lib/exploreFilters";
 import { prefetchApps } from "./hooks/useApps";
 
 function RedirectWithSearch({ to }: { to: string }) {
@@ -36,17 +38,44 @@ export function App() {
   const [theme, toggleTheme] = useTheme();
   const [total, setTotal] = useState(0);
   // /studio/* runs the Builder full-bleed, outside the Kittie dashboard chrome.
-  const studio = useLocation().pathname.startsWith("/studio");
+  const { pathname } = useLocation();
+  const studio = pathname.startsWith("/studio");
 
-  // Warm the default Explore query + category facets so the first paint isn't a cold ~1s wait.
+  // Route-scoped prefetch: only warm what the current page needs immediately.
   useEffect(() => {
-    prefetchApps({ sortBy: "revenue", sortOrder: "desc" });
-    listCategories().catch(() => {});
-    prefetchApps({ sortBy: "reviews", sortOrder: "desc", releasedAfter: Math.floor((Date.now() - 7 * 86_400_000) / 1000) });
-    prefetchApps({ sortBy: "rankDelta", sortOrder: "desc" });
-    prefetchApps({ sortBy: "rankDelta", sortOrder: "asc" });
-    listCharts({ store: "apple", type: "free", country: "US", limit: 100 }).catch(() => {});
-  }, []);
+    const releasedAfter = sevenDayReleasedAfterEpoch();
+    const onPulse = pathname.startsWith("/dashboard/pulse") || pathname === "/";
+    const onExplore = pathname.startsWith("/dashboard/explore");
+    const onTrending = pathname.startsWith("/dashboard/trending");
+
+    if (onPulse) {
+      prefetchApps({ sortBy: "reviews", sortOrder: "desc", releasedAfter });
+      prefetchApps({ sortBy: "rankDelta", sortOrder: "desc" });
+      prefetchApps({ sortBy: "rankDelta", sortOrder: "asc" });
+    } else if (onExplore) {
+      prefetchApps(defaultExploreApiParams());
+      listCategories().catch(() => {});
+    }
+
+    const warmSecondary = () => {
+      if (!onExplore) prefetchApps(defaultExploreApiParams());
+      if (!onPulse) {
+        prefetchApps({ sortBy: "reviews", sortOrder: "desc", releasedAfter });
+        prefetchApps({ sortBy: "rankDelta", sortOrder: "desc" });
+        prefetchApps({ sortBy: "rankDelta", sortOrder: "asc" });
+      }
+      if (onTrending) {
+        listCharts({ store: "apple", type: "free", country: "US", limit: 100 }).catch(() => {});
+      }
+    };
+
+    if (typeof requestIdleCallback !== "undefined") {
+      const id = requestIdleCallback(warmSecondary, { timeout: 5000 });
+      return () => cancelIdleCallback(id);
+    }
+    const t = setTimeout(warmSecondary, 2500);
+    return () => clearTimeout(t);
+  }, [pathname]);
 
   return (
     <div className={studio ? "app-shell studio" : "app-shell"}>
@@ -54,7 +83,8 @@ export function App() {
       <Routes>
         <Route path="/studio" element={<BuilderPage theme={theme} onToggleTheme={toggleTheme} />} />
         <Route path="/studio/:id" element={<BuilderPage theme={theme} onToggleTheme={toggleTheme} />} />
-        <Route path="/" element={<Navigate to="/dashboard/explore" replace />} />
+        <Route path="/" element={<Navigate to="/dashboard/pulse" replace />} />
+        <Route path="/dashboard/pulse" element={<PulsePage theme={theme} onToggleTheme={toggleTheme} />} />
         <Route
           path="/dashboard/explore"
           element={<ExplorePage theme={theme} onToggleTheme={toggleTheme} onTotal={setTotal} />}
