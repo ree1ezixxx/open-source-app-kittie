@@ -124,6 +124,22 @@ _Avoid_: Stale copy-forward
 Run snapshot then score once per calendar day. No API cost barrier — more days of Snapshots improve trend and Growth period accuracy. Same-day reruns overwrite that date's row; they do not add history.
 _Avoid_: Every other day, batch weekly (for Observed metrics)
 
+**Build Context**:
+The persistent, portable memory a coding-AI keeps about *one project it is helping build* — the idea, audience, target markets, monetisation, constraints, the Apps/features the user has asked about, decisions accepted and rejected, the current build phase, evidence gathered, and outstanding unknowns. Lives as plain files in a `.kittie/` folder **inside the user's own project repo** (not Kittie's DB), so any agent that opens that repo inherits the same understanding. Identified by a `context_id` that maps to one `.kittie/` location. This is project memory, not app-catalog data. It holds three legitimate kinds of content, all traceable: (1) **market data** (snapshots/reviews/growth, `observed`/`modelled`), (2) **user input** (what the user stated/likes), and (3) **data-grounded insights** — analytical assumptions like "build X, these apps are trending" carried as a `DecisionPacket` (evidence + assumptions + confidence). Anything with no data and no user statement is an explicit `unknown`, never a guess.
+_Avoid_: Session, conversation, profile, project (unqualified)
+
+**Market lock**:
+The reproducibility pin for a build decision — a record of *exactly which live market data a recommendation was based on*: snapshot date, competitor App IDs, data-source versions, scoring-model version, evidence coverage, tool versions. Lets any agent re-derive or sanity-check the same decision later, or detect that the world has moved. A Market lock whose snapshot is older than its freshness window, or whose pinned source/model versions no longer match, is `stale` (a `CoverageStatus`). Stored as `.kittie/market.lock.json`.
+_Avoid_: Snapshot (that is one App's metric row; a Market lock pins a *set* of them for a decision), cache
+
+**Build plan**:
+The exported, human-readable build plan for the *user's own project* (`.kittie/build-plan.md`) — distinct from a **Blueprint**, which is the build plan attached to a *Hot idea* and stored in Kittie's DB. Same idea (a structured plan to build something), different owner: a Build plan belongs to the active Build Context; a Blueprint belongs to a Hot idea.
+_Avoid_: Blueprint (reserved for the Hot-idea plan), spec
+
+**Standing preference**:
+A durable like/dislike or "always/never" rule the user holds, which the agent must honour on *every* call — the "sticky note on the agent's forehead" (mirrors how `CLAUDE.md` rules are always in scope, e.g. "always HTML over md"). Distinct from a one-off project fact or a decision: a Standing preference is a persistent directive that shapes how the agent acts, not a thing the agent learned about the market. Always present in the digest a Build Context returns. **Global to the user** — lives in a global store (`~/.kittie/`, the user's home, or the app account), one per user, and rides across *every* project they build. Merged on top of per-project state whenever a Build Context is read. Contrast with project state (idea/audience/decisions), which is per-project so app A's facts never bleed into app B.
+_Avoid_: Setting, config, decision (a decision is market-derived; a preference is user-asserted taste)
+
 ## Flagged ambiguities
 
 **Chart visibility**: Free chart feeds only expose apps currently in top lists (e.g. top 100). Apps outside those lists have no Observed rank until they chart — rank is unknown, not zero.
