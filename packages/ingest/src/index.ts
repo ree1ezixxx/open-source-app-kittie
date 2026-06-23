@@ -23,3 +23,13 @@ export { suggestRelatedKeywords } from "./keyword-suggest.js";
 export { searchPopularity } from "./keyword-popularity.js";
 export { syncKeyword, syncKeywordWithRankings, getCachedKeyword, fetchKeywordRankings } from "./db/keywords.js";
 export { runKeywordSync } from "./jobs/keyword-sync.js";
+export {
+  appleToCanonical,
+  appleAdapter,
+  googleToCanonical,
+  googleAdapter,
+  recordCoverageView,
+  type RecordCoverageView,
+  type AdapterContext,
+  type SourceAdapter,
+} from "./canonical/index.js";
