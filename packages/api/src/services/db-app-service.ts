@@ -36,12 +36,16 @@ import {
   invalidateAppReadCaches as invalidateAppQueryReadCaches,
   getRankDeltasFor,
   getSparklinesFor,
+  keysetColumn,
   listCategoryFacetsFromDb,
   poolIsInFinalOrder,
   searchAppCandidates,
+  searchAppCandidatesKeyset,
 } from "./app-query.js";
 import {
+  decodeKeysetCursor,
   dropsRowsInMemory,
+  encodeKeysetCursor,
   hasLiveGrowthFilter,
   matchesSearch,
   paginateApps,
@@ -138,6 +142,35 @@ export async function searchAppsFromDb(params: AppSearchParams): Promise<Paginat
   if (cached && Date.now() - cached.at < APP_SEARCH_CACHE_TTL_MS) return cached.value;
 
   const period = params.growthPeriod ?? "7d";
+
+  // Keyset fast-path: a SQL-native DESC sort whose raw column orders byte-identically to
+  // the legacy sortApps path (keysetColumn != null), no in-memory-dropping filter, and
+  // either no cursor or a keyset (tuple) cursor. Paginate in SQL with a (sortValue, id)
+  // boundary + LIMIT pageSize — the candidate scan is ~50 rows, not the 5000-row
+  // POOL_CAP. A legacy bare-id cursor decodes to null and falls through to the pool path
+  // below, so a mid-session client holding an old cursor keeps working unchanged.
+  const keysetCursor = decodeKeysetCursor(params.cursor);
+  if (keysetColumn(params) !== null && !dropsRowsInMemory(params) && (params.cursor == null || keysetCursor !== null)) {
+    const limit = params.limit ?? 20;
+    const kpool = await searchAppCandidatesKeyset(params, keysetCursor, limit);
+    if (!kpool) return rememberAppSearch(cacheKey, { data: [], pagination: { nextCursor: null, totalCount: 0 } });
+    const rows = await buildScoredAppRows(kpool.ids, period, kpool.marketCountry, new Map<string, number>());
+    const data = rows.map((r) => r.item);
+    const last = data.at(-1);
+    // Full page → there may be more; short page → end. (Keyset removes the legacy
+    // POOL_CAP pagination ceiling, so deep pages past ~5000 now continue instead of
+    // resetting — a strict improvement over the old behavior.) The cursor's sortValue is
+    // the CANDIDATE scan's column value (kpool.sortValues), not the scored item's, so a
+    // newer partial-day snapshot can't shift the boundary and re-emit rows.
+    const nextCursor =
+      data.length === limit && last ? encodeKeysetCursor(kpool.sortValues.get(last.id) ?? null, last.id) : null;
+    const sparklines = await getSparklinesFor(data.map((d) => d.id), kpool.marketCountry);
+    return rememberAppSearch(cacheKey, {
+      data: data.map((item) => ({ ...item, sparkline: sparklines.get(item.id) ?? [] })),
+      pagination: { nextCursor, totalCount: kpool.totalCount },
+    });
+  }
+
   const pool = await searchAppCandidates(params);
   if (!pool) return rememberAppSearch(cacheKey, { data: [], pagination: { nextCursor: null, totalCount: 0 } });
 

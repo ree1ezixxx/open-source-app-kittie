@@ -83,7 +83,11 @@ export const appSnapshots = sqliteTable(
     index("snapshots_date_idx").on(t.snapshotDate),
     // Serves the /apps list: order the latest-day partition by review count
     // (the default sort + every live-metric proxy) without a temp b-tree sort.
-    index("snapshots_date_reviews_idx").on(t.snapshotDate, t.reviewCount),
+    // app_id is part of the key so the keyset cursor's (review_count, app_id) tiebreaker
+    // is served index-only — without it, keyset pagination forces a table seek per row +
+    // a temp b-tree and regresses below the old proxy scan. Supersedes the bare
+    // (snapshot_date, review_count) index.
+    index("snapshots_date_reviews_app_idx").on(t.snapshotDate, t.reviewCount, t.appId),
     // Covering index for the filtered "X of Y" count AND the `sortBy=rating` /
     // `minRating` paths: count(distinct app_id) WHERE snapshot_date=? AND rating>=?
     // is served index-only (no apps join, no table I/O) — ~0.15s vs ~1.2s on a

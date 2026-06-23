@@ -103,3 +103,32 @@ SQL-native + indexable (the real fix, but cross-lane: ingest + schema); (b) shri
 scoring pool (small accuracy / pagination-depth tradeoff); (c) score-only-the-page for
 the SQL-native sorts (pure win, but doesn't help the default revenue view). → surfaced
 to Rhodri for the call.
+
+---
+
+# Keyset-pagination refactor — `perf/keyset-pagination` (off `main` after #140)
+
+Rhodri re-armed the goal under ultracode: actually reach ≤200ms on the default
+`revenue` + `search` views. The lever (from the floor analysis above): push pagination
+INTO SQL so the candidate query is `LIMIT pageSize` (~50), not `LIMIT 5000` — then the
+cold scan is tiny for any SQL-native sort, and with the revenue precompute the default
+view goes SQL-native + fast.
+
+## Fresh baseline — 2026-06-23 (cold, fresh 4.6GB clone, pin day 2026-06-19, 1.1M apps)
+| suite | p50 | p95 | p99 |
+|---|---|---|---|
+| apps:search | 152 | 422 | 1470 |
+| apps:filter+sort | 404 | 786 | 834 |
+| charts | 1 | 53 | 63 |
+
+TARGET: cold p95 ≤ 200ms for every apps shape; charts already ✓. Hard rule: BYTE-IDENTICAL
+parity vs current behavior (perf-only; no ranking/pagination change), proven by capture+diff.
+
+## Experiments
+| # | change | result | verdict |
+|---|---|---|---|
+| A | **Keyset pagination** for SQL-native DESC sorts (reviews, rating w/ minRating>0). Candidate query paginates with a `(sortValue, app_id)` boundary + `LIMIT pageSize` instead of the 5000-row POOL_CAP pool. New covering index `(snapshot_date, review_count, app_id)`. Cursor carries the candidate scan's column value (not the scored item's — that diverges on a partial newer snapshot day and re-emits rows). | reviews-desc cold **0.47→0.10s**; rating-desc 0.57→0.29s (large rating tie-groups cap the tiebreaker). **BYTE-IDENTICAL** to legacy across pages 1-3 of 8 query shapes incl. negatives (verified by capture+diff `scripts/capture-pages.mjs`). typecheck + api/db tests (80+10) green. | **keep** |
+
+Note: suite p95 stays ~900ms because it also benches `asc`/`revenue`/`rankDelta` sorts (NOT keyset-eligible — unchanged legacy path). The win is per-shape on the real hot paths (reviews/rating desc). Search stays on the FTS pool path (~350ms). Default `revenue` → Tranche B below.
+
+### (earlier experiments, pre-keyset)
