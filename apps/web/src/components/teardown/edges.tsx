@@ -1,9 +1,10 @@
 import { BaseEdge, getSmoothStepPath, type EdgeProps } from "@xyflow/react";
 
 /**
- * Beam edge: a smoothstep wire with a glowing dot that travels along it
+ * Beam edge: a smoothstep wire with a short light-streak that glides along it
  * *toward the source* (data feeds upward into the parent / the app root).
- * `data.child` renders the lighter dashed signal wire + a dimmer beam.
+ * The streak is a round-capped dash whose dashoffset animates one full period,
+ * so it loops seamlessly. `data.child` = the lighter dashed signal wire.
  */
 function BeamEdge({
   id,
@@ -26,6 +27,10 @@ function BeamEdge({
     borderRadius: child ? 12 : 16,
   });
 
+  const dash = child ? 16 : 22;
+  const gap = child ? 150 : 190;
+  const period = dash + gap;
+
   return (
     <>
       <BaseEdge
@@ -37,16 +42,21 @@ function BeamEdge({
           strokeDasharray: child ? "4 5" : undefined,
         }}
       />
-      <circle className={child ? "td-beam td-beam-child" : "td-beam"} r={child ? 2 : 2.6}>
-        <animateMotion
-          dur={child ? "2.8s" : "2s"}
+      <path
+        className={child ? "td-beam td-beam-child" : "td-beam"}
+        d={path}
+        fill="none"
+        strokeLinecap="round"
+        strokeDasharray={`${dash} ${gap}`}
+      >
+        <animate
+          attributeName="stroke-dashoffset"
+          from="0"
+          to={period}
+          dur={child ? "2.6s" : "2s"}
           repeatCount="indefinite"
-          path={path}
-          keyPoints="1;0"
-          keyTimes="0;1"
-          calcMode="linear"
         />
-      </circle>
+      </path>
     </>
   );
 }

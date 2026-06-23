@@ -225,15 +225,18 @@
   border-color: transparent;
 }
 
-/* ---- beams (dot travels along the wire, feeding the parent) ---- */
+/* ---- beams (light-streak glides along the wire, feeding the parent) ---- */
 .td-beam {
-  fill: var(--accent);
-  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--accent) 85%, transparent));
+  stroke: var(--accent);
+  stroke-width: 2;
+  fill: none;
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--accent) 60%, transparent));
 }
 .td-beam-child {
-  fill: var(--positive);
-  opacity: 0.85;
-  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--positive) 65%, transparent));
+  stroke: var(--positive);
+  stroke-width: 1.5;
+  opacity: 0.9;
+  filter: drop-shadow(0 0 2px color-mix(in srgb, var(--positive) 45%, transparent));
 }
 @media (prefers-reduced-motion: reduce) {
   .td-beam,
