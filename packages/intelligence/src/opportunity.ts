@@ -1,12 +1,13 @@
 /**
- * Intent-layer synthesis (lane L5, epic #97). Pure functions that turn raw
- * market data into a canonical `DecisionPacket` — no I/O, fully testable. The
- * MCP tool handlers fetch the data, call these, and (optionally) persist to the
- * build context. Honesty: every observed claim carries a store URL; blocked
- * sources are named in `coverage.missing`, never fabricated.
+ * Market-opportunity synthesis (lane L5, epic #97). Pure functions that turn raw
+ * market data into a canonical `DecisionPacket` — no I/O, fully testable. Callers
+ * (the MCP tools AND the web API) fetch the data, call these, and (optionally)
+ * persist to the build context — one decision layer, two surfaces. Honesty:
+ * every observed claim carries a store URL; blocked sources are named in
+ * `coverage.missing`, never fabricated.
  */
 import type { DecisionPacket, Evidence, RecommendedAction } from "@kittie/types";
-import { buildDecisionPacket } from "@kittie/intelligence";
+import { buildDecisionPacket } from "./decision-packet.js";
 
 /** The subset of a market-app row the synthesis needs. */
 export interface MarketApp {
@@ -82,8 +83,9 @@ export function synthesizeOpportunity(input: OpportunityInput): DecisionPacket {
   const score = Math.min(0.9, 0.3 + count * 0.03);
 
   // Next-tool rails — every `tool` MUST be a real registered Kittie tool (see
-  // tools.ts; an invariant test enforces this). Persist the idea first when no
-  // build context exists yet, so the loop can start accumulating.
+  // tools.ts; an invariant test at the MCP boundary enforces this). Persist the
+  // idea first when no build context exists yet, so the loop can start
+  // accumulating.
   const recommendedActions: RecommendedAction[] = [];
   if (!hasBuildContext) {
     recommendedActions.push({
