@@ -93,6 +93,11 @@ export const appSnapshots = sqliteTable(
     // is served index-only (no apps join, no table I/O) — ~0.15s vs ~1.2s on a
     // 1.1M-row day. (snapshot_date, rating, app_id) also orders the rating sort.
     index("snapshots_date_rating_app_idx").on(t.snapshotDate, t.rating, t.appId),
+    // rating DESC keyset: rating has only ~40 distinct values → huge tie-groups, so the
+    // ASC index (reverse-scanned) would temp-sort the (rating, app_id ASC) tiebreaker over
+    // those groups. A rating-DESC + app_id-ASC index serves the default rating sort
+    // index-only. (reviews/revenue have ~unique values → tiny ties → no DESC index needed.)
+    index("snapshots_date_rating_desc_idx").on(t.snapshotDate, sql`${t.rating} desc`, t.appId),
     // Serves the default Explore `sortBy=revenue` keyset once the day's revenue estimates
     // are precomputed (backfill-estimates / snapshot worker): orders the candidate pool by
     // the stored revenue with the (revenue_estimate, app_id) cursor tiebreaker index-only.

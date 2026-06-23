@@ -12,10 +12,16 @@ const QUERIES = [
   "minRating=4&sortBy=rating&sortOrder=desc",
   "category=Games&sortBy=reviews&sortOrder=desc",
   "minRating=4.5&sortBy=reviews&sortOrder=desc&limit=10",
-  // negatives (must stay legacy / unchanged):
+  // asc (keyset-eligible, non-null columns):
+  "minRating=4&sortBy=reviews&sortOrder=asc",
+  "minRating=4&sortBy=rating&sortOrder=asc",
+  "sortBy=revenue&sortOrder=asc",
   "sortBy=rating&sortOrder=desc",
   "sortBy=revenue&sortOrder=desc",
+  // negatives (must stay legacy / unchanged):
   "search=fitness&sortBy=reviews&sortOrder=desc",
+  "sortBy=growth&sortOrder=desc",
+  "sortBy=rankDelta&sortOrder=desc",
 ];
 
 function decodeCursorAppId(c) {

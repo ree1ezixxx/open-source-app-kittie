@@ -520,7 +520,11 @@ export type KeysetCursor = { sortValue: number | null; appId: string };
  *    until then sqlSortColumn returns null for them so this never fires.
  *  updated/released are excluded: sortApps coalesces their NULL date to epoch 0. */
 export function keysetColumn(params: AppSearchParams): AnyColumn | null {
-  if ((params.sortOrder ?? "desc") !== "desc") return null;
+  // Both directions are keyset-eligible because every column below is NON-NULL in its
+  // eligible context (review_count is never null; rating only when minRating>0 excludes
+  // the NULL/0 tail; revenue/downloads only when the day is fully backfilled). With no
+  // NULLs there's no null-sink divergence, so ASC matches sortApps too (SQLite's ASC
+  // NULLs-first would otherwise disagree with sortApps' unconditional null-sink).
   switch (params.sortBy) {
     case "reviews":
       return appSnapshots.reviewCount;
@@ -547,19 +551,23 @@ async function selectCandidateIdsKeyset(
   pageSize: number,
 ): Promise<Array<{ id: string; sortVal: number | null }>> {
   const col = keysetColumn(params)!;
+  const isAsc = (params.sortOrder ?? "desc") === "asc";
   const conds = allConditions(c);
   if (cursor) {
     // Built with drizzle or()/and() (NOT a raw sql`(X) OR (Y)` chunk — that doesn't
     // parenthesize as a unit inside the outer and(), so the OR escapes the date/market
-    // pin and re-emits boundary rows).
+    // pin and re-emits boundary rows). Tiebreak on app_snapshots.app_id ASC (the indexed
+    // column), so the cursor comparison + ORDER BY are served index-only — using the
+    // joined apps.id instead forces a temp b-tree over big tie-groups (e.g. rating).
     if (cursor.sortValue === null) {
-      // Boundary sits on a NULL col value (NULLs are the last DESC block, ordered by id).
-      conds.push(and(isNull(col), gt(apps.id, cursor.appId))!);
+      // Boundary on a NULL col value (only reachable for a nullable DESC sort; the
+      // asc-eligible columns are non-null). NULLs are the last DESC block, ordered by id.
+      conds.push(and(isNull(col), gt(appSnapshots.appId, cursor.appId))!);
     } else {
-      // Strictly after (sortValue, id) in DESC order. `col < v` is unknown for NULL col,
-      // so NULLs are never pulled early — they trail after all non-null rows, matching
-      // SQLite's native DESC null-last and sortApps' null-sink.
-      conds.push(or(lt(col, cursor.sortValue), and(eq(col, cursor.sortValue), gt(apps.id, cursor.appId)))!);
+      // Strictly after (sortValue, app_id): for DESC that's a smaller col, for ASC a
+      // larger col; ties advance by app_id ASC. NULL cols never satisfy the inequality.
+      const afterCol = isAsc ? gt(col, cursor.sortValue) : lt(col, cursor.sortValue);
+      conds.push(or(afterCol, and(eq(col, cursor.sortValue), gt(appSnapshots.appId, cursor.appId)))!);
     }
   }
   const rows = await getDb()
@@ -567,7 +575,7 @@ async function selectCandidateIdsKeyset(
     .from(apps)
     .innerJoin(appSnapshots, eq(appSnapshots.appId, apps.id))
     .where(and(...conds))
-    .orderBy(desc(col), apps.id)
+    .orderBy(isAsc ? asc(col) : desc(col), appSnapshots.appId)
     .limit(pageSize);
   const seen = new Set<string>();
   const out: Array<{ id: string; sortVal: number | null }> = [];
