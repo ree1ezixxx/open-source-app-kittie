@@ -18,4 +18,6 @@ data/
 .ab-review/
 generated-workspaces/
 coordinator/.cache/
+coordinator/.govern/
+.td-shots/
 tmp/
