@@ -289,7 +289,7 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
                 date={
                   app.historicals.length
                     ? app.historicals[app.historicals.length - 1]!.date
-                    : app.updatedAt
+                    : null
                 }
               />
             </div>

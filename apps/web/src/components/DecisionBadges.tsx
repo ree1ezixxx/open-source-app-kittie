@@ -29,11 +29,13 @@ export function ConfidenceBadge({
   compact?: boolean;
 }) {
   const pct = Math.round(confidence.score * 100);
+  // threshold on the rounded percent so the displayed % and the band/tone never disagree
+  const rounded = pct / 100;
   const title = confidence.reasons.length ? confidence.reasons.join(" · ") : undefined;
   return (
-    <span className={`conf-badge tone-${tone(confidence.score)}`} title={title}>
+    <span className={`conf-badge tone-${tone(rounded)}`} title={title}>
       <span className="conf-dot" />
-      {pct}% <span className="conf-word">{confidenceLabel(confidence.score)}</span>
+      {pct}% <span className="conf-word">{confidenceLabel(rounded)}</span>
       {!compact && <span className="conf-tail">confidence</span>}
     </span>
   );
@@ -72,6 +74,7 @@ export function freshnessFromDate(iso: string | null): Freshness {
   const t = Date.parse(iso);
   if (Number.isNaN(t)) return "unknown";
   const days = Math.floor((Date.now() - t) / 86_400_000);
+  if (days < 0) return "unknown"; // future-dated snapshot is not "fresh"
   return days <= 2 ? "fresh" : days <= 7 ? "aging" : "stale";
 }
 
@@ -89,7 +92,12 @@ const FRESH_WORD: Record<Freshness, string> = {
 export function FreshnessBadge({ date }: { date: string | null }) {
   const label = freshnessFromDate(date);
   const t = label === "fresh" ? "high" : label === "aging" ? "mid" : "low";
-  const human = date ? new Date(date).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : null;
+  // parse YYYY-MM-DD as UTC (it's stored as UTC) so users west of UTC don't see the day before;
+  // only render a date when it actually parsed (avoids an "Invalid Date" suffix).
+  const human =
+    label !== "unknown" && date
+      ? new Date(date).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" })
+      : null;
   return (
     <span className={`fresh-badge tone-${t}`} title={date ? `Latest snapshot ${date}` : "No snapshot date"}>
       {FRESH_WORD[label]}
