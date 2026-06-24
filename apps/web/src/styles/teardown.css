@@ -26,7 +26,7 @@
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-pop);
   cursor: pointer;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
 }
 .td-node:hover {
   border-color: var(--border-strong);
@@ -68,6 +68,29 @@
 .td-icon svg {
   width: 18px;
   height: 18px;
+}
+/* cluster icon tint — driven by [data-kind], token-based (replaces inline hex) */
+.td-cluster[data-kind="growth"] .td-icon { color: var(--cluster-growth); background: color-mix(in srgb, var(--cluster-growth) 12%, transparent); }
+.td-cluster[data-kind="ads"] .td-icon { color: var(--cluster-ads); background: color-mix(in srgb, var(--cluster-ads) 12%, transparent); }
+.td-cluster[data-kind="discovery"] .td-icon { color: var(--cluster-discovery); background: color-mix(in srgb, var(--cluster-discovery) 12%, transparent); }
+.td-cluster[data-kind="stack"] .td-icon { color: var(--cluster-stack); background: color-mix(in srgb, var(--cluster-stack) 12%, transparent); }
+.td-cluster[data-kind="voice"] .td-icon { color: var(--cluster-voice); background: color-mix(in srgb, var(--cluster-voice) 12%, transparent); }
+.td-cluster[data-kind="competitors"] .td-icon { color: var(--cluster-competitors); background: color-mix(in srgb, var(--cluster-competitors) 12%, transparent); }
+
+/* idle / sparse — no data yet: de-emphasise so a thin canvas reads as thin, not complete */
+.td-node[data-status="idle"] {
+  opacity: 0.58;
+  box-shadow: var(--elev-1);
+}
+.td-node[data-status="idle"]:hover {
+  opacity: 0.92;
+}
+.td-cluster[data-status="idle"] .td-icon {
+  color: var(--text-faint);
+  background: var(--surface);
+}
+.td-signal[data-status="idle"] .td-signal-value {
+  color: var(--text-faint);
 }
 .td-app-icon {
   width: 40px;
@@ -114,8 +137,8 @@
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--positive) 18%, transparent);
 }
 .td-status-warn {
-  background: #f59e0b;
-  box-shadow: 0 0 0 3px color-mix(in srgb, #f59e0b 22%, transparent);
+  background: var(--warn);
+  box-shadow: 0 0 0 3px var(--warn-soft);
 }
 .td-status-down {
   background: var(--negative);
@@ -141,7 +164,8 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-family: var(--font-mono);
-  font-size: 9.5px;
+  font-size: 10.5px;
+  letter-spacing: 0.03em;
   color: var(--text-tertiary);
   text-transform: uppercase;
 }
@@ -165,22 +189,39 @@
 }
 
 .td-foot {
-  display: flex;
-  gap: 6px;
-  padding: 9px 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: 7px 10px;
+  padding: 9px 12px 11px;
   border-top: 1px solid var(--border-soft);
 }
 .td-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.td-metric-val {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--text-secondary);
-  background: var(--surface);
-  border: 1px solid var(--border-soft);
-  border-radius: 7px;
-  padding: 3px 7px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.td-metric-label {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .td-metric svg {
   width: 12px;
@@ -223,6 +264,14 @@
   color: var(--accent-text);
   background: var(--accent-soft);
   border-color: transparent;
+  font-weight: 600;
+}
+/* context pill — quietest tier (store/category recede so the accent badge leads) */
+.td-pill-soft {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-tertiary);
+  padding-inline: 4px;
 }
 
 /* ---- beams (light-streak glides along the wire, feeding the parent) ---- */
@@ -230,13 +279,13 @@
   stroke: var(--accent);
   stroke-width: 2;
   fill: none;
-  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--accent) 60%, transparent));
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--accent) 55%, transparent));
 }
 .td-beam-child {
   stroke: var(--positive);
-  stroke-width: 1.5;
-  opacity: 0.9;
-  filter: drop-shadow(0 0 2px color-mix(in srgb, var(--positive) 45%, transparent));
+  stroke-width: 1;
+  opacity: 0.38;
+  filter: none;
 }
 @media (prefers-reduced-motion: reduce) {
   .td-beam,

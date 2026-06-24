@@ -72,10 +72,10 @@ export function verticalLayout(nodes: Node[]): Node[] {
   const CARD_H = 116;
   const SIGNAL_W = 168;
   const SIGNAL_H = 76;
-  const COL_GAP = 34;
+  const COL_GAP = 44;
   const ROOT_GAP = 88;
   const SIGNAL_GAP = 46;
-  const SIGNAL_ROW = 14;
+  const SIGNAL_ROW = 20;
 
   const n = clusters.length;
   const totalW = n * CARD_W + Math.max(0, n - 1) * COL_GAP;
