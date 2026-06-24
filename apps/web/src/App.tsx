@@ -24,6 +24,9 @@ import { ScreenshotGeneratorPage } from "./pages/ScreenshotGeneratorPage";
 import { HotIdeasPage } from "./pages/HotIdeasPage";
 import { IdeaDetailPage } from "./pages/IdeaDetailPage";
 import { PricingCalculatorPage } from "./pages/PricingCalculatorPage";
+import { IntelligenceHome } from "./pages/AppIntelligence/IntelligenceHome";
+import { ValidatePage } from "./pages/AppIntelligence/ValidatePage";
+import { SimilarPage } from "./pages/AppIntelligence/SimilarPage";
 import { useTheme } from "./lib/theme";
 import { prefetchForRoute } from "./lib/routePrefetch";
 
@@ -76,6 +79,11 @@ export function App() {
         <Route path="/dashboard/hot-ideas" element={<HotIdeasPage />} />
         <Route path="/dashboard/hot-ideas/:slug" element={<IdeaDetailPage />} />
         <Route path="/tools/pricing-calculator" element={<PricingCalculatorPage />} />
+
+        {/* App Intelligence (Lane C) */}
+        <Route path="/intelligence" element={<IntelligenceHome />} />
+        <Route path="/intelligence/validate" element={<ValidatePage />} />
+        <Route path="/intelligence/similar" element={<SimilarPage />} />
 
         {/* Reviews & Meta */}
         <Route path="/dashboard/reviews" element={<RedirectWithSearch to="/dashboard/reviews/overview" />} />

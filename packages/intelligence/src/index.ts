@@ -56,6 +56,25 @@ export {
   type SectionLabel,
   TEARDOWN_DEPTHS,
 } from "./teardown/index.js";
+export {
+  tokenize,
+  interpretFromApp,
+  interpretFromQuery,
+  keywordOverlap,
+  classifySimilarity,
+  scoreSimilar,
+  rankSimilar,
+  computeSimilarConfidence,
+  buildSimilarAgentSummary,
+  type SimilarCandidate,
+} from "./similarity/index.js";
+export {
+  scoreIdea,
+  deriveVerdict,
+  summarizeCompetitors,
+  buildValidateAgentSummary,
+  type IdeaScoringInput,
+} from "./idea-validation/index.js";
 
 import type { AppListItem } from "@kittie/types";
 import { computeGrowthPct, computeGrowthScore, isFirstMover, reviewGrowth7d } from "./growth.js";
