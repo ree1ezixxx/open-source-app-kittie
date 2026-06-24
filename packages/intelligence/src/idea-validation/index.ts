@@ -101,10 +101,11 @@ export function deriveVerdict(
 
   if (sat >= 0.75) return diff < 0.35 ? "saturated" : "crowded";
   if (sat >= 0.4) return qual >= 0.6 && diff < 0.4 ? "crowded" : "has_room";
-  // low saturation
+  // Low saturation — competitors exist (the count===0 guard already returned),
+  // so this is never "unvalidated"; low competition means there IS room, with
+  // strong demand + differentiation marking the best case.
   if (dem >= 0.45 && diff >= 0.4) return "strong_opportunity";
-  if (dem >= 0.3) return "has_room";
-  return "unvalidated";
+  return "has_room";
 }
 
 /** Plain-language competitive-landscape summary. */
