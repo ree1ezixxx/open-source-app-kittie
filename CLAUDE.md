@@ -15,9 +15,13 @@ The **one** UI direction is the **light-mode "App Teardown"** design:
 - The signature view is the **App Teardown canvas** — an app's intelligence exploded onto a
   pannable react-flow node graph (`apps/web/src/components/teardown/`), reached from each app's
   detail page via the **Classic ⇄ Teardown** toggle.
-- **Run it:** `pnpm dev:web` (web) + `pnpm dev:api` (API). Canonical dev ports: **web `5173`,
-  API `3008`** (web proxies `/api` → `3008`; override with `VITE_API_ORIGIN`). The teardown
-  canvas is at any app → **View** → **Teardown** tab.
+- **Run it:** `pnpm dev:web` (web) + `pnpm dev:api` (API). Canonical dev ports: **web `5175`,
+  API `3008`** (pinned in `apps/web/vite.config.ts`; web proxies `/api` → `3008`; override the
+  API origin with `VITE_API_ORIGIN`). The teardown canvas is at any app → **View** → **Teardown** tab.
+- **The web localhost is ALWAYS `:5175`.** Never `:5173`. `pnpm dev:web` only lands on a
+  different port if `5175` is genuinely occupied (a conflict/error) — never by choice. If you
+  ever see another port, a stray dev server is already on 5175: kill it and re-run on 5175,
+  don't accept the fallback port.
 - **Do NOT build, open, or revive other design directions** — the "App Canvas" hub-and-spoke
   view, the "Exponential UI" redesign, or any alternative shell. They are deprecated. If a fresh
   visual exploration is ever wanted, it must be an explicit, separate decision — never a default.
