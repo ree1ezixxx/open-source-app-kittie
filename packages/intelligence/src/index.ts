@@ -50,6 +50,13 @@ export {
   buildSimilarAgentSummary,
   type SimilarCandidate,
 } from "./similarity/index.js";
+export {
+  scoreIdea,
+  deriveVerdict,
+  summarizeCompetitors,
+  buildValidateAgentSummary,
+  type IdeaScoringInput,
+} from "./idea-validation/index.js";
 
 import type { AppListItem } from "@kittie/types";
 import { computeGrowthPct, computeGrowthScore, isFirstMover, reviewGrowth7d } from "./growth.js";
