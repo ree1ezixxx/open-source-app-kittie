@@ -38,6 +38,22 @@ export {
   type MarketApp,
   type OpportunityInput,
 } from "./opportunity.js";
+export {
+  buildTeardownApp,
+  type BuildTeardownInput,
+  type TeardownAppOutput,
+  type TeardownDepth,
+  type TeardownIdentity,
+  type TeardownMetrics,
+  type MonetisationModel,
+  type ReviewInsights,
+  type CoreLoop,
+  type FeatureMap,
+  type CloneInsights,
+  type AsoModel,
+  type SectionLabel,
+  TEARDOWN_DEPTHS,
+} from "./teardown/index.js";
 
 import type { AppListItem } from "@kittie/types";
 import { computeGrowthPct, computeGrowthScore, isFirstMover, reviewGrowth7d } from "./growth.js";
