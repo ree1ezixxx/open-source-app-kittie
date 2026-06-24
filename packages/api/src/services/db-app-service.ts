@@ -14,9 +14,11 @@ import { inArray, count } from "drizzle-orm";
 import { lookupAppleApp } from "@kittie/ingest";
 import {
   type AppSignals,
+  type MarketApp,
   estimateDownloads,
   estimateRevenue,
   GROWTH_PERIOD_DAYS,
+  synthesizeOpportunity,
 } from "@kittie/intelligence";
 import type {
   AppDetail,
@@ -26,6 +28,7 @@ import type {
   CreatorPartnership,
   AppListItem,
   AppSearchParams,
+  DecisionPacket,
   MetaAdCreative,
   PaginatedResponse,
   Review,
@@ -313,6 +316,50 @@ async function backfillListingFacts<
   }
 }
 
+/**
+ * Synthesise this app's category-opportunity DecisionPacket from OBSERVED peers:
+ * the app's category is the niche, its most-reviewed category peers are the
+ * competitor sample. Honest by construction — ad data and un-mined review themes
+ * are declared in `coverage.missing` (so coverage is never `full`), confidence
+ * scales with the real peer sample, and a category-less app yields no packet
+ * (we never invent a niche). Never throws: a peer-fetch/synthesis failure returns
+ * undefined so the detail fetch is unaffected.
+ */
+async function buildCategoryOpportunity(
+  category: string | null,
+  selfId: string,
+  snapshotId: string,
+  observedAt: string,
+): Promise<DecisionPacket | undefined> {
+  if (!category) return undefined;
+  try {
+    const peerRes = await searchAppsFromDb({
+      categories: category,
+      sortBy: "reviews",
+      sortOrder: "desc",
+      limit: 50,
+    });
+    const peers: MarketApp[] = peerRes.data
+      .filter((p) => p.id !== selfId)
+      .map((p) => ({
+        id: p.id,
+        store: p.store,
+        title: p.title,
+        rating: p.rating,
+        reviewCount: p.reviewCount,
+      }));
+    return synthesizeOpportunity({
+      niche: category,
+      apps: peers,
+      reviewThemes: null,
+      observedAt,
+      snapshotId,
+    });
+  } catch {
+    return undefined;
+  }
+}
+
 export async function getAppByIdFromDb(id: string): Promise<AppDetail | null> {
   const db = getDb();
   const row = await getAppRowById(db, id);
@@ -343,8 +390,16 @@ export async function getAppByIdFromDb(id: string): Promise<AppDetail | null> {
     revenueEstimate: s.revenueEstimate,
   }));
 
+  const decisionPacket = await buildCategoryOpportunity(
+    list.category,
+    id,
+    ctx.latest.id,
+    ctx.latest.createdAt.toISOString(),
+  );
+
   return {
     ...list,
+    decisionPacket,
     description: app.description,
     screenshotUrls: parseJsonArray(app.screenshotUrls),
     websiteUrl: app.websiteUrl,

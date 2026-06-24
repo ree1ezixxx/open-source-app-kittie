@@ -1,6 +1,10 @@
 export * from "./provenance.js";
 export * from "./decision-packet.js";
 
+// `export *` re-exports but creates no local binding — import the name explicitly
+// so `AppDetail.decisionPacket` can reference it as a type within this module.
+import type { DecisionPacket } from "./decision-packet.js";
+
 /** Store identifier — one App per store listing. */
 export type Store = "apple" | "google";
 
@@ -163,6 +167,14 @@ export interface AppDetail extends AppListItem {
   appleSearchAds: AppleSearchAd[];
   creators: CreatorPartnership[];
   historicals: AppHistoricalPoint[];
+  /**
+   * Market-opportunity decision for this app's category, synthesised from
+   * observed category peers (`synthesizeOpportunity`). Optional — omitted when
+   * the app has no category to reason about. Confidence/coverage are computed,
+   * never decorative: blocked sources (ad data, un-mined review themes) are
+   * declared in `coverage.missing`, never fabricated.
+   */
+  decisionPacket?: DecisionPacket;
 }
 
 export interface AppIap {
