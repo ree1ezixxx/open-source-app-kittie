@@ -41,6 +41,7 @@ import {
   poolIsInFinalOrder,
   searchAppCandidates,
   searchAppCandidatesKeyset,
+  searchAppCandidatesKeysetFts,
 } from "./app-query.js";
 import {
   decodeKeysetCursor,
@@ -49,6 +50,7 @@ import {
   hasLiveGrowthFilter,
   matchesSearch,
   paginateApps,
+  searchKeysetSafe,
   sortApps,
 } from "./filter-sort.js";
 
@@ -150,9 +152,17 @@ export async function searchAppsFromDb(params: AppSearchParams): Promise<Paginat
   // POOL_CAP. A legacy bare-id cursor decodes to null and falls through to the pool path
   // below, so a mid-session client holding an old cursor keeps working unchanged.
   const keysetCursor = decodeKeysetCursor(params.cursor);
-  if (keysetColumn(params) !== null && !dropsRowsInMemory(params) && (params.cursor == null || keysetCursor !== null)) {
+  if (
+    keysetColumn(params) !== null &&
+    (!dropsRowsInMemory(params) || searchKeysetSafe(params)) &&
+    (params.cursor == null || keysetCursor !== null)
+  ) {
     const limit = params.limit ?? 20;
-    const kpool = await searchAppCandidatesKeyset(params, keysetCursor, limit);
+    // FTS keyset when the (only) drop-filter is a free-text search; the plain keyset
+    // candidate otherwise. Both return a single keyset page ordered by the sort column.
+    const kpool = params.search
+      ? await searchAppCandidatesKeysetFts(params, keysetCursor, limit)
+      : await searchAppCandidatesKeyset(params, keysetCursor, limit);
     if (!kpool) return rememberAppSearch(cacheKey, { data: [], pagination: { nextCursor: null, totalCount: 0 } });
     const rows = await buildScoredAppRows(kpool.ids, period, kpool.marketCountry, new Map<string, number>());
     const data = rows.map((r) => r.item);
