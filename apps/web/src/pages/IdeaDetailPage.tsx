@@ -156,26 +156,26 @@ export function IdeaDetailPage() {
             <IdeaMockup idea={idea} height={280} />
           </div>
           <div className="idea-detail-head">
-            <h1>{idea.title}</h1>
-            <p className="idea-detail-summary">{idea.description}</p>
+            <h1 data-field="name">{idea.title}</h1>
+            <p className="idea-detail-summary" data-field="description">{idea.description}</p>
             <div className="idea-meta">
-              <span className="idea-cat">{idea.sourceCategory}</span>
+              <span className="idea-cat" data-field="source-category">{idea.sourceCategory}</span>
               <span>·</span>
-              <span>{idea.ideaCategory}</span>
+              <span data-field="idea-category">{idea.ideaCategory}</span>
               <span>·</span>
-              <span className="idea-rating">
+              <span className="idea-rating" data-field="rating" data-value={idea.rating}>
                 <IconStar /> {idea.rating.toFixed(1)}
               </span>
             </div>
-            <div className="idea-blueprint">
+            <div className="idea-blueprint" data-field="blueprint">
               {idea.blueprint.map((tag) => (
-                <span key={tag} className={`bp-tag bp-${tag}`}>
+                <span key={tag} className={`bp-tag bp-${tag}`} data-value={tag}>
                   <span className="dot" />
                   {blueprintLabel(tag)}
                 </span>
               ))}
             </div>
-            <div className="idea-detail-actions">
+            <div className="idea-detail-actions" data-field="actions">
               <button className="btn btn-accent" onClick={onExport}>
                 {copied ? "Copied ✓" : "Export as prompt"}
               </button>
@@ -212,47 +212,47 @@ export function IdeaDetailPage() {
         </div>
 
         {tab === "building" && bp && (
-          <section className="idea-panel">
+          <section className="idea-panel" data-section="building">
             <div className="idea-panel-grid">
               <div className="idea-fact">
                 <span className="k">Difficulty</span>
-                <span className={`v diff-${bp.difficulty}`}>{bp.difficulty}</span>
-                <p>{bp.difficultyReasoning}</p>
+                <span className={`v diff-${bp.difficulty}`} data-field="difficulty" data-value={bp.difficulty}>{bp.difficulty}</span>
+                <p data-field="difficulty-reasoning">{bp.difficultyReasoning}</p>
               </div>
               <div className="idea-fact">
                 <span className="k">Timeline</span>
-                <span className="v">~{bp.timelineWeeks} weeks</span>
-                <p>{bp.mvpScope}</p>
+                <span className="v" data-field="timeline-weeks" data-value={bp.timelineWeeks}>~{bp.timelineWeeks} weeks</span>
+                <p data-field="mvp-scope">{bp.mvpScope}</p>
               </div>
               <div className="idea-fact">
                 <span className="k">Architecture</span>
-                <span className="v">{bp.architecture}</span>
-                <p>{bp.techStack.join(" · ")}</p>
+                <span className="v" data-field="architecture">{bp.architecture}</span>
+                <p data-field="tech-stack">{bp.techStack.join(" · ")}</p>
               </div>
             </div>
 
             <div className="idea-features">
               <div className="idea-feature-col">
                 <h3>MVP features</h3>
-                <ul>{bp.mvpFeatures.map((f, i) => <li key={i}>{f}</li>)}</ul>
+                <ul data-field="mvp-features">{bp.mvpFeatures.map((f, i) => <li key={i}>{f}</li>)}</ul>
               </div>
               <div className="idea-feature-col">
                 <h3>Key features</h3>
-                <ul>{bp.keyFeatures.map((f, i) => <li key={i}>{f}</li>)}</ul>
+                <ul data-field="key-features">{bp.keyFeatures.map((f, i) => <li key={i}>{f}</li>)}</ul>
               </div>
               <div className="idea-feature-col">
                 <h3>V2 features</h3>
-                <ul>{bp.v2Features.map((f, i) => <li key={i}>{f}</li>)}</ul>
+                <ul data-field="v2-features">{bp.v2Features.map((f, i) => <li key={i}>{f}</li>)}</ul>
               </div>
             </div>
 
             <div className="idea-reqs">
               <h3>Requirements</h3>
-              <ul>{bp.requirements.map((r, i) => <li key={i}>{r}</li>)}</ul>
+              <ul data-field="requirements">{bp.requirements.map((r, i) => <li key={i}>{r}</li>)}</ul>
               {bp.thirdPartyServices.length > 0 && (
                 <>
                   <h3>Third-party services</h3>
-                  <ul>{bp.thirdPartyServices.map((s, i) => <li key={i}>{s}</li>)}</ul>
+                  <ul data-field="third-party-services">{bp.thirdPartyServices.map((s, i) => <li key={i}>{s}</li>)}</ul>
                 </>
               )}
             </div>
@@ -260,30 +260,30 @@ export function IdeaDetailPage() {
         )}
 
         {tab === "opportunity" && (
-          <section className="idea-panel">
+          <section className="idea-panel" data-section="opportunity">
             {bp?.opportunity ? (
               <>
-                <p className="idea-opportunity-note" style={{ marginTop: 0, fontSize: 15 }}>
+                <p className="idea-opportunity-note" style={{ marginTop: 0, fontSize: 15 }} data-field="opportunity-thesis">
                   {bp.opportunity.summary}
                 </p>
                 <div className="idea-panel-grid">
-                  <div className="idea-fact"><span className="k">Why this app</span><p>{bp.opportunity.whyThisApp}</p></div>
-                  <div className="idea-fact"><span className="k">Market size</span><p>{bp.opportunity.marketSizeInsight}</p></div>
-                  <div className="idea-fact"><span className="k">Target audience</span><p>{bp.opportunity.targetAudience}</p></div>
-                  <div className="idea-fact"><span className="k">Monetization</span><p>{bp.opportunity.monetizationStrategy}</p></div>
+                  <div className="idea-fact"><span className="k">Why this app</span><p data-field="why-this-app">{bp.opportunity.whyThisApp}</p></div>
+                  <div className="idea-fact"><span className="k">Market size</span><p data-field="market-size">{bp.opportunity.marketSizeInsight}</p></div>
+                  <div className="idea-fact"><span className="k">Target audience</span><p data-field="target-audience">{bp.opportunity.targetAudience}</p></div>
+                  <div className="idea-fact"><span className="k">Monetization</span><p data-field="monetization">{bp.opportunity.monetizationStrategy}</p></div>
                 </div>
                 <div className="idea-features">
                   <div className="idea-feature-col">
                     <h3>Pain points</h3>
-                    <ul>{bp.opportunity.painPoints.map((x, i) => <li key={i}>{x}</li>)}</ul>
+                    <ul data-field="pain-points">{bp.opportunity.painPoints.map((x, i) => <li key={i}>{x}</li>)}</ul>
                   </div>
                   <div className="idea-feature-col">
                     <h3>Feature gaps</h3>
-                    <ul>{bp.opportunity.featureGaps.map((x, i) => <li key={i}>{x}</li>)}</ul>
+                    <ul data-field="feature-gaps">{bp.opportunity.featureGaps.map((x, i) => <li key={i}>{x}</li>)}</ul>
                   </div>
                   <div className="idea-feature-col">
                     <h3>Competitive edge</h3>
-                    <ul>{bp.opportunity.competitiveAdvantages.map((x, i) => <li key={i}>{x}</li>)}</ul>
+                    <ul data-field="competitive-advantages">{bp.opportunity.competitiveAdvantages.map((x, i) => <li key={i}>{x}</li>)}</ul>
                   </div>
                 </div>
                 <p className="idea-opportunity-note">AI-generated analysis — directional, not a guarantee.</p>
@@ -294,26 +294,26 @@ export function IdeaDetailPage() {
               </p>
             )}
             <h3>Source app</h3>
-            <div className="idea-source-card">
+            <div className="idea-source-card" data-section="source-app" data-store={sourceApp.store}>
               {sourceApp.iconUrl && <img src={sourceApp.iconUrl} alt="" className="idea-source-icon" />}
               <div className="idea-source-info">
-                <strong>{sourceApp.title}</strong>
+                <strong data-field="source-app-name">{sourceApp.title}</strong>
                 <span className="muted">
-                  {sourceApp.developer ?? "Unknown developer"} · {sourceApp.category ?? "—"}
+                  <span data-field="developer">{sourceApp.developer ?? "Unknown developer"}</span> · <span data-field="category">{sourceApp.category ?? "—"}</span>
                 </span>
               </div>
               <div className="idea-source-stats">
-                <div><span className="k">Reviews</span><span className="v">{compact(sourceApp.reviews)}</span></div>
-                <div><span className="k">Rating</span><span className="v">{sourceApp.rating?.toFixed(1) ?? "—"}</span></div>
-                <div><span className="k">Downloads est.</span><span className="v">{sourceApp.downloads ? compact(sourceApp.downloads) : "—"}</span></div>
-                <div><span className="k">Revenue est.</span><span className="v">{sourceApp.revenue ? `$${compact(sourceApp.revenue)}/mo` : "—"}</span></div>
-                <div><span className="k">Price</span><span className="v">{sourceApp.price ? `$${sourceApp.price}` : "Free"}</span></div>
+                <div><span className="k">Reviews</span><span className="v" data-field="reviews" data-value={sourceApp.reviews}>{compact(sourceApp.reviews)}</span></div>
+                <div><span className="k">Rating</span><span className="v" data-field="rating" data-value={sourceApp.rating ?? undefined}>{sourceApp.rating?.toFixed(1) ?? "—"}</span></div>
+                <div><span className="k">Downloads est.</span><span className="v" data-field="downloads" data-value={sourceApp.downloads ?? undefined}>{sourceApp.downloads ? compact(sourceApp.downloads) : "—"}</span></div>
+                <div><span className="k">Revenue est.</span><span className="v" data-field="revenue" data-value={sourceApp.revenue ?? undefined}>{sourceApp.revenue ? `$${compact(sourceApp.revenue)}/mo` : "—"}</span></div>
+                <div><span className="k">Price</span><span className="v" data-field="price" data-value={sourceApp.price ?? undefined}>{sourceApp.price ? `$${sourceApp.price}` : "Free"}</span></div>
               </div>
             </div>
             {inAppPurchases.length > 0 && (
               <div className="idea-reqs">
                 <h3>In-app purchases</h3>
-                <ul>
+                <ul data-field="in-app-purchases">
                   {inAppPurchases.map((p, i) => (
                     <li key={i}>
                       {p.name}
@@ -333,27 +333,27 @@ export function IdeaDetailPage() {
         )}
 
         {tab === "marketing" && (
-          <section className="idea-panel">
+          <section className="idea-panel" data-section="marketing">
             {bp?.marketing ? (
               <>
-                <p className="idea-opportunity-note" style={{ marginTop: 0, fontSize: 15 }}>
+                <p className="idea-opportunity-note" style={{ marginTop: 0, fontSize: 15 }} data-field="marketing-strategy">
                   {bp.marketing.marketingStrategy}
                 </p>
                 <div className="idea-features">
-                  <div className="idea-feature-col"><h3>Platforms</h3><ul>{bp.marketing.marketingPlatforms.map((x, i) => <li key={i}>{x}</li>)}</ul></div>
-                  <div className="idea-feature-col"><h3>Content hooks</h3><ul>{bp.marketing.contentHooks.map((x, i) => <li key={i}>{x}</li>)}</ul></div>
-                  <div className="idea-feature-col"><h3>UGC formats</h3><ul>{bp.marketing.ugcFormats.map((x, i) => <li key={i}>{x}</li>)}</ul></div>
+                  <div className="idea-feature-col"><h3>Platforms</h3><ul data-field="marketing-platforms">{bp.marketing.marketingPlatforms.map((x, i) => <li key={i}>{x}</li>)}</ul></div>
+                  <div className="idea-feature-col"><h3>Content hooks</h3><ul data-field="content-hooks">{bp.marketing.contentHooks.map((x, i) => <li key={i}>{x}</li>)}</ul></div>
+                  <div className="idea-feature-col"><h3>UGC formats</h3><ul data-field="ugc-formats">{bp.marketing.ugcFormats.map((x, i) => <li key={i}>{x}</li>)}</ul></div>
                 </div>
                 <div className="idea-features">
-                  <div className="idea-feature-col"><h3>Campaign ideas</h3><ul>{bp.marketing.campaignIdeas.map((x, i) => <li key={i}>{x}</li>)}</ul></div>
-                  <div className="idea-feature-col"><h3>Creator types</h3><ul>{bp.marketing.creatorTypes.map((x, i) => <li key={i}>{x}</li>)}</ul></div>
-                  <div className="idea-feature-col"><h3>Key selling points</h3><ul>{bp.marketing.keySellingPoints.map((x, i) => <li key={i}>{x}</li>)}</ul></div>
+                  <div className="idea-feature-col"><h3>Campaign ideas</h3><ul data-field="campaign-ideas">{bp.marketing.campaignIdeas.map((x, i) => <li key={i}>{x}</li>)}</ul></div>
+                  <div className="idea-feature-col"><h3>Creator types</h3><ul data-field="creator-types">{bp.marketing.creatorTypes.map((x, i) => <li key={i}>{x}</li>)}</ul></div>
+                  <div className="idea-feature-col"><h3>Key selling points</h3><ul data-field="key-selling-points">{bp.marketing.keySellingPoints.map((x, i) => <li key={i}>{x}</li>)}</ul></div>
                 </div>
                 <div className="idea-reqs">
                   <h3>ASO keywords</h3>
-                  <ul>{bp.marketing.asoKeywords.map((x, i) => <li key={i}>{x}</li>)}</ul>
+                  <ul data-field="aso-keywords">{bp.marketing.asoKeywords.map((x, i) => <li key={i}>{x}</li>)}</ul>
                   <h3>Go-to-market</h3>
-                  <p>{bp.marketing.goToMarket}</p>
+                  <p data-field="go-to-market">{bp.marketing.goToMarket}</p>
                 </div>
                 <p className="idea-opportunity-note">AI-generated plan — a starting point, not a guarantee.</p>
               </>
@@ -365,12 +365,12 @@ export function IdeaDetailPage() {
             <div className="idea-panel-grid">
               <div className="idea-fact">
                 <span className="k">Positioning</span>
-                <span className="v">{idea.ideaCategory}</span>
+                <span className="v" data-field="positioning">{idea.ideaCategory}</span>
                 <p>{idea.description}</p>
               </div>
               <div className="idea-fact">
                 <span className="k">Category to rank in</span>
-                <span className="v">{idea.sourceCategory}</span>
+                <span className="v" data-field="category-to-rank">{idea.sourceCategory}</span>
                 <p>
                   The source app proves search demand here — start ASO research with the Keyword
                   Explorer on this category's terms.
@@ -378,7 +378,7 @@ export function IdeaDetailPage() {
               </div>
               <div className="idea-fact">
                 <span className="k">Proof of demand</span>
-                <span className="v">{compact(idea.reviews)} reviews</span>
+                <span className="v" data-field="proof-of-demand">{compact(idea.reviews)} reviews</span>
                 <p>
                   The source app holds a {idea.rating.toFixed(1)}★ rating
                   {idea.revenue ? ` and an estimated $${compact(idea.revenue)}/mo` : ""} — an
@@ -390,7 +390,7 @@ export function IdeaDetailPage() {
         )}
 
         {similar.length > 0 && (
-          <section className="idea-similar">
+          <section className="idea-similar" data-section="similar">
             <h3>Similar ideas</h3>
             <div className="idea-similar-rail">
               {similar.map((s) =>
