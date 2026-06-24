@@ -82,17 +82,16 @@ function buildGraph(
       data: {
         kind: "growth",
         icon: <IconChart />,
-        accent: "#18a957",
         title: "Growth",
         subtitle: "Momentum & scale",
         status: app.downloadsEstimate30d ? "ok" : "idle",
         metrics: [
-          { icon: <IconChart />, value: dl, title: "Downloads 30d" },
-          { icon: <span className="td-glyph">$</span>, value: mrr, title: "MRR estimate" },
+          { icon: <IconChart />, value: dl, title: "Downloads" },
+          { icon: <span className="td-glyph">$</span>, value: mrr, title: "MRR" },
           {
             icon: <IconSpark />,
             value: app.growthScore != null ? String(Math.round(app.growthScore)) : "—",
-            title: "Growth score",
+            title: "Score",
           },
         ],
       } satisfies ClusterData,
@@ -106,7 +105,6 @@ function buildGraph(
       data: {
         kind: "ads",
         icon: <IconImage />,
-        accent: "#f59e0b",
         title: "Acquisition",
         subtitle: "Paid reach",
         status: adsCount + asaCount > 0 ? "ok" : "idle",
@@ -125,7 +123,6 @@ function buildGraph(
       data: {
         kind: "discovery",
         icon: <IconGlobe />,
-        accent: "#3b82f6",
         title: "Discovery",
         subtitle: "ASO & findability",
         status: langs > 0 ? "ok" : "idle",
@@ -144,7 +141,6 @@ function buildGraph(
       data: {
         kind: "stack",
         icon: <IconInfo />,
-        accent: "#8b5cf6",
         title: "Stack",
         subtitle: "Build & monetization",
         status: "ok",
@@ -164,7 +160,6 @@ function buildGraph(
       data: {
         kind: "voice",
         icon: <IconMessage />,
-        accent: "#ec4899",
         title: "Voice",
         subtitle: "Sentiment & creators",
         status: (app.rating ?? 0) >= 4.5 ? "ok" : app.reviewCount > 0 ? "warn" : "idle",
@@ -184,7 +179,6 @@ function buildGraph(
       data: {
         kind: "competitors",
         icon: <IconUsers />,
-        accent: "#64748b",
         title: "Competitors",
         subtitle: "Similar apps",
         status: "ok",

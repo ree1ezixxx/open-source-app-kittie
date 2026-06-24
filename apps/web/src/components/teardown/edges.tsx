@@ -27,8 +27,8 @@ function BeamEdge({
     borderRadius: child ? 12 : 16,
   });
 
-  const dash = child ? 16 : 22;
-  const gap = child ? 150 : 190;
+  const dash = child ? 12 : 26;
+  const gap = child ? 240 : 150;
   const period = dash + gap;
 
   return (
@@ -38,8 +38,8 @@ function BeamEdge({
         path={path}
         style={{
           stroke: child ? "var(--td-edge-child)" : "var(--td-edge)",
-          strokeWidth: child ? 1.2 : 1.5,
-          strokeDasharray: child ? "4 5" : undefined,
+          strokeWidth: child ? 1 : 1.75,
+          strokeDasharray: child ? "3 6" : undefined,
         }}
       />
       <path
@@ -53,7 +53,7 @@ function BeamEdge({
           attributeName="stroke-dashoffset"
           from="0"
           to={period}
-          dur={child ? "2.6s" : "2s"}
+          dur={child ? "3s" : "1.9s"}
           repeatCount="indefinite"
         />
       </path>

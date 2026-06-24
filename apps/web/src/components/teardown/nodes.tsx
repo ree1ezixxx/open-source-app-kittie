@@ -7,7 +7,6 @@ export type Metric = { icon: ReactNode; value: string; title?: string };
 export type ClusterData = {
   kind: string;
   icon: ReactNode;
-  accent: string;
   title: string;
   subtitle: string;
   status: NodeStatus;
@@ -68,12 +67,10 @@ function RootNode({ data }: NodeProps<RootNodeType>) {
 
 function ClusterNode({ data }: NodeProps<ClusterNodeType>) {
   return (
-    <div className="td-node td-cluster" role="button" tabIndex={0} onClick={() => data.onOpen?.()}>
+    <div className="td-node td-cluster" role="button" tabIndex={0} data-kind={data.kind} data-status={data.status} onClick={() => data.onOpen?.()}>
       <Handle type="target" position={Position.Top} className="td-handle" />
       <div className="td-head">
-        <div className="td-icon" style={{ background: `${data.accent}1f`, color: data.accent }}>
-          {data.icon}
-        </div>
+        <div className="td-icon">{data.icon}</div>
         <div className="td-head-meta">
           <div className="td-title">{data.title}</div>
           <div className="td-sub">{data.subtitle}</div>
@@ -83,8 +80,11 @@ function ClusterNode({ data }: NodeProps<ClusterNodeType>) {
       <div className="td-foot">
         {data.metrics.map((m, i) => (
           <span className="td-metric" key={i} title={m.title}>
-            {m.icon}
-            <span>{m.value}</span>
+            <span className="td-metric-val">
+              {m.icon}
+              {m.value}
+            </span>
+            {m.title && <span className="td-metric-label">{m.title}</span>}
           </span>
         ))}
       </div>
@@ -95,7 +95,7 @@ function ClusterNode({ data }: NodeProps<ClusterNodeType>) {
 
 function SignalNode({ data }: NodeProps<SignalNodeType>) {
   return (
-    <div className="td-node td-signal" role="button" tabIndex={0} onClick={() => data.onOpen?.()}>
+    <div className="td-node td-signal" role="button" tabIndex={0} data-status={data.status} onClick={() => data.onOpen?.()}>
       <Handle type="target" position={Position.Top} className="td-handle" />
       <div className="td-signal-top">
         <span className={`td-status td-status-${data.status}`} />
