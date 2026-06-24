@@ -10,6 +10,8 @@ import { MetricBar } from "../components/MetricBar";
 import { Segmented } from "../components/Segmented";
 import { TeardownCanvas } from "../components/teardown/TeardownCanvas";
 import { DetailCard, EmptyCard, Fact } from "../components/DetailCard";
+import { DecisionPacketCard } from "../components/DecisionPacketCard";
+import { FreshnessBadge } from "../components/DecisionBadges";
 import { TrendPanel, type ChartMetric } from "../components/TrendPanel";
 import { SimilarApps } from "../components/SimilarApps";
 import { FavoriteToggle } from "../components/FavoriteToggle";
@@ -225,6 +227,12 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
               </div>
             </header>
 
+            {/* decision-first: the one dominant "why this market matters" verdict,
+                above the metric wall. Omitted when the app has no category packet. */}
+            {app.decisionPacket && (
+              <DecisionPacketCard packet={app.decisionPacket} category={app.category} />
+            )}
+
             {/* truth-style headline stat cards: Creators · Ads · Size · Platforms · Rating */}
             <div className="detail-stats">
               <StatCard label="Creators" value={app.creators.length || "—"} />
@@ -269,6 +277,22 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
                 },
               ]}
             />
+
+            {/* honest provenance: the headline numbers are modelled estimates,
+                tagged with the freshness of the snapshot they were computed from. */}
+            <div className="estimate-note">
+              <IconInfo />
+              <span>
+                Downloads &amp; revenue are <strong>modelled</strong> estimates, not observed.
+              </span>
+              <FreshnessBadge
+                date={
+                  app.historicals.length
+                    ? app.historicals[app.historicals.length - 1]!.date
+                    : null
+                }
+              />
+            </div>
 
             {/* trend chart */}
             <TrendPanel app={app} metric={chartMetric} />
