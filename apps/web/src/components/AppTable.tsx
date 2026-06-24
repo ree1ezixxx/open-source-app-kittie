@@ -34,7 +34,7 @@ const COLS: Col[] = [
   { key: "mrr", label: "MRR", num: true, sort: "revenue", field: "revenue" },
   { key: "released", label: "Released", num: true, sort: "released" },
   { key: "updated", label: "Last update", num: true, sort: "updated" },
-  { key: "action", label: "Action", num: true },
+  { key: "action", label: "Action", num: true, field: "actions" },
 ];
 
 /** Reviews growth over the window as a % of the prior count (live shows "+0.3%"). */

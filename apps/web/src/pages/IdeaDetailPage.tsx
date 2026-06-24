@@ -307,8 +307,8 @@ export function IdeaDetailPage() {
               <div className="idea-source-stats">
                 <div><span className="k">Reviews</span><span className="v" data-field="reviews" data-value={sourceApp.reviews}>{compact(sourceApp.reviews)}</span></div>
                 <div><span className="k">Rating</span><span className="v" data-field="rating" data-value={sourceApp.rating ?? undefined}>{sourceApp.rating?.toFixed(1) ?? "—"}</span></div>
-                <div><span className="k">Downloads est.</span><span className="v" data-field="downloads" data-value={sourceApp.downloads ?? undefined}>{sourceApp.downloads ? compact(sourceApp.downloads) : "—"}</span></div>
-                <div><span className="k">Revenue est.</span><span className="v" data-field="revenue" data-value={sourceApp.revenue ?? undefined}>{sourceApp.revenue ? `$${compact(sourceApp.revenue)}/mo` : "—"}</span></div>
+                <div><span className="k">Downloads est.</span><span className="v" data-field="downloads" data-value={sourceApp.downloads ?? undefined}>{sourceApp.downloads != null ? compact(sourceApp.downloads) : "—"}</span></div>
+                <div><span className="k">Revenue est.</span><span className="v" data-field="revenue" data-value={sourceApp.revenue ?? undefined}>{sourceApp.revenue != null ? `$${compact(sourceApp.revenue)}/mo` : "—"}</span></div>
                 <div><span className="k">Price</span><span className="v" data-field="price" data-value={sourceApp.price ?? undefined}>{sourceApp.price ? `$${sourceApp.price}` : "Free"}</span></div>
               </div>
             </div>
