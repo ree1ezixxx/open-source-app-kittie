@@ -10,6 +10,7 @@ import { MetricBar } from "../components/MetricBar";
 import { Segmented } from "../components/Segmented";
 import { TeardownCanvas } from "../components/teardown/TeardownCanvas";
 import { DetailCard, EmptyCard, Fact } from "../components/DetailCard";
+import { DecisionPacketCard } from "../components/DecisionPacketCard";
 import { TrendPanel, type ChartMetric } from "../components/TrendPanel";
 import { SimilarApps } from "../components/SimilarApps";
 import { FavoriteToggle } from "../components/FavoriteToggle";
@@ -224,6 +225,12 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
                 </div>
               </div>
             </header>
+
+            {/* decision-first: the one dominant "why this market matters" verdict,
+                above the metric wall. Omitted when the app has no category packet. */}
+            {app.decisionPacket && (
+              <DecisionPacketCard packet={app.decisionPacket} category={app.category} />
+            )}
 
             {/* truth-style headline stat cards: Creators · Ads · Size · Platforms · Rating */}
             <div className="detail-stats">

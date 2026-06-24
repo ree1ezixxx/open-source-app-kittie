@@ -1686,3 +1686,75 @@ table.apps tbody tr:hover td:first-child { box-shadow: inset 2px 0 0 0 var(--acc
 }
 .review-title { font-family: var(--font-ui); font-weight: 600; }
 .intel-grid .dcard { min-height: 140px; }
+
+/* ── Decision packet — the decision-first "why this market matters" block ──
+   Dominant element directly under the hero; accent-edged, single headline. */
+.decision {
+  background: linear-gradient(180deg, var(--accent-soft), transparent 62%), var(--panel);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px 16px;
+  margin-bottom: 22px;
+}
+.decision-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap; margin-bottom: 12px;
+}
+.decision-tag {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--font-mono); font-size: 10.5px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.07em; color: var(--accent-text);
+}
+.decision-tag svg { width: 13px; height: 13px; }
+.decision-badges { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.decision-headline {
+  margin: 0 0 14px; max-width: 62ch;
+  font-size: 19px; line-height: 1.32; font-weight: 650; letter-spacing: -0.01em;
+  color: var(--text);
+}
+.decision-evidence {
+  list-style: none; margin: 0 0 14px; padding: 0;
+  display: flex; flex-direction: column; gap: 7px;
+}
+.decision-evidence li { display: flex; align-items: baseline; gap: 9px; font-size: 12.5px; color: var(--text-secondary); }
+.ev-kind {
+  flex-shrink: 0; font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--text-tertiary); padding: 1px 6px; border: 1px solid var(--border-soft); border-radius: 99px;
+}
+.ev-claim { flex: 1; }
+.ev-src { color: var(--text-tertiary); display: inline-flex; flex-shrink: 0; }
+.ev-src:hover { color: var(--accent-text); }
+.ev-src svg { width: 13px; height: 13px; }
+.decision-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin-bottom: 12px; }
+.decision-actions-label {
+  font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--text-tertiary); margin-right: 2px;
+}
+.action-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 550; color: var(--text-secondary);
+  background: var(--surface-2); border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm); padding: 4px 9px;
+}
+.action-cost { font-size: 10.5px; font-weight: 600; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.decision-missing { display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--text-tertiary); }
+.decision-missing svg { width: 13px; height: 13px; flex-shrink: 0; }
+
+/* confidence / coverage badges — reused on Explore + HotIdeas cards (Loop 4) */
+.conf-badge, .cov-badge {
+  display: inline-flex; align-items: center; gap: 5px; white-space: nowrap;
+  font-size: 11px; font-weight: 600;
+  padding: 2px 8px; border-radius: 99px;
+  border: 1px solid var(--border); background: var(--panel); color: var(--text-secondary);
+}
+.conf-badge .conf-dot { width: 7px; height: 7px; border-radius: 99px; background: currentColor; }
+.conf-badge .conf-word { font-weight: 650; }
+.conf-badge .conf-tail { color: var(--text-tertiary); font-weight: 500; }
+.conf-badge.tone-high { color: var(--accent-text); border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); }
+.conf-badge.tone-mid { color: #b4690e; }
+.conf-badge.tone-low { color: var(--text-tertiary); }
+.cov-badge svg { width: 12px; height: 12px; opacity: 0.8; }
+.cov-badge.tone-high { color: var(--accent-text); }
+.cov-badge.tone-mid { color: var(--text-secondary); }
+.cov-badge.tone-low { color: var(--text-tertiary); }
