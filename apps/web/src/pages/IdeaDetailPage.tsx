@@ -63,7 +63,9 @@ function buildPrompt(detail: IdeaDetail): string {
 
 export function IdeaDetailPage() {
   const { slug = "" } = useParams();
-  const storeAppId = useMemo(() => /-id([^/]+)$/.exec(decodeURIComponent(slug))?.[1] ?? null, [slug]);
+  // Match the LAST "-id" so idea names containing "-id" (e.g. "brand-identity") don't
+  // mis-split the slug — mirrors the canonical parser in lib/slug.ts.
+  const storeAppId = useMemo(() => /^.*-id([^/]+)$/.exec(decodeURIComponent(slug))?.[1] ?? null, [slug]);
 
   const [detail, setDetail] = useState<IdeaDetail | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "missing">("loading");
