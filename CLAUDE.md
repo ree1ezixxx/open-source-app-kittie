@@ -8,6 +8,20 @@ Surface profitable, fast-moving apps across iOS and Android: revenue estimates, 
 
 Not a commercial product (for now). Ship fast: **days, not months**.
 
+## Canonical UI design (single source of truth — do NOT introduce competing designs)
+
+The **one** UI direction is the **light-mode "App Teardown"** design:
+- **Light theme by default** (`apps/web/src/lib/theme.ts`); dark stays available via the toggle.
+- The signature view is the **App Teardown canvas** — an app's intelligence exploded onto a
+  pannable react-flow node graph (`apps/web/src/components/teardown/`), reached from each app's
+  detail page via the **Classic ⇄ Teardown** toggle.
+- **Run it:** `pnpm dev:web` (web) + `pnpm dev:api` (API). Canonical dev ports: **web `5173`,
+  API `3008`** (web proxies `/api` → `3008`; override with `VITE_API_ORIGIN`). The teardown
+  canvas is at any app → **View** → **Teardown** tab.
+- **Do NOT build, open, or revive other design directions** — the "App Canvas" hub-and-spoke
+  view, the "Exponential UI" redesign, or any alternative shell. They are deprecated. If a fresh
+  visual exploration is ever wanted, it must be an explicit, separate decision — never a default.
+
 ## Communication
 
 Ultra compression — say the minimum that conveys the answer.
