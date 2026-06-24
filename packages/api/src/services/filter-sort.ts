@@ -157,8 +157,13 @@ export function hasLiveGrowthFilter(params: AppSearchParams): boolean {
  *  whole pool. (minRating/maxRating, min/maxReviews, categories, source, developer are
  *  applied identically in SQL and re-checked consistently here — they don't disqualify.) */
 export function dropsRowsInMemory(params: AppSearchParams): boolean {
+  return params.search != null || dropsRowsInMemoryExceptSearch(params);
+}
+
+/** dropsRowsInMemory minus the free-text-search check — the FTS keyset handles the search
+ *  text in SQL, so it only needs the OTHER in-memory-dropping filters to be absent. */
+function dropsRowsInMemoryExceptSearch(params: AppSearchParams): boolean {
   return (
-    params.search != null ||
     params.minDownloads != null ||
     params.maxDownloads != null ||
     params.minRevenue != null ||
@@ -176,6 +181,15 @@ export function dropsRowsInMemory(params: AppSearchParams): boolean {
     params.updatedAfter != null ||
     params.updatedBefore != null
   );
+}
+
+/** The FTS search candidate can be ordered by the sort column + scored PAGE-ONLY (instead
+ *  of scoring the 5000-row relevance pool) when a free-text search is the ONLY in-memory-
+ *  dropping filter AND it uses the default text fields — then matchesSearch (which passes
+ *  on the FTS title/developer match) drops nothing, so the SQL page IS the result page.
+ *  The caller also requires keysetColumn(params) != null. */
+export function searchKeysetSafe(params: AppSearchParams): boolean {
+  return params.search != null && params.textSearchFields == null && !dropsRowsInMemoryExceptSearch(params);
 }
 
 function sortValue(item: AppListItem, sortBy: AppSearchParams["sortBy"]): number | string | null {

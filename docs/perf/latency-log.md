@@ -158,12 +158,25 @@ after each day's ingest; if it lapses, the gate serves the (correct, slower) pro
   historicals 3ms, reviews 0.5ms, keywords 0.4ms, ideas 4ms — all ✓.
 - BYTE-IDENTICAL verified across pages 1-3 of all shapes incl. asc + the negatives.
 
+### Experiment C — FTS search keyset (PR #2)
+Search with a keyset-eligible sort (the web's Explore default is `sort=revenue`) now
+orders the FTS candidate by the SORT column + LIMIT pageSize and scores only the page,
+instead of scoring the 5000-row relevance pool. New `searchAppCandidatesKeysetFts` +
+`ftsCandidateKeyset`; gated by `searchKeysetSafe` (search is the only in-memory-drop
+filter + default text fields, so matchesSearch — which passes on the FTS title/dev match
+— drops nothing) && `keysetColumn != null`.
+- **Realistic search (specific / multi-word terms) p95 ≤42ms cold, 10-run streak ✓** (was
+  ~0.37s). Light terms (≤5000 matches) BYTE-IDENTICAL to legacy (verified: meditation,
+  757 matches).
+- **Heavier terms (>5000 matches, e.g. `fitness` 7745) = sanctioned ranking change**: NEW
+  ranks over ALL matches by the sort column (surfacing high-review apps the legacy
+  top-5000-by-relevance pool excluded) — more correct, but visibly different. Rhodri
+  signed off ("do search next"), same class as the Tranche B revenue precompute.
+- **Pathological single super-common words** (`game` 16601, `photo` 8582 matches) stay
+  ~0.4s — the FTS-by-column sort scales with match count; legacy was equally slow there
+  (no regression). Not a realistic search.
+
 ### Remaining > 200ms (honest)
-- **search** heavy-term p95 ~0.37s. The FTS candidate is pooled by relevance (bm25 rank,
-  not a stored column), then re-sorted; making it keyset-fast means ordering the FTS
-  candidate by the sort column = a **ranking change** (top-50-by-sort over ALL matches vs
-  over the top-5000-by-relevance), like Tranche B. Needs sign-off. Most searches (rare
-  terms, small pool) are already <150ms.
 - **asc + a selective filter** (e.g. reviews asc + minRating): inherent on BOTH keyset and
   legacy — the asc scan starts at the filtered-out bottom. Not a real hot path.
 - **rankDelta** (Highlights gainers/losers) ~0.34s: a live per-request sort over the

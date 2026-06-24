@@ -619,6 +619,75 @@ export async function searchAppCandidatesKeyset(
   };
 }
 
+/** FTS keyset candidate: the apps_fts MATCH ∩ SQL filters, ordered by the SORT column
+ *  (not bm25 rank) + a (sortValue, app_id) keyset boundary, LIMIT pageSize. Lets a search
+ *  with a keyset-eligible sort score only the page instead of the 5000-row relevance pool.
+ *  For terms with ≤ POOL_CAP matches this is byte-identical to the legacy path (both
+ *  consider every match); for heavier terms it ranks over ALL matches, not the top-5000-
+ *  by-relevance (a sanctioned ranking change, like the revenue precompute). */
+async function ftsCandidateKeyset(
+  match: string,
+  filter: SQL,
+  col: AnyColumn,
+  isAsc: boolean,
+  cursor: KeysetCursor | null,
+  pageSize: number,
+): Promise<Array<{ id: string; sortVal: number | null }>> {
+  let keyset = sql``;
+  if (cursor && cursor.sortValue !== null) {
+    const afterCol = isAsc ? sql`${col} > ${cursor.sortValue}` : sql`${col} < ${cursor.sortValue}`;
+    keyset = sql` AND ((${afterCol}) OR (${col} = ${cursor.sortValue} AND app_snapshots.app_id > ${cursor.appId}))`;
+  }
+  const order = isAsc ? sql`asc` : sql`desc`;
+  const rows = await getDb().all<{ id: string; sortVal: number | null }>(sql`
+    SELECT apps.id AS id, ${col} AS sortVal
+    FROM apps_fts
+    JOIN apps ON apps.id = apps_fts.app_id
+    JOIN app_snapshots ON app_snapshots.app_id = apps.id
+    WHERE apps_fts MATCH ${match} AND ${filter}${keyset}
+    ORDER BY ${col} ${order}, app_snapshots.app_id ASC
+    LIMIT ${pageSize}
+  `);
+  const seen = new Set<string>();
+  const out: Array<{ id: string; sortVal: number | null }> = [];
+  for (const r of rows) {
+    if (seen.has(r.id)) continue;
+    seen.add(r.id);
+    out.push({ id: r.id, sortVal: r.sortVal ?? null });
+  }
+  return out;
+}
+
+/** Keyset variant for FTS search: ftsCount (unchanged "X of Y") in parallel with a
+ *  single-page FTS keyset scan ordered by the sort column. Caller gates via
+ *  searchKeysetSafe(params) && keysetColumn(params) != null. */
+export async function searchAppCandidatesKeysetFts(
+  params: AppSearchParams,
+  cursor: KeysetCursor | null,
+  pageSize: number,
+): Promise<KeysetPool | null> {
+  const marketCountry = marketCountryOf(params);
+  const maxDate = await latestSnapshotDate(marketCountry);
+  if (!maxDate) return null;
+  const search = params.search?.trim();
+  const ftsMatch = search ? toFtsMatch(search) : null;
+  const col = keysetColumn(params);
+  if (!ftsMatch || !col) return null;
+  const conds = buildConditions(params, maxDate);
+  const filter = and(...allConditions(conds))!;
+  const isAsc = (params.sortOrder ?? "desc") === "asc";
+  const [totalCount, cand] = await Promise.all([
+    ftsCount(ftsMatch, filter),
+    ftsCandidateKeyset(ftsMatch, filter, col, isAsc, cursor, pageSize),
+  ]);
+  return {
+    totalCount,
+    ids: cand.map((r) => r.id),
+    sortValues: new Map(cand.map((r) => [r.id, r.sortVal])),
+    marketCountry,
+  };
+}
+
 export interface CategoryFacet {
   name: string;
   stores: Store[];
