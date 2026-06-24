@@ -14,6 +14,7 @@ import {
   IconGlobe,
   IconMessage,
   IconBulb,
+  IconSparkles,
   IconKey,
   IconTerminal,
   IconBook,
@@ -62,6 +63,12 @@ const PRIMARY: Group[] = [
   {
     label: "App ideas",
     items: [{ to: "/dashboard/hot-ideas", label: "Hot ideas", icon: IconBulb }],
+  },
+  // New product surface (post-pivot): the market-awareness layer. Not part of the
+  // appkittie clone taxonomy above — it's the decision loop the pivot is built around.
+  {
+    label: "Intelligence",
+    items: [{ to: "/intelligence", label: "App Intelligence", icon: IconSparkles }],
   },
 ];
 
