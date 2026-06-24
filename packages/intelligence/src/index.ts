@@ -39,6 +39,24 @@ export {
   type OpportunityInput,
 } from "./opportunity.js";
 export {
+  buildTeardownApp,
+  type BuildTeardownInput,
+  type TeardownAppOutput,
+  type TeardownDepth,
+  type TeardownIdentity,
+  type TeardownMetrics,
+  type MonetisationModel,
+  type ReviewInsights,
+  type CoreLoop,
+  type FeatureMap,
+  type CloneInsights,
+  type AsoModel,
+  type ReviewClusters,
+  type ScreenMap,
+  type SectionLabel,
+  TEARDOWN_DEPTHS,
+} from "./teardown/index.js";
+export {
   tokenize,
   interpretFromApp,
   interpretFromQuery,
