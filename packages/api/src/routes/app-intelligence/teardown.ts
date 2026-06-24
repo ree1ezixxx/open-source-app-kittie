@@ -4,40 +4,23 @@
  *   POST /api/v1/app-intelligence/teardown          { appId, depth? }
  *
  * Backend synthesis only (Lane C owns the canvas). `quick` is deterministic and
- * LLM-free; `standard`/`deep` enrichment lands in later loops. Never fabricates —
- * blocked sources surface in `decisionPacket.coverage.missing`.
+ * LLM-free; `standard` adds a cached local-LLM narrative (degrades to quick if
+ * the model is down). Never fabricates — blocked sources surface in
+ * `decisionPacket.coverage.missing`. Orchestration lives in the service.
  */
 import { Hono } from "hono";
 import { z } from "zod";
-import { buildTeardownApp, TEARDOWN_DEPTHS, type TeardownDepth } from "@kittie/intelligence";
-import { getAppById, getAppReviews } from "../../services/app-service.js";
+import { TEARDOWN_DEPTHS, type TeardownDepth } from "@kittie/intelligence";
+import { getAppTeardown } from "../../services/teardown-service.js";
 
 export const teardownRouter = new Hono();
 
 function parseDepth(raw: string | undefined): TeardownDepth {
-  return (TEARDOWN_DEPTHS as readonly string[]).includes(raw ?? "")
-    ? (raw as TeardownDepth)
-    : "quick";
-}
-
-/** Reviews are best-effort — a teardown is honest without them (reviewInsights → missing). */
-async function safeReviews(id: string) {
-  try {
-    return await getAppReviews(id);
-  } catch {
-    return [];
-  }
-}
-
-async function teardown(id: string, depth: TeardownDepth) {
-  const app = await getAppById(id);
-  if (!app) return null;
-  const reviews = await safeReviews(id);
-  return buildTeardownApp({ app, reviews, depth, observedAt: new Date().toISOString() });
+  return (TEARDOWN_DEPTHS as readonly string[]).includes(raw ?? "") ? (raw as TeardownDepth) : "quick";
 }
 
 teardownRouter.get("/apps/:id/teardown", async (c) => {
-  const result = await teardown(c.req.param("id"), parseDepth(c.req.query("depth")));
+  const result = await getAppTeardown(c.req.param("id"), parseDepth(c.req.query("depth")));
   if (!result) return c.json({ error: "App not found" }, 404);
   return c.json({ data: result });
 });
@@ -51,7 +34,7 @@ teardownRouter.post("/teardown", async (c) => {
   const body = await c.req.json().catch(() => null);
   const parsed = teardownRequestSchema.safeParse(body);
   if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
-  const result = await teardown(parsed.data.appId, parsed.data.depth ?? "quick");
+  const result = await getAppTeardown(parsed.data.appId, parsed.data.depth ?? "quick");
   if (!result) return c.json({ error: "App not found" }, 404);
   return c.json({ data: result });
 });
