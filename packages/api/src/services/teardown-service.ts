@@ -8,18 +8,21 @@
 import type { AppDetail, Review } from "@kittie/types";
 import {
   buildTeardownApp,
+  type AsoModel,
   type CloneInsights,
   type CoreLoop,
   type FeatureMap,
+  type ReviewClusters,
+  type ScreenMap,
   type SectionLabel,
   type TeardownAppOutput,
   type TeardownDepth,
 } from "@kittie/intelligence";
-import { cachedGammaJson, GAMMA_MODEL } from "../lib/gamma.js";
+import { cachedJson, fetchImageBase64, gammaJsonRaw, gammaVisionRaw, GAMMA_MODEL } from "../lib/gamma.js";
 import { getAppById, getAppReviews } from "./app-service.js";
 
 /** Highest depth this loop implements; higher requests clamp down (honest `depth`). */
-const IMPLEMENTED_MAX: TeardownDepth = "standard";
+const IMPLEMENTED_MAX: TeardownDepth = "deep";
 const ORDER: Record<TeardownDepth, number> = { quick: 0, standard: 1, deep: 2 };
 
 interface StandardNarrative {
@@ -128,12 +131,8 @@ async function enrichStandard(base: TeardownAppOutput, app: AppDetail): Promise<
   // only when the underlying app facts move.
   const input = JSON.stringify({ v: 2, id: app.id, m: base.metrics, d: base.decisionPacket.decision, r: base.risks });
   try {
-    const { value, cached } = await cachedGammaJson<Record<string, unknown>>(
-      "teardown_standard",
-      app.id,
-      input,
-      prompt,
-      { temperature: 0.25 },
+    const { value, cached } = await cachedJson<Record<string, unknown>>("teardown_standard", app.id, input, () =>
+      gammaJsonRaw(prompt, { temperature: 0.25 }),
     );
     const n = normalizeNarrative(value);
     const label = INFERRED(cached);
@@ -183,6 +182,95 @@ async function enrichStandard(base: TeardownAppOutput, app: AppDetail): Promise<
   }
 }
 
+/* -------------------------------- deep -------------------------------- */
+
+/** Deterministic ASO model: observed ad keywords + locale coverage (no LLM). */
+function buildAso(app: AppDetail): AsoModel {
+  const seen = new Set<string>();
+  const keywords: AsoModel["keywords"] = [];
+  for (const a of app.appleSearchAds) {
+    if (seen.has(a.keyword)) continue;
+    seen.add(a.keyword);
+    keywords.push({ keyword: a.keyword, rank: a.rank, difficulty: null, opportunity: null });
+    if (keywords.length >= 25) break;
+  }
+  return { languageCount: app.languages.length, languages: app.languages, keywords };
+}
+
+/** LLM-cluster raw review bodies into themes. Null when there are no reviews. */
+async function clusterReviews(app: AppDetail, reviews: Review[]): Promise<ReviewClusters | null> {
+  const sample = reviews.slice(0, 25);
+  if (sample.length === 0) return null;
+  const bodies = sample.map((r) => ({ rating: r.rating, text: r.body.slice(0, 300) }));
+  const prompt =
+    "Cluster these mobile-app reviews into themes for a founder studying the app. " +
+    "Return ONLY JSON {\"lovedThemes\":[],\"painThemes\":[],\"requestedFeatures\":[]} — each array exactly 3 short, concrete phrases drawn from the reviews (no fluff). " +
+    `REVIEWS:\n${JSON.stringify(bodies)}`;
+  const input = JSON.stringify({ v: 1, id: app.id, n: sample.length, ids: sample.map((r) => r.id).slice(0, 25) });
+  try {
+    const { value } = await cachedJson<Record<string, unknown>>("teardown_review_clusters", app.id, input, () =>
+      gammaJsonRaw(prompt, { temperature: 0.2 }),
+    );
+    return {
+      sampled: sample.length,
+      lovedThemes: strArr(value.lovedThemes),
+      painThemes: strArr(value.painThemes),
+      requestedFeatures: strArr(value.requestedFeatures),
+    };
+  } catch (err) {
+    console.warn(`[teardown] review clustering degraded for ${app.id}:`, err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
+/** Vision UI blueprint from the first listing screenshot. Best-effort — null on any failure. */
+async function screenMapFromVision(app: AppDetail): Promise<ScreenMap | null> {
+  const url = app.screenshotUrls[0];
+  if (!url) return null;
+  const prompt =
+    "This is one screenshot from a mobile app's store listing. Return ONLY JSON " +
+    '{"screens":[{"name":"","purpose":"","keyComponents":["","",""]}]} — describe THIS screen: a short name, its purpose in one phrase, and 3 key UI components visible. One screen object.';
+  const input = JSON.stringify({ v: 1, id: app.id, url });
+  try {
+    const { value } = await cachedJson<Record<string, unknown>>("teardown_screenmap", app.id, input, async () =>
+      gammaVisionRaw(prompt, await fetchImageBase64(url)),
+    );
+    const screensRaw = Array.isArray(value.screens) ? value.screens : [];
+    const screens = screensRaw
+      .map((s) => {
+        const o = (s ?? {}) as Record<string, unknown>;
+        return { name: str(o.name) ?? "Screen", purpose: str(o.purpose) ?? "", keyComponents: strArr(o.keyComponents) };
+      })
+      .slice(0, 6);
+    return screens.length ? { source: url, screens } : null;
+  } catch (err) {
+    console.warn(`[teardown] screen-map degraded for ${app.id}:`, err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
+async function enrichDeep(base: TeardownAppOutput, app: AppDetail, reviews: Review[]): Promise<TeardownAppOutput> {
+  const aso = buildAso(app);
+  const [reviewClusters, screenMap] = await Promise.all([clusterReviews(app, reviews), screenMapFromVision(app)]);
+  return {
+    ...base,
+    depth: "deep",
+    aso,
+    reviewClusters,
+    screenMap,
+    labels: {
+      ...base.labels,
+      aso: { kind: "observed", note: "observed ad keywords + listing locales" },
+      reviewClusters: reviewClusters
+        ? { kind: "inferred", note: `${GAMMA_MODEL} (local), cached` }
+        : { kind: "missing", note: "no reviews to cluster, or local LLM unavailable" },
+      screenMap: screenMap
+        ? { kind: "inferred", note: `${GAMMA_MODEL} vision (local), cached` }
+        : { kind: "missing", note: "no screenshot, or vision unavailable" },
+    },
+  };
+}
+
 async function safeReviews(id: string): Promise<Review[]> {
   try {
     return await getAppReviews(id);
@@ -201,7 +289,8 @@ export async function getAppTeardown(id: string, requestedDepth: TeardownDepth):
   const target: TeardownDepth = ORDER[requestedDepth] > ORDER[IMPLEMENTED_MAX] ? IMPLEMENTED_MAX : requestedDepth;
 
   const reviews = await safeReviews(id);
-  const base = buildTeardownApp({ app, reviews, depth: target, observedAt: new Date().toISOString() });
-  if (ORDER[target] >= ORDER.standard) return enrichStandard(base, app);
-  return base;
+  let out = buildTeardownApp({ app, reviews, depth: target, observedAt: new Date().toISOString() });
+  if (ORDER[target] >= ORDER.standard) out = await enrichStandard(out, app);
+  if (ORDER[target] >= ORDER.deep) out = await enrichDeep(out, app, reviews);
+  return out;
 }

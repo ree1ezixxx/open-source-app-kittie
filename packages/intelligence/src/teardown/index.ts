@@ -212,7 +212,9 @@ export function buildTeardownApp(input: BuildTeardownInput): TeardownAppOutput {
     featureMap: null,
     monetisation: mon,
     reviewInsights: reviews_,
+    reviewClusters: null,
     aso: null,
+    screenMap: null,
     cloneInsights: null,
     risks,
     decisionPacket,
@@ -234,7 +236,9 @@ export function buildTeardownApp(input: BuildTeardownInput): TeardownAppOutput {
       coreLoop: STANDARD(),
       featureMap: STANDARD(),
       cloneInsights: STANDARD(),
+      reviewClusters: DEEP("requires deep depth (review clustering)"),
       aso: DEEP(),
+      screenMap: DEEP("requires deep depth (vision)"),
     },
   };
 }

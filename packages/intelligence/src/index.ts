@@ -51,6 +51,8 @@ export {
   type FeatureMap,
   type CloneInsights,
   type AsoModel,
+  type ReviewClusters,
+  type ScreenMap,
   type SectionLabel,
   TEARDOWN_DEPTHS,
 } from "./teardown/index.js";

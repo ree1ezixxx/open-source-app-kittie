@@ -87,7 +87,7 @@ describe("buildTeardownApp — quick mode", () => {
 
   it("never fabricates: standard/deep sections are null with a `missing` label in quick", () => {
     const out = buildTeardownApp({ app: makeApp(), observedAt: OBS });
-    for (const section of ["thesis", "coreUserProblem", "audience", "coreLoop", "featureMap", "cloneInsights", "aso"] as const) {
+    for (const section of ["thesis", "coreUserProblem", "audience", "coreLoop", "featureMap", "cloneInsights", "reviewClusters", "aso", "screenMap"] as const) {
       expect(out[section]).toBeNull();
       expect(out.labels[section]?.kind).toBe("missing");
       expect(out.labels[section]?.note.length).toBeGreaterThan(0);

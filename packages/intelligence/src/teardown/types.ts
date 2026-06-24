@@ -91,10 +91,28 @@ export interface MonetisationModel {
   summary: string | null;
 }
 
-/** ASO / keyword opportunity. Deep mode (needs keyword data). */
+/** ASO / keyword opportunity. Deep mode. Deterministic from observed ad keywords + locales. */
 export interface AsoModel {
   languageCount: number;
-  keywords: Array<{ keyword: string; difficulty: number | null; opportunity: number | null }>;
+  languages: string[];
+  /** Keywords the app is observed bidding on (Apple Search Ads), with bid rank. */
+  keywords: Array<{ keyword: string; rank: number | null; difficulty: number | null; opportunity: number | null }>;
+}
+
+/** LLM-clustered review themes (deep). Built from raw review bodies, tagged or not. */
+export interface ReviewClusters {
+  /** Reviews sampled into the clustering call. */
+  sampled: number;
+  lovedThemes: string[];
+  painThemes: string[];
+  requestedFeatures: string[];
+}
+
+/** Vision-derived UI blueprint from listing screenshots (deep). Best-effort. */
+export interface ScreenMap {
+  /** Which screenshot(s) were read. */
+  source: string;
+  screens: Array<{ name: string; purpose: string; keyComponents: string[] }>;
 }
 
 /** Clone playbook — the strategic payload. LLM-inferred (standard+). */
@@ -127,7 +145,11 @@ export interface TeardownAppOutput {
   featureMap: FeatureMap | null;
   monetisation: MonetisationModel;
   reviewInsights: ReviewInsights | null;
+  /** LLM-clustered review themes — deep only; null otherwise. */
+  reviewClusters: ReviewClusters | null;
   aso: AsoModel | null;
+  /** Vision UI blueprint — deep only, best-effort; null otherwise. */
+  screenMap: ScreenMap | null;
   cloneInsights: CloneInsights | null;
   /** Deterministic top risks — always present. */
   risks: string[];
