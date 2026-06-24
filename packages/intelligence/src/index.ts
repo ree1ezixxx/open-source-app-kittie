@@ -38,6 +38,18 @@ export {
   type MarketApp,
   type OpportunityInput,
 } from "./opportunity.js";
+export {
+  tokenize,
+  interpretFromApp,
+  interpretFromQuery,
+  keywordOverlap,
+  classifySimilarity,
+  scoreSimilar,
+  rankSimilar,
+  computeSimilarConfidence,
+  buildSimilarAgentSummary,
+  type SimilarCandidate,
+} from "./similarity/index.js";
 
 import type { AppListItem } from "@kittie/types";
 import { computeGrowthPct, computeGrowthScore, isFirstMover, reviewGrowth7d } from "./growth.js";
