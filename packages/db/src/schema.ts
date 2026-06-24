@@ -83,12 +83,27 @@ export const appSnapshots = sqliteTable(
     index("snapshots_date_idx").on(t.snapshotDate),
     // Serves the /apps list: order the latest-day partition by review count
     // (the default sort + every live-metric proxy) without a temp b-tree sort.
-    index("snapshots_date_reviews_idx").on(t.snapshotDate, t.reviewCount),
+    // app_id is part of the key so the keyset cursor's (review_count, app_id) tiebreaker
+    // is served index-only — without it, keyset pagination forces a table seek per row +
+    // a temp b-tree and regresses below the old proxy scan. Supersedes the bare
+    // (snapshot_date, review_count) index.
+    index("snapshots_date_reviews_app_idx").on(t.snapshotDate, t.reviewCount, t.appId),
     // Covering index for the filtered "X of Y" count AND the `sortBy=rating` /
     // `minRating` paths: count(distinct app_id) WHERE snapshot_date=? AND rating>=?
     // is served index-only (no apps join, no table I/O) — ~0.15s vs ~1.2s on a
     // 1.1M-row day. (snapshot_date, rating, app_id) also orders the rating sort.
     index("snapshots_date_rating_app_idx").on(t.snapshotDate, t.rating, t.appId),
+    // rating DESC keyset: rating has only ~40 distinct values → huge tie-groups, so the
+    // ASC index (reverse-scanned) would temp-sort the (rating, app_id ASC) tiebreaker over
+    // those groups. A rating-DESC + app_id-ASC index serves the default rating sort
+    // index-only. (reviews/revenue have ~unique values → tiny ties → no DESC index needed.)
+    index("snapshots_date_rating_desc_idx").on(t.snapshotDate, sql`${t.rating} desc`, t.appId),
+    // Serves the default Explore `sortBy=revenue` keyset once the day's revenue estimates
+    // are precomputed (backfill-estimates / snapshot worker): orders the candidate pool by
+    // the stored revenue with the (revenue_estimate, app_id) cursor tiebreaker index-only.
+    index("snapshots_date_revenue_app_idx").on(t.snapshotDate, t.revenueEstimate, t.appId),
+    // Same, for the `sortBy=downloads` keyset.
+    index("snapshots_date_downloads_app_idx").on(t.snapshotDate, t.downloadsEstimate, t.appId),
     // Serves the Trending charts query. Chart-ranked rows are ~0.3% of the table
     // (~8k of 3M); without this, finding them meant starting from every app of a
     // store (~500k) and seeking each one's snapshots — a ~20s full traversal.

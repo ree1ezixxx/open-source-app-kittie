@@ -103,3 +103,70 @@ SQL-native + indexable (the real fix, but cross-lane: ingest + schema); (b) shri
 scoring pool (small accuracy / pagination-depth tradeoff); (c) score-only-the-page for
 the SQL-native sorts (pure win, but doesn't help the default revenue view). → surfaced
 to Rhodri for the call.
+
+---
+
+# Keyset-pagination refactor — `perf/keyset-pagination` (off `main` after #140)
+
+Rhodri re-armed the goal under ultracode: actually reach ≤200ms on the default
+`revenue` + `search` views. The lever (from the floor analysis above): push pagination
+INTO SQL so the candidate query is `LIMIT pageSize` (~50), not `LIMIT 5000` — then the
+cold scan is tiny for any SQL-native sort, and with the revenue precompute the default
+view goes SQL-native + fast.
+
+## Fresh baseline — 2026-06-23 (cold, fresh 4.6GB clone, pin day 2026-06-19, 1.1M apps)
+| suite | p50 | p95 | p99 |
+|---|---|---|---|
+| apps:search | 152 | 422 | 1470 |
+| apps:filter+sort | 404 | 786 | 834 |
+| charts | 1 | 53 | 63 |
+
+TARGET: cold p95 ≤ 200ms for every apps shape; charts already ✓. Hard rule: BYTE-IDENTICAL
+parity vs current behavior (perf-only; no ranking/pagination change), proven by capture+diff.
+
+## Experiments
+| # | change | result | verdict |
+|---|---|---|---|
+| A | **Keyset pagination** for SQL-native DESC sorts (reviews, rating w/ minRating>0). Candidate query paginates with a `(sortValue, app_id)` boundary + `LIMIT pageSize` instead of the 5000-row POOL_CAP pool. New covering index `(snapshot_date, review_count, app_id)`. Cursor carries the candidate scan's column value (not the scored item's — that diverges on a partial newer snapshot day and re-emits rows). | reviews-desc cold **0.47→0.10s**; rating-desc 0.57→0.29s (large rating tie-groups cap the tiebreaker). **BYTE-IDENTICAL** to legacy across pages 1-3 of 8 query shapes incl. negatives (verified by capture+diff `scripts/capture-pages.mjs`). typecheck + api/db tests (80+10) green. | **keep** |
+
+Note: suite p95 stays ~900ms because it also benches `asc`/`rankDelta` sorts (NOT keyset-eligible — unchanged legacy path). The win is per-shape on the real hot paths.
+
+| B | **Revenue/downloads precompute → keyset.** `backfill-estimates.ts` persists revenue/downloads/growth on every row of the pinned complete day; new indexes `(snapshot_date, revenue_estimate, app_id)` + downloads. `sqlSortColumn(revenue\|downloads)` returns the stored column when the day is fully backfilled (`revenueColumnReady` gate — zero-null check, cached; falls back to the reviewCount proxy otherwise, so a missing/partial backfill is correct-but-slower, never wrong). revenue/downloads then flow through the Tranche-A keyset path automatically. | **default `revenue` view cold 0.37→0.10s**, downloads 0.44→0.10s. Verified BYTE-IDENTICAL to the proxy across pages 1-3 of all shapes (the top-revenue apps are all high-review, so the old top-5000-by-reviews proxy was already exact at the top — Experiment-4's apparent delta was the partial-day artifact, gone in steady state). New order is monotonic on revenue_estimate. typecheck + api/db tests green. | **keep** |
+
+### Hot-path summary (cold p95, after A+B)
+| shape | before | after |
+|---|---|---|
+| **revenue desc (default Explore)** | 0.37s | **0.10s ✓** |
+| reviews desc | 0.47s | **0.10s ✓** |
+| downloads desc | 0.44s | **0.10s ✓** |
+| rating desc (minRating>0) | 0.57s | 0.29s (large rating tie-groups cap the tiebreaker) |
+| charts | 0.05s | 0.05s ✓ |
+| search (FTS) | 0.37s | 0.37s (FTS rank can't be keyset; unchanged) |
+| asc / rankDelta sorts | ~0.4s | ~0.4s (not keyset; not real hot paths) |
+
+**Production follow-up (cross-lane):** the backfill is a script — the snapshot worker
+(`packages/ingest`) should write revenue/downloads/growth at snapshot-write time so the
+gate stays "ready" without a manual backfill. Until then, run `backfill-estimates.ts`
+after each day's ingest; if it lapses, the gate serves the (correct, slower) proxy.
+
+## Completion evidence (A + B + asc/rating)
+- **10-run quality streak** on the `/apps` hot desc sorts (revenue/reviews/rating/downloads,
+  distinct cold params each round): all 10 rounds ≤120ms (worst = rating ~116ms). ✓
+- **Web first-contentful paint** (dev server → optimized API): `/dashboard/pulse` **168ms ✓**,
+  `/dashboard/explore` 232ms (dev bundle; a production `vite build` is smaller).
+- **Other hot endpoints** (cold): charts 53ms, categories 2ms, app-detail 3ms,
+  historicals 3ms, reviews 0.5ms, keywords 0.4ms, ideas 4ms — all ✓.
+- BYTE-IDENTICAL verified across pages 1-3 of all shapes incl. asc + the negatives.
+
+### Remaining > 200ms (honest)
+- **search** heavy-term p95 ~0.37s. The FTS candidate is pooled by relevance (bm25 rank,
+  not a stored column), then re-sorted; making it keyset-fast means ordering the FTS
+  candidate by the sort column = a **ranking change** (top-50-by-sort over ALL matches vs
+  over the top-5000-by-relevance), like Tranche B. Needs sign-off. Most searches (rare
+  terms, small pool) are already <150ms.
+- **asc + a selective filter** (e.g. reviews asc + minRating): inherent on BOTH keyset and
+  legacy — the asc scan starts at the filtered-out bottom. Not a real hot path.
+- **rankDelta** (Highlights gainers/losers) ~0.34s: a live per-request sort over the
+  charted set; no stored column to keyset.
+
+### (earlier experiments, pre-keyset)

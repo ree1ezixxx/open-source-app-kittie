@@ -19,6 +19,7 @@ import {
   isNotNull,
   isNull,
   like,
+  lt,
   lte,
   ne,
   notInArray,
@@ -33,6 +34,7 @@ import { getDb } from "../lib/db.js";
 /** Drop in-memory list/sparkline/rank caches so Explore picks up new snapshot days. */
 export function invalidateAppReadCaches(): void {
   cachedMaxDate.clear();
+  cachedRevenueReady.clear();
   cachedCategoryFacets = null;
 }
 
@@ -99,6 +101,32 @@ export function chooseLatestCompleteSnapshotDate(
   return rows.find((r) => r.c >= threshold)?.d ?? newest;
 }
 
+// Whether the pinned day's revenue/downloads estimates are FULLY precomputed for a
+// market — gates sqlSortColumn(revenue|downloads) onto the real column vs the reviewCount
+// proxy. Refreshed (with the same TTL) whenever latestSnapshotDate recomputes the day.
+// Defaults false → proxy, so a missing/partial backfill silently serves the slower-but-
+// correct proxy order rather than ordering by a mostly-NULL column.
+const cachedRevenueReady = new Map<string, { value: boolean; at: number }>();
+
+function revenueColumnReady(country: string): boolean {
+  return cachedRevenueReady.get(country)?.value ?? false;
+}
+
+async function refreshRevenueReady(country: string, maxDate: string | null): Promise<void> {
+  if (!maxDate) {
+    cachedRevenueReady.set(country, { value: false, at: Date.now() });
+    return;
+  }
+  // Ready iff the pinned day has ZERO null revenue_estimate rows (a half-backfilled day
+  // would order revenue by a mostly-null column). The (snapshot_date, revenue_estimate,
+  // app_id) index makes the NULL range an index-only count.
+  const [row] = await getDb()
+    .select({ n: count() })
+    .from(appSnapshots)
+    .where(and(eq(appSnapshots.snapshotDate, maxDate), eq(appSnapshots.chartCountry, country), isNull(appSnapshots.revenueEstimate)));
+  cachedRevenueReady.set(country, { value: (row?.n ?? 1) === 0, at: Date.now() });
+}
+
 async function latestSnapshotDate(country = "US"): Promise<string | null> {
   const hit = cachedMaxDate.get(country);
   if (hit && Date.now() - hit.at < MAX_DATE_TTL_MS) return hit.value;
@@ -117,6 +145,7 @@ async function latestSnapshotDate(country = "US"): Promise<string | null> {
     rows.filter((r): r is SnapshotDateCount => r.d != null).map((r) => ({ d: r.d!, c: r.c })),
   );
   cachedMaxDate.set(country, { value: d, at: Date.now() });
+  await refreshRevenueReady(country, d);
   return d;
 }
 
@@ -264,8 +293,8 @@ function allConditions(c: AppConditions): SQL[] {
  * column — selectCandidateIds proxies them by review count (busiest apps ≈ where the
  * top earners / movers are) and sortApps re-orders the pool by the exact live value.
  */
-function sqlSortColumn(sortBy: AppSearchParams["sortBy"]): AnyColumn | null {
-  switch (sortBy) {
+function sqlSortColumn(params: AppSearchParams): AnyColumn | null {
+  switch (params.sortBy) {
     case "reviews":
       return appSnapshots.reviewCount;
     case "rating":
@@ -275,11 +304,18 @@ function sqlSortColumn(sortBy: AppSearchParams["sortBy"]): AnyColumn | null {
     case "released":
     case "newest":
       return apps.releasedAt;
-    // downloads/revenue/growth/trending are MODELLED live at read time — the stored
-    // estimate columns are null for ~99.7% of snapshots, so ordering the pool by them
-    // yields an arbitrary (rowid) slice. Fall through to the reviewCount proxy (a real
-    // popularity correlate); sortApps then applies the true live order in memory.
-    // Proper fix would require persisting the estimates at snapshot time.
+    // revenue/downloads are modelled live, BUT the snapshot worker/backfill now persists
+    // them onto every row of the pinned complete day. When that day is fully backfilled
+    // (revenueColumnReady), order by the stored column directly — the candidate pool
+    // becomes the true top-N revenue/downloads (more accurate than the old reviewCount
+    // proxy: it surfaces high-revenue/low-review apps the proxy pool excluded), and the
+    // keyset path makes it a LIMIT-50 scan. Unbackfilled day → proxy (correct, slower).
+    case "revenue":
+      return revenueColumnReady(marketCountryOf(params)) ? appSnapshots.revenueEstimate : null;
+    case "downloads":
+      return revenueColumnReady(marketCountryOf(params)) ? appSnapshots.downloadsEstimate : null;
+    // growth/trending stay live: sortApps recomputes growthScore at read time (period-
+    // dependent), so the stored growth_score column would not match the display order.
     default:
       return null;
   }
@@ -291,7 +327,7 @@ function sqlSortColumn(sortBy: AppSearchParams["sortBy"]): AnyColumn | null {
  *  NULL boundary). Lets searchAppsFromDb score only the requested page, not the whole
  *  ~5000-row pool. */
 export function poolIsInFinalOrder(params: AppSearchParams): boolean {
-  return sqlSortColumn(params.sortBy) !== null && (params.sortOrder ?? "desc") === "desc";
+  return sqlSortColumn(params) !== null && (params.sortOrder ?? "desc") === "desc";
 }
 
 async function countMatches(c: AppConditions): Promise<number> {
@@ -357,7 +393,7 @@ async function selectCandidateIds(c: AppConditions, params: AppSearchParams): Pr
     return [...new Set(rows.map((r) => r.id))];
   }
 
-  const col = sqlSortColumn(params.sortBy) ?? appSnapshots.reviewCount;
+  const col = sqlSortColumn(params) ?? appSnapshots.reviewCount;
   const dir = (params.sortOrder ?? "desc") === "asc" ? asc : desc;
   const cap = effectivePoolCap(params);
 
@@ -466,6 +502,121 @@ export async function searchAppCandidates(params: AppSearchParams): Promise<AppC
     [totalCount, ids] = await Promise.all([countMatches(conds), selectCandidateIds(conds, params)]);
   }
   return { totalCount, ids, marketCountry };
+}
+
+// ── Keyset pagination fast-path ──────────────────────────────────────────────
+// For SQL-native DESC sorts whose raw column orders BYTE-IDENTICALLY to sortApps, we
+// paginate in SQL with a (sortValue, app_id) boundary + LIMIT pageSize, instead of
+// materialising the 5000-row POOL_CAP pool and slicing it. The candidate scan drops
+// from ~5000 rows to ~50, cutting cold p95 several-fold.
+export type KeysetCursor = { sortValue: number | null; appId: string };
+
+/** The column to keyset by when it orders byte-identically to the legacy sortApps path,
+ *  else null (→ caller keeps the legacy pool path).
+ *  - reviews: raw review_count null-sinks exactly like sortApps' raw sortValue.
+ *  - rating: raw rating == sortApps' (rating ?? 0) ONLY when minRating>0 excludes the
+ *    540k zero-rated + null-rated apps; otherwise the 0/NULL tail diverges, so legacy.
+ *  - revenue/downloads: served once the pin day's estimates are precomputed (Tranche B);
+ *    until then sqlSortColumn returns null for them so this never fires.
+ *  updated/released are excluded: sortApps coalesces their NULL date to epoch 0. */
+export function keysetColumn(params: AppSearchParams): AnyColumn | null {
+  // Both directions are keyset-eligible because every column below is NON-NULL in its
+  // eligible context (review_count is never null; rating only when minRating>0 excludes
+  // the NULL/0 tail; revenue/downloads only when the day is fully backfilled). With no
+  // NULLs there's no null-sink divergence, so ASC matches sortApps too (SQLite's ASC
+  // NULLs-first would otherwise disagree with sortApps' unconditional null-sink).
+  switch (params.sortBy) {
+    case "reviews":
+      return appSnapshots.reviewCount;
+    case "rating":
+      return params.minRating != null && params.minRating > 0 ? appSnapshots.rating : null;
+    case "revenue":
+      return sqlSortColumn(params) === appSnapshots.revenueEstimate ? appSnapshots.revenueEstimate : null;
+    case "downloads":
+      return sqlSortColumn(params) === appSnapshots.downloadsEstimate ? appSnapshots.downloadsEstimate : null;
+    default:
+      return null;
+  }
+}
+
+/** Top `pageSize` candidates after the keyset boundary, in (col DESC, app_id ASC) order
+ *  — the exact order the legacy pool path produces, bounded to one page. Returns each
+ *  id WITH its sort-column value, so the next cursor is built from the SAME column the
+ *  scan ordered by (not from the scored item, whose value can come from a newer partial
+ *  snapshot day than the pinned candidate day — that mismatch re-emits boundary rows). */
+async function selectCandidateIdsKeyset(
+  c: AppConditions,
+  params: AppSearchParams,
+  cursor: KeysetCursor | null,
+  pageSize: number,
+): Promise<Array<{ id: string; sortVal: number | null }>> {
+  const col = keysetColumn(params)!;
+  const isAsc = (params.sortOrder ?? "desc") === "asc";
+  const conds = allConditions(c);
+  if (cursor) {
+    // Built with drizzle or()/and() (NOT a raw sql`(X) OR (Y)` chunk — that doesn't
+    // parenthesize as a unit inside the outer and(), so the OR escapes the date/market
+    // pin and re-emits boundary rows). Tiebreak on app_snapshots.app_id ASC (the indexed
+    // column), so the cursor comparison + ORDER BY are served index-only — using the
+    // joined apps.id instead forces a temp b-tree over big tie-groups (e.g. rating).
+    if (cursor.sortValue === null) {
+      // Boundary on a NULL col value (only reachable for a nullable DESC sort; the
+      // asc-eligible columns are non-null). NULLs are the last DESC block, ordered by id.
+      conds.push(and(isNull(col), gt(appSnapshots.appId, cursor.appId))!);
+    } else {
+      // Strictly after (sortValue, app_id): for DESC that's a smaller col, for ASC a
+      // larger col; ties advance by app_id ASC. NULL cols never satisfy the inequality.
+      const afterCol = isAsc ? gt(col, cursor.sortValue) : lt(col, cursor.sortValue);
+      conds.push(or(afterCol, and(eq(col, cursor.sortValue), gt(appSnapshots.appId, cursor.appId)))!);
+    }
+  }
+  const rows = await getDb()
+    .select({ id: apps.id, sortVal: sql<number | null>`${col}` })
+    .from(apps)
+    .innerJoin(appSnapshots, eq(appSnapshots.appId, apps.id))
+    .where(and(...conds))
+    .orderBy(isAsc ? asc(col) : desc(col), appSnapshots.appId)
+    .limit(pageSize);
+  const seen = new Set<string>();
+  const out: Array<{ id: string; sortVal: number | null }> = [];
+  for (const r of rows) {
+    if (seen.has(r.id)) continue; // dedupe multi-market join
+    seen.add(r.id);
+    out.push({ id: r.id, sortVal: r.sortVal ?? null });
+  }
+  return out;
+}
+
+export interface KeysetPool {
+  totalCount: number;
+  ids: string[];
+  /** id → the candidate scan's sort-column value, for building the next cursor. */
+  sortValues: Map<string, number | null>;
+  marketCountry: string;
+}
+
+/** Keyset variant of searchAppCandidates: totalCount (unchanged) in parallel with a
+ *  single-page keyset scan. Only valid when keysetColumn(params) != null and the query
+ *  has no FTS/in-memory-dropping filter (caller gates via canUseKeyset). */
+export async function searchAppCandidatesKeyset(
+  params: AppSearchParams,
+  cursor: KeysetCursor | null,
+  pageSize: number,
+): Promise<KeysetPool | null> {
+  const marketCountry = marketCountryOf(params);
+  const maxDate = await latestSnapshotDate(marketCountry);
+  if (!maxDate) return null;
+  const conds = buildConditions(params, maxDate);
+  const [totalCount, cand] = await Promise.all([
+    countMatches(conds),
+    selectCandidateIdsKeyset(conds, params, cursor, pageSize),
+  ]);
+  return {
+    totalCount,
+    ids: cand.map((r) => r.id),
+    sortValues: new Map(cand.map((r) => [r.id, r.sortVal])),
+    marketCountry,
+  };
 }
 
 export interface CategoryFacet {

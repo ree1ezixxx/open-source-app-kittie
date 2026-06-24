@@ -109,6 +109,36 @@ export function matchesSearch(row: ScoredAppRow, params: AppSearchParams): boole
   return true;
 }
 
+// ── Keyset pagination cursor ────────────────────────────────────────────────
+// The keyset fast-path (searchAppsFromDb) paginates in SQL with a (sortValue, id)
+// boundary instead of materialising a 5000-row pool. The cursor carries the sort
+// column value of the page's last row + that row's app id. Versioned + base64 JSON.
+// Legacy bare-id cursors (a plain app-id string, not a JSON array) decode to null →
+// the caller resolves position the old way, so mid-session clients never break.
+const KEYSET_CURSOR_VERSION = 1;
+
+export function encodeKeysetCursor(sortValue: number | null, appId: string): string {
+  return Buffer.from(JSON.stringify([KEYSET_CURSOR_VERSION, sortValue, appId])).toString("base64");
+}
+
+export function decodeKeysetCursor(cursor: string | undefined): { sortValue: number | null; appId: string } | null {
+  if (!cursor) return null;
+  try {
+    const parsed: unknown = JSON.parse(Buffer.from(cursor, "base64").toString("utf8"));
+    if (
+      !Array.isArray(parsed) ||
+      parsed[0] !== KEYSET_CURSOR_VERSION ||
+      !(typeof parsed[1] === "number" || parsed[1] === null) ||
+      typeof parsed[2] !== "string"
+    ) {
+      return null;
+    }
+    return { sortValue: parsed[1], appId: parsed[2] };
+  } catch {
+    return null;
+  }
+}
+
 /** Growth score filters run in-memory only — SQL total must not include them. */
 export function hasLiveGrowthFilter(params: AppSearchParams): boolean {
   return (

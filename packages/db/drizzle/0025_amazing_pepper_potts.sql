@@ -1,0 +1,1 @@
+CREATE INDEX `snapshots_date_rating_desc_idx` ON `app_snapshots` (`snapshot_date`,"rating" desc,`app_id`);
