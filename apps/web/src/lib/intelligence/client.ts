@@ -1,24 +1,30 @@
 /**
- * App-Intelligence client (Lane C · wired-to-mock).
+ * App-Intelligence client (Lane C).
  *
- * Tries the live endpoint first; on any failure — route not mounted yet, network
- * error, non-2xx, or empty body — falls back to a labelled preview fixture. A
- * mock result is ALWAYS tagged `source: "mock"`, so the UI can say so and never
- * present a fixture as a real market fact. When Lane A (`:3018`) / Lane B
- * (`:3019`) land, point `VITE_API_ORIGIN` at them (or merge to `main`) and the
- * same calls return `source: "live"` with no UI change.
+ * Tries the live endpoint first; on any failure — route not mounted, network
+ * error, non-2xx, or empty body — falls back to a labelled preview fixture
+ * (`source: "mock"`), so the UI never presents a fixture as a real market fact.
+ *
+ * Live responses are reconciled to the render types via `adapt.ts`. The served
+ * envelope is inconsistent across lanes (Lane A returns the report bare; Lane B
+ * wraps in `{ data }`), so `tryLive` accepts both. Endpoints (canonical `:3008`
+ * once merged, or `VITE_API_ORIGIN`): `POST /similar`, `POST /validate`,
+ * `GET /apps/:id/teardown`.
  */
+import { adaptSimilar, adaptTeardown, adaptValidate } from "./adapt";
 import { mockSimilar, mockTeardown, mockValidate } from "./mocks";
 import type { SimilarOutput, TeardownOutput, ValidateOutput } from "./types";
 
 const BASE = "/api/v1/app-intelligence";
 
-async function tryLive<T>(path: string, init: RequestInit, signal?: AbortSignal): Promise<T | null> {
+/** Returns the raw served object (envelope-tolerant), or null on any failure. */
+async function tryLive(path: string, init: RequestInit, signal?: AbortSignal): Promise<any | null> {
   try {
     const res = await fetch(`${BASE}${path}`, { ...init, signal });
     if (!res.ok) return null;
-    const body = (await res.json()) as { data?: T };
-    return body?.data ?? null;
+    const body = (await res.json()) as { data?: unknown } | null;
+    if (!body) return null;
+    return (body as { data?: unknown }).data ?? body; // Lane B wraps in {data}; Lane A is bare
   } catch {
     return null; // route absent / aborted / offline — caller serves a preview
   }
@@ -31,13 +37,13 @@ const jsonPost = (payload: unknown): RequestInit => ({
 });
 
 export async function validateIdea(idea: string, signal?: AbortSignal): Promise<ValidateOutput> {
-  const live = await tryLive<ValidateOutput>("/validate", jsonPost({ idea }), signal);
-  return live ? { ...live, source: "live" } : mockValidate(idea);
+  const live = await tryLive("/validate", jsonPost({ idea }), signal);
+  return live ? adaptValidate(live, idea) : mockValidate(idea);
 }
 
 export async function findSimilar(query: string, signal?: AbortSignal): Promise<SimilarOutput> {
-  const live = await tryLive<SimilarOutput>("/similar", jsonPost({ query }), signal);
-  return live ? { ...live, source: "live" } : mockSimilar(query);
+  const live = await tryLive("/similar", jsonPost({ query }), signal);
+  return live ? adaptSimilar(live, query) : mockSimilar(query);
 }
 
 export async function teardownApp(
@@ -45,6 +51,6 @@ export async function teardownApp(
   appName: string,
   signal?: AbortSignal,
 ): Promise<TeardownOutput> {
-  const live = await tryLive<TeardownOutput>(`/teardown/${encodeURIComponent(appId)}`, { method: "GET" }, signal);
-  return live ? { ...live, source: "live" } : mockTeardown(appId, appName);
+  const live = await tryLive(`/apps/${encodeURIComponent(appId)}/teardown`, { method: "GET" }, signal);
+  return live ? adaptTeardown(live) : mockTeardown(appId, appName);
 }
