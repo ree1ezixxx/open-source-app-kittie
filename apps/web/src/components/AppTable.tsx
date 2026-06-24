@@ -18,6 +18,8 @@ type Col = {
   label: string;
   num?: boolean;
   sort?: AppSortField;
+  /** Stable machine name exposed as the column's `data-field` for agent extraction; defaults to `key`. */
+  field?: string;
 };
 
 // Live column order: # · APP · CATEGORY · GROWTH 7D · RATING · REVIEWS ·
@@ -29,10 +31,10 @@ const COLS: Col[] = [
   { key: "rating", label: "Rating", num: true, sort: "rating" },
   { key: "reviews", label: "Reviews", num: true, sort: "reviews" },
   { key: "downloads", label: "Downloads", num: true, sort: "downloads" },
-  { key: "mrr", label: "MRR", num: true, sort: "revenue" },
+  { key: "mrr", label: "MRR", num: true, sort: "revenue", field: "revenue" },
   { key: "released", label: "Released", num: true, sort: "released" },
   { key: "updated", label: "Last update", num: true, sort: "updated" },
-  { key: "action", label: "Action", num: true },
+  { key: "action", label: "Action", num: true, field: "actions" },
 ];
 
 /** Reviews growth over the window as a % of the prior count (live shows "+0.3%"). */
@@ -162,10 +164,12 @@ export function AppTable({
     <table className="apps">
       <thead>
         <tr>
-          <th className="num rank-th">#</th>
+          <th scope="col" data-field="rank" className="num rank-th">#</th>
           {COLS.map((c) => (
             <th
               key={c.key}
+              scope="col"
+              data-field={c.field ?? c.key}
               className={`${c.num ? "num" : ""} ${c.sort ? "sortable" : ""} ${c.key === "app" ? "col-app" : ""}`}
               onClick={c.sort ? () => onSort(c.sort!) : undefined}
             >
@@ -188,31 +192,41 @@ export function AppTable({
               const cColor = categoryColor(a.category);
               const StoreGlyph = a.store === "apple" ? IconApple : IconGooglePlay;
               return (
-                <tr key={a.id} onClick={() => onSelect(a.id)}>
-                  <td className="num rank-cell">{startRank + i + 1}</td>
-                  <td className="col-app">
+                <tr
+                  key={a.id}
+                  data-row="app"
+                  data-app-id={a.id}
+                  data-store={a.store}
+                  onClick={() => onSelect(a.id)}
+                >
+                  <td className="num rank-cell" data-field="rank" data-value={startRank + i + 1}>
+                    {startRank + i + 1}
+                  </td>
+                  <td className="col-app" data-field="app">
                     <div className="app-cell">
                       <AppIcon url={a.iconUrl} title={a.title} />
                       <div className="app-meta">
                         <div className="app-title" title={a.title}>
-                          {a.title}
+                          <span data-field="name">{a.title}</span>
                           {a.isFirstMover && (
-                            <span className="fm-badge" style={{ marginLeft: 8 }}>
+                            <span className="fm-badge" data-field="first-mover" data-value="true" style={{ marginLeft: 8 }}>
                               <IconSpark /> First mover
                             </span>
                           )}
                         </div>
                         <div className="app-dev" title={a.developer}>
                           <StoreGlyph
+                            data-field="platform"
+                            data-value={a.store}
                             aria-label={a.store === "apple" ? "App Store" : "Google Play"}
                             style={{ width: 11, height: 11, verticalAlign: -1.5, marginRight: 4, opacity: 0.7 }}
                           />
-                          {a.developer}
+                          <span data-field="developer">{a.developer}</span>
                         </div>
                       </div>
                     </div>
                   </td>
-                  <td>
+                  <td data-field="category" data-value={a.category ?? undefined}>
                     {a.category ? (
                       <span className="pill" style={pillStyle(cColor)}>
                         <span className="dot" /> {a.category}
@@ -221,10 +235,10 @@ export function AppTable({
                       <span className="num-muted">—</span>
                     )}
                   </td>
-                  <td>
+                  <td data-field="growth" data-value={growthPct(a) ?? undefined}>
                     <GrowthCell a={a as AppListItemEx} />
                   </td>
-                  <td className="num">
+                  <td className="num" data-field="rating" data-value={a.rating ?? undefined}>
                     {a.rating != null ? (
                       <span className="rating">
                         <IconStar /> <span className="num-strong">{formatRating(a.rating)}</span>
@@ -233,27 +247,27 @@ export function AppTable({
                       <span className="num-muted">—</span>
                     )}
                   </td>
-                  <td className="num">
+                  <td className="num" data-field="reviews" data-value={a.reviewCount}>
                     <div className="num-strong">{formatCompact(a.reviewCount)} reviews</div>
                     <div className="cell-sub">{a.reviewCount.toLocaleString()}</div>
                   </td>
-                  <td className="num">
+                  <td className="num" data-field="downloads" data-value={a.downloadsEstimate30d ?? undefined}>
                     {a.downloadsEstimate30d != null ? (
                       <span className="num-strong">{formatCompact(a.downloadsEstimate30d)}</span>
                     ) : (
                       <span className="num-muted">—</span>
                     )}
                   </td>
-                  <td className="num">
+                  <td className="num" data-field="revenue" data-value={a.revenueEstimate30d ?? undefined}>
                     <span className="num-strong">{formatMoney(a.revenueEstimate30d)}</span>
                   </td>
-                  <td className="num">
+                  <td className="num" data-field="released" data-value={a.releasedAt ?? undefined}>
                     <TwoLineDate iso={a.releasedAt} absolute={monthYear(a.releasedAt)} />
                   </td>
-                  <td className="num">
+                  <td className="num" data-field="updated" data-value={a.updatedAt ?? undefined}>
                     <TwoLineDate iso={a.updatedAt} absolute={formatDate(a.updatedAt)} />
                   </td>
-                  <td className="num">
+                  <td className="num" data-field="actions">
                     <span
                       style={{ display: "inline-flex", alignItems: "center", gap: 6, justifyContent: "flex-end" }}
                       onClick={(e) => e.stopPropagation()}
