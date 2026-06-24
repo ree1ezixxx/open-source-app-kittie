@@ -1758,3 +1758,16 @@ table.apps tbody tr:hover td:first-child { box-shadow: inset 2px 0 0 0 var(--acc
 .cov-badge.tone-high { color: var(--accent-text); }
 .cov-badge.tone-mid { color: var(--text-secondary); }
 .cov-badge.tone-low { color: var(--text-tertiary); }
+
+/* honest "these headline numbers are modelled" caption under the metric bar */
+.estimate-note { display: flex; align-items: center; gap: 8px; margin: 10px 2px 0; font-size: 11.5px; color: var(--text-tertiary); }
+.estimate-note svg { width: 13px; height: 13px; flex-shrink: 0; }
+.estimate-note strong { color: var(--text-secondary); font-weight: 650; }
+.fresh-badge {
+  display: inline-flex; align-items: center; white-space: nowrap;
+  font-size: 10.5px; font-weight: 600;
+  padding: 1px 7px; border-radius: 99px; border: 1px solid var(--border); background: var(--panel);
+}
+.fresh-badge.tone-high { color: var(--accent-text); }
+.fresh-badge.tone-mid { color: #b4690e; }
+.fresh-badge.tone-low { color: var(--text-tertiary); }

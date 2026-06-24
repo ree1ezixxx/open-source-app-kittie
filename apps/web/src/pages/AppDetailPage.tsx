@@ -11,6 +11,7 @@ import { Segmented } from "../components/Segmented";
 import { TeardownCanvas } from "../components/teardown/TeardownCanvas";
 import { DetailCard, EmptyCard, Fact } from "../components/DetailCard";
 import { DecisionPacketCard } from "../components/DecisionPacketCard";
+import { FreshnessBadge } from "../components/DecisionBadges";
 import { TrendPanel, type ChartMetric } from "../components/TrendPanel";
 import { SimilarApps } from "../components/SimilarApps";
 import { FavoriteToggle } from "../components/FavoriteToggle";
@@ -276,6 +277,22 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
                 },
               ]}
             />
+
+            {/* honest provenance: the headline numbers are modelled estimates,
+                tagged with the freshness of the snapshot they were computed from. */}
+            <div className="estimate-note">
+              <IconInfo />
+              <span>
+                Downloads &amp; revenue are <strong>modelled</strong> estimates, not observed.
+              </span>
+              <FreshnessBadge
+                date={
+                  app.historicals.length
+                    ? app.historicals[app.historicals.length - 1]!.date
+                    : app.updatedAt
+                }
+              />
+            </div>
 
             {/* trend chart */}
             <TrendPanel app={app} metric={chartMetric} />

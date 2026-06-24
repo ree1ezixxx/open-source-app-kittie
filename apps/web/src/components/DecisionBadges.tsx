@@ -1,4 +1,4 @@
-import type { Confidence, DecisionCoverage } from "@kittie/types";
+import type { Confidence, DecisionCoverage, Freshness } from "@kittie/types";
 import { IconInfo } from "../icons";
 
 /** Plain-language confidence band from the 0..1 score. */
@@ -62,6 +62,38 @@ export function CoverageBadge({
     <span className={`cov-badge tone-${t}`} title={title}>
       {COVERAGE_WORD[coverage.status]}
       {!compact && coverage.missing.length > 0 && <IconInfo />}
+    </span>
+  );
+}
+
+/** Derive a freshness band from an ISO date — daily snapshots: ≤2d fresh, ≤7d aging. */
+export function freshnessFromDate(iso: string | null): Freshness {
+  if (!iso) return "unknown";
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return "unknown";
+  const days = Math.floor((Date.now() - t) / 86_400_000);
+  return days <= 2 ? "fresh" : days <= 7 ? "aging" : "stale";
+}
+
+const FRESH_WORD: Record<Freshness, string> = {
+  fresh: "Fresh",
+  aging: "Aging",
+  stale: "Stale",
+  unknown: "Unknown age",
+};
+
+/**
+ * Freshness badge — how recent the underlying snapshot is. Honest: derived from
+ * the real latest-snapshot date, shown alongside it; `unknown` when undated.
+ */
+export function FreshnessBadge({ date }: { date: string | null }) {
+  const label = freshnessFromDate(date);
+  const t = label === "fresh" ? "high" : label === "aging" ? "mid" : "low";
+  const human = date ? new Date(date).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : null;
+  return (
+    <span className={`fresh-badge tone-${t}`} title={date ? `Latest snapshot ${date}` : "No snapshot date"}>
+      {FRESH_WORD[label]}
+      {human ? ` · ${human}` : ""}
     </span>
   );
 }
