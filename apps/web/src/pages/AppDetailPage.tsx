@@ -9,6 +9,7 @@ import { formatCompact, formatMoney, formatRating, formatDate } from "../lib/for
 import { MetricBar } from "../components/MetricBar";
 import { Segmented } from "../components/Segmented";
 import { TeardownCanvas } from "../components/teardown/TeardownCanvas";
+import { TeardownIntelligence } from "../components/teardown/TeardownIntelligence";
 import { DetailCard, EmptyCard, Fact } from "../components/DetailCard";
 import { DecisionPacketCard } from "../components/DecisionPacketCard";
 import { FreshnessBadge } from "../components/DecisionBadges";
@@ -178,7 +179,14 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
       </div>
 
       {view === "teardown" && app && !error && !loading ? (
-        <TeardownCanvas app={app} reviews={reviews} />
+        // Enrich, don't replace: the canvas stays exactly as-is (bounded height),
+        // with the structured teardown intelligence flowed beneath it.
+        <div className="teardown-view">
+          <div className="teardown-canvas-wrap">
+            <TeardownCanvas app={app} reviews={reviews} />
+          </div>
+          <TeardownIntelligence app={app} />
+        </div>
       ) : (
       <div className="detail-scroll" ref={scrollRef}>
         {error ? (
