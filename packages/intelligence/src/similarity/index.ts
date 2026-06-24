@@ -215,9 +215,10 @@ export function rankSimilar(
       const byClass = CLASS_ORDER[a.similarityClass] - CLASS_ORDER[b.similarityClass];
       if (byClass !== 0) return byClass;
       const byScore = b.similarityScore - a.similarityScore;
-      // Within a class, similarity leads; near-ties break on prominence (review
-      // count) so real competitors surface above obscure 0-review namesakes.
-      if (Math.abs(byScore) > 0.02) return byScore;
+      // Within a class, similarity leads; near-ties (within 0.06) break on
+      // prominence (review count) so real competitors surface above obscure
+      // 0-review namesakes that happen to match the rare/high-IDF term.
+      if (Math.abs(byScore) > 0.06) return byScore;
       return (b.app.reviewCount ?? 0) - (a.app.reviewCount ?? 0);
     })
     .slice(0, limit);

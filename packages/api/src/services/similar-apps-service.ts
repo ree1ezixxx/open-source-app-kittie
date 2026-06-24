@@ -113,8 +113,11 @@ export async function findSimilarApps(
     if (!pool) return;
     marketCountry = pool.marketCountry;
     const w = termWeight[i] ?? 0;
-    const len = Math.max(1, pool.ids.length);
-    pool.ids.forEach((id, r) => {
+    // searchAppCandidates ignores `limit` (returns up to the pool cap), so bound
+    // hydration ourselves: keep this term's top-RETRIEVE by FTS rank.
+    const ids = pool.ids.slice(0, RETRIEVE);
+    const len = Math.max(1, ids.length);
+    ids.forEach((id, r) => {
       const rankW = 1 - r / len;
       ftsAcc.set(id, (ftsAcc.get(id) ?? 0) + w * rankW);
     });
@@ -145,7 +148,8 @@ export async function findSimilarApps(
       sortOrder: "desc",
       limit: RETRIEVE,
     });
-    for (const id of catPool?.ids ?? []) {
+    // bound hydration (searchAppCandidates ignores `limit`): most-reviewed RETRIEVE peers.
+    for (const id of (catPool?.ids ?? []).slice(0, RETRIEVE)) {
       if (id !== selfId) catIds.add(id);
     }
     const newIds = [...catIds].filter((id) => !itemById.has(id));
