@@ -1,9 +1,11 @@
 /**
  * `teardown_app` service (Lane B) — orchestrates the depth ladder. `quick` is
  * the pure deterministic blueprint from `@kittie/intelligence` (NO LLM). `standard`
- * layers a cached, locally-generated narrative (thesis, core problem, audience,
- * core loop, feature map, clone insights) on top; if the local model is
- * unavailable it degrades to `quick` — never fabricates. (`deep` lands next loop.)
+ * layers a cached Gemini Flash narrative (thesis, core problem, audience, core
+ * loop, feature map, clone insights) on top; `deep` adds review clusters + a
+ * vision screen-map. If Gemini is unconfigured or quota-exhausted, every LLM
+ * section degrades to `quick` — never fabricates. All reasoning is on Flash
+ * (one provider with `validate`), so there is no local-model dependency.
  */
 import type { AppDetail, Review } from "@kittie/types";
 import {
@@ -18,7 +20,14 @@ import {
   type TeardownAppOutput,
   type TeardownDepth,
 } from "@kittie/intelligence";
-import { cachedJson, fetchImageBase64, gammaJsonRaw, gammaVisionRaw, GAMMA_MODEL } from "../lib/gamma.js";
+import {
+  cachedJson,
+  fetchImageBase64,
+  generate,
+  generateVisionRaw,
+  GEMINI_MODEL,
+  isGeminiConfigured,
+} from "../lib/gemini.js";
 import { getAppById, getAppReviews } from "./app-service.js";
 
 /** Highest depth this loop implements; higher requests clamp down (honest `depth`). */
@@ -121,18 +130,20 @@ function buildStandardPrompt(app: AppDetail, base: TeardownAppOutput): string {
 
 const INFERRED = (cached: boolean): SectionLabel => ({
   kind: "inferred",
-  note: `${GAMMA_MODEL} (local)${cached ? ", cached" : ""}`,
+  note: `${GEMINI_MODEL}${cached ? ", cached" : ""}`,
 });
-const DEGRADED: SectionLabel = { kind: "missing", note: "local LLM unavailable — quick depth served" };
+const DEGRADED: SectionLabel = { kind: "missing", note: "LLM unavailable (no key / quota) — quick depth served" };
 
 async function enrichStandard(base: TeardownAppOutput, app: AppDetail): Promise<TeardownAppOutput> {
+  // No key → skip the network call entirely and degrade to the deterministic base.
+  if (!isGeminiConfigured()) return degradeStandard(base);
   const prompt = buildStandardPrompt(app, base);
   // Cache key = the facts we fed (not the prompt envelope), so the cache invalidates
   // only when the underlying app facts move.
   const input = JSON.stringify({ v: 2, id: app.id, m: base.metrics, d: base.decisionPacket.decision, r: base.risks });
   try {
     const { value, cached } = await cachedJson<Record<string, unknown>>("teardown_standard", app.id, input, () =>
-      gammaJsonRaw(prompt, { temperature: 0.25 }),
+      generate(prompt, { json: true, priority: "user" }),
     );
     const n = normalizeNarrative(value);
     const label = INFERRED(cached);
@@ -167,19 +178,24 @@ async function enrichStandard(base: TeardownAppOutput, app: AppDetail): Promise<
   } catch (err) {
     // Degrade honestly — serve the deterministic quick base, label why.
     console.warn(`[teardown] standard enrichment degraded for ${app.id}:`, err instanceof Error ? err.message : err);
-    return {
-      ...base,
-      labels: {
-        ...base.labels,
-        thesis: DEGRADED,
-        coreUserProblem: DEGRADED,
-        audience: DEGRADED,
-        coreLoop: DEGRADED,
-        featureMap: DEGRADED,
-        cloneInsights: DEGRADED,
-      },
-    };
+    return degradeStandard(base);
   }
+}
+
+/** The deterministic quick base, with narrative sections labelled as degraded. */
+function degradeStandard(base: TeardownAppOutput): TeardownAppOutput {
+  return {
+    ...base,
+    labels: {
+      ...base.labels,
+      thesis: DEGRADED,
+      coreUserProblem: DEGRADED,
+      audience: DEGRADED,
+      coreLoop: DEGRADED,
+      featureMap: DEGRADED,
+      cloneInsights: DEGRADED,
+    },
+  };
 }
 
 /* -------------------------------- deep -------------------------------- */
@@ -200,7 +216,7 @@ function buildAso(app: AppDetail): AsoModel {
 /** LLM-cluster raw review bodies into themes. Null when there are no reviews. */
 async function clusterReviews(app: AppDetail, reviews: Review[]): Promise<ReviewClusters | null> {
   const sample = reviews.slice(0, 25);
-  if (sample.length === 0) return null;
+  if (sample.length === 0 || !isGeminiConfigured()) return null;
   const bodies = sample.map((r) => ({ rating: r.rating, text: r.body.slice(0, 300) }));
   const prompt =
     "Cluster these mobile-app reviews into themes for a founder studying the app. " +
@@ -209,7 +225,7 @@ async function clusterReviews(app: AppDetail, reviews: Review[]): Promise<Review
   const input = JSON.stringify({ v: 1, id: app.id, n: sample.length, ids: sample.map((r) => r.id).slice(0, 25) });
   try {
     const { value } = await cachedJson<Record<string, unknown>>("teardown_review_clusters", app.id, input, () =>
-      gammaJsonRaw(prompt, { temperature: 0.2 }),
+      generate(prompt, { json: true, priority: "user" }),
     );
     return {
       sampled: sample.length,
@@ -226,14 +242,14 @@ async function clusterReviews(app: AppDetail, reviews: Review[]): Promise<Review
 /** Vision UI blueprint from the first listing screenshot. Best-effort — null on any failure. */
 async function screenMapFromVision(app: AppDetail): Promise<ScreenMap | null> {
   const url = app.screenshotUrls[0];
-  if (!url) return null;
+  if (!url || !isGeminiConfigured()) return null;
   const prompt =
     "This is one screenshot from a mobile app's store listing. Return ONLY JSON " +
     '{"screens":[{"name":"","purpose":"","keyComponents":["","",""]}]} — describe THIS screen: a short name, its purpose in one phrase, and 3 key UI components visible. One screen object.';
   const input = JSON.stringify({ v: 1, id: app.id, url });
   try {
     const { value } = await cachedJson<Record<string, unknown>>("teardown_screenmap", app.id, input, async () =>
-      gammaVisionRaw(prompt, await fetchImageBase64(url)),
+      generateVisionRaw(prompt, await fetchImageBase64(url)),
     );
     const screensRaw = Array.isArray(value.screens) ? value.screens : [];
     const screens = screensRaw
@@ -262,11 +278,11 @@ async function enrichDeep(base: TeardownAppOutput, app: AppDetail, reviews: Revi
       ...base.labels,
       aso: { kind: "observed", note: "observed ad keywords + listing locales" },
       reviewClusters: reviewClusters
-        ? { kind: "inferred", note: `${GAMMA_MODEL} (local), cached` }
-        : { kind: "missing", note: "no reviews to cluster, or local LLM unavailable" },
+        ? { kind: "inferred", note: `${GEMINI_MODEL}, cached` }
+        : { kind: "missing", note: "no reviews to cluster, or LLM unavailable (no key / quota)" },
       screenMap: screenMap
-        ? { kind: "inferred", note: `${GAMMA_MODEL} vision (local), cached` }
-        : { kind: "missing", note: "no screenshot, or vision unavailable" },
+        ? { kind: "inferred", note: `${GEMINI_MODEL} vision, cached` }
+        : { kind: "missing", note: "no screenshot, or vision unavailable (no key / quota)" },
     },
   };
 }

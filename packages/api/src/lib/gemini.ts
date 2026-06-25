@@ -203,6 +203,24 @@ export async function generateJson<T>(prompt: string, opts: GenerateOptions = {}
   return JSON.parse(text) as T;
 }
 
+/** Fetch a listing image and base64-encode it for a `generateVisionRaw` call. */
+export async function fetchImageBase64(
+  url: string,
+  timeoutMs = 15_000,
+): Promise<{ mimeType: string; base64: string }> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) throw new Error(`image fetch HTTP ${res.status}`);
+    const mimeType = res.headers.get("content-type")?.split(";")[0] || "image/jpeg";
+    const base64 = Buffer.from(await res.arrayBuffer()).toString("base64");
+    return { mimeType, base64 };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /* ---- cache-through ------------------------------------------------------ */
 
 export function hashInput(input: string): string {
@@ -228,4 +246,25 @@ export async function cachedGenerate(
   const output = await produce();
   await saveAiGeneration(db, { kind, subjectId, inputHash, output, model: GEMINI_MODEL });
   return { output, cached: false };
+}
+
+/**
+ * Typed cache-through JSON generation: like `cachedGenerate`, but `produce`
+ * returns a raw JSON string which is fence-stripped + validated before it is
+ * cached (never store junk) and parsed on the way out. Mirrors the local-LLM
+ * seam's `cachedJson` so callers can swap providers without restructuring.
+ */
+export async function cachedJson<T>(
+  kind: string,
+  subjectId: string,
+  input: string,
+  produce: () => Promise<string>,
+): Promise<{ value: T; cached: boolean }> {
+  const { output, cached } = await cachedGenerate(kind, subjectId, input, async () => {
+    const raw = await produce();
+    const text = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+    JSON.parse(text); // validate before caching — never persist an unparseable body
+    return text;
+  });
+  return { value: JSON.parse(output) as T, cached };
 }
