@@ -1,0 +1,58 @@
+/* Audit-home market pulse (#176) — ported prototype carousel, real apps. */
+.ah-root {
+  min-height: 100vh;
+  background:
+    radial-gradient(900px 500px at 85% -10%, color-mix(in srgb, var(--accent, #adfa1b) 16%, transparent), transparent 60%),
+    var(--bg, #fafaf9);
+  color: var(--text, #0c0e0a);
+  font-family: var(--font-mono, ui-monospace, monospace), system-ui;
+  padding-bottom: 80px;
+}
+.ah-msg { padding: 40px clamp(16px, 4vw, 56px); color: var(--text-tertiary, #797f72); }
+
+.ah-hero { padding: clamp(36px, 6vw, 72px) clamp(16px, 4vw, 56px) 24px; max-width: 1100px; }
+.ah-kicker {
+  font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--accent-text, #4d7c0f); margin-bottom: 16px;
+}
+.ah-hero h1 { font-size: clamp(32px, 5vw, 56px); letter-spacing: -0.035em; margin: 0 0 14px; font-weight: 600; }
+.ah-accent { color: var(--accent-text, #4d7c0f); }
+.ah-hero p { font-size: clamp(14px, 1.5vw, 18px); color: var(--text-secondary, #41463c); max-width: 56ch; line-height: 1.5; margin: 0; }
+
+.ah-rows { padding-top: 8px; }
+.ah-row { padding: 18px 0; }
+.ah-row-head { display: flex; align-items: baseline; gap: 14px; padding: 0 clamp(16px, 4vw, 56px); margin-bottom: 12px; }
+.ah-row-head h2 { font-size: clamp(18px, 2.2vw, 24px); letter-spacing: -0.02em; margin: 0; font-weight: 600; }
+.ah-pulse { font-size: 11.5px; color: var(--text-tertiary, #797f72); }
+
+.ah-marquee {
+  position: relative; overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent);
+}
+.ah-track { display: flex; gap: 14px; width: max-content; padding: 6px clamp(16px, 4vw, 56px); animation: ah-scroll 60s linear infinite; }
+.ah-track.rtl { animation-direction: reverse; }
+.ah-marquee:hover .ah-track { animation-play-state: paused; }
+@keyframes ah-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+.ah-tile {
+  flex: 0 0 auto; width: 230px;
+  background: var(--panel, #fff); border: 1px solid var(--border, #e7e7e2);
+  border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 12px;
+  transition: transform 0.14s ease, box-shadow 0.14s ease;
+}
+.ah-tile:hover { transform: translateY(-3px); box-shadow: 0 16px 34px -20px rgba(0,0,0,0.34); }
+.ah-tile-top { display: flex; align-items: center; gap: 11px; }
+.ah-logo {
+  width: 46px; height: 46px; border-radius: 12px; flex: 0 0 auto; object-fit: cover;
+  display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 17px;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06);
+}
+.ah-tile-id { min-width: 0; }
+.ah-name { font-weight: 600; font-size: 15px; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ah-cat { font-size: 10px; color: var(--text-tertiary, #797f72); text-transform: uppercase; letter-spacing: 0.06em; }
+.ah-tile-foot { display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--border-soft, #efefea); padding-top: 8px; }
+.ah-delta { font-size: 11px; font-weight: 600; padding: 3px 7px; border-radius: 999px; }
+.ah-delta.up { color: #16a34a; background: color-mix(in srgb, #16a34a 12%, transparent); }
+.ah-delta.down { color: #e8590c; background: color-mix(in srgb, #e8590c 12%, transparent); }
+.ah-metric { margin-left: auto; font-size: 10.5px; color: var(--text-tertiary, #797f72); }
