@@ -23,7 +23,7 @@ export interface SubScore {
   value: number | null; // 0..100
   sourceStatus: SourceStatus;
   /** The raw signals that fed this score, for traceability/drawer display. */
-  inputs: Record<string, number | string | null>;
+  inputs: Record<string, number | string | boolean | null>;
   note?: string;
 }
 

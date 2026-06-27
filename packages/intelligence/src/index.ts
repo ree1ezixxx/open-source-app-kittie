@@ -22,6 +22,13 @@ export {
   type PainReviewInput,
   type PainAnalysis,
 } from "./reviews/pain.js";
+export {
+  parseInstallBucket,
+  computeMonetisation,
+  type InstallRange,
+  type MonetisationInput,
+  type MonetisationResult,
+} from "./calibration.js";
 export { classifyReview } from "./reviewClassifier.js";
 export type { ClassifiableReview } from "./reviewClassifier.js";
 export type {

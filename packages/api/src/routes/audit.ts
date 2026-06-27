@@ -30,6 +30,7 @@ auditRouter.get("/", async (c) => {
         name: ctx.app.title,
         category: ctx.app.category,
         iconUrl: ctx.app.iconUrl,
+        price: ctx.app.price,
       },
       signals,
       reviews,

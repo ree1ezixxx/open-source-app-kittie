@@ -92,6 +92,20 @@ describe("buildAuditReport", () => {
     expect(reviewText.status).toBe("unavailable");
   });
 
+  it("includes a Monetisation score; Play bucket calibrates it (#173)", () => {
+    const uncal = buildAuditReport(input(), AT);
+    const mon = uncal.scores.find((s) => s.name === "monetisation")!;
+    expect(mon).toBeDefined();
+    expect(mon.inputs.calibrated).toBe(false);
+    expect(uncal.sources.find((s) => s.key === "play-installs")!.status).toBe("unavailable");
+
+    const cal = buildAuditReport({ ...input(), play: { installBucket: "1,000,000+" } }, AT);
+    const monCal = cal.scores.find((s) => s.name === "monetisation")!;
+    expect(monCal.inputs.calibrated).toBe(true);
+    expect(monCal.note).toContain("Google Play");
+    expect(cal.sources.find((s) => s.key === "play-installs")!.status).toBe("available");
+  });
+
   it("carries app identity + iso timestamp through", () => {
     const report = buildAuditReport(input(), AT);
     expect(report.appId).toBe("app_1");

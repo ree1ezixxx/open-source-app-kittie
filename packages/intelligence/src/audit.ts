@@ -3,6 +3,8 @@ import type { AppSignals } from "./types.js";
 import { computeGrowthScore, computeGrowthPct, growthSourceStatuses } from "./growth.js";
 import { computeConfidence } from "./confidence.js";
 import { analyzePain, MIN_PAIN_SAMPLE, type PainReviewInput } from "./reviews/pain.js";
+import { estimateRevenue, estimateDownloads } from "./revenue.js";
+import { computeMonetisation } from "./calibration.js";
 
 // Audit aggregator (epic #168, slice #170): compose sub-scores + evidence +
 // confidence into an AuditReport. Pure + deterministic — `generatedAt` is passed
@@ -10,10 +12,12 @@ import { analyzePain, MIN_PAIN_SAMPLE, type PainReviewInput } from "./reviews/pa
 // Demand / Pain / Monetisation / Buildability behind the same contract.
 
 export interface AuditInput {
-  app: { id: string; name: string; category: string | null; iconUrl?: string | null };
+  app: { id: string; name: string; category: string | null; iconUrl?: string | null; price?: number | null };
   signals: AppSignals;
   /** Review text for pain-cluster mining (#172). Omit ⇒ Pain unavailable. */
   reviews?: PainReviewInput[];
+  /** Google Play monetisation signals (#173). Omit ⇒ uncalibrated. */
+  play?: { installBucket?: string | null; hasSubscription?: boolean };
 }
 
 export function buildAuditReport(input: AuditInput, generatedAt: string): AuditReport {
@@ -116,6 +120,41 @@ export function buildAuditReport(input: AuditInput, generatedAt: string): AuditR
   }
   const painClusters: PainCluster[] = pain.clusters;
 
+  // ── Monetisation (#173) — modelled revenue, Play-install calibrated ───────
+  const modelledRevenue = estimateRevenue(signals);
+  const modelledDownloads = estimateDownloads(signals, modelledRevenue);
+  const mon = computeMonetisation({
+    modelledRevenueUsd: modelledRevenue,
+    modelledDownloads,
+    iapCount: signals.iapCount,
+    price: app.price,
+    hasSubscription: input.play?.hasSubscription,
+    installBucket: input.play?.installBucket,
+  });
+  scores.push({
+    name: "monetisation",
+    label: "Monetisation",
+    value: mon.score,
+    sourceStatus: mon.sourceStatus,
+    inputs: mon.inputs,
+    note: mon.note,
+  });
+  evidence.push({
+    id: "mon-revenue",
+    kind: "monetisation",
+    title: `~$${compact(mon.inputs.revenueUsdPerMo as number)}/mo modelled${
+      mon.calibrated ? " · Play-calibrated" : ""
+    }`,
+    detail:
+      signals.iapCount > 0
+        ? `${signals.iapCount} in-app purchases · est. ${compact(
+            mon.inputs.downloadsPerMo as number,
+          )} downloads/mo.`
+        : `est. ${compact(mon.inputs.downloadsPerMo as number)} downloads/mo.`,
+    sourceStatus: mon.sourceStatus,
+    observedAt: generatedAt,
+  });
+
   // ── Source strip — explicit per-signal availability (#171) ───────────────
   const st = growthSourceStatuses(signals);
   const sources: SourceSummary[] = [
@@ -133,6 +172,12 @@ export function buildAuditReport(input: AuditInput, generatedAt: string): AuditR
       label: "Review text",
       status: painStatus,
       note: painStatus === "unavailable" ? "No reviews ingested for this app yet" : undefined,
+    },
+    {
+      key: "play-installs",
+      label: "Play installs",
+      status: mon.calibrated ? "available" : "unavailable",
+      note: mon.calibrated ? undefined : "No Google Play install data — estimate uncalibrated",
     },
   ];
 
@@ -163,4 +208,10 @@ export function buildAuditReport(input: AuditInput, generatedAt: string): AuditR
 
 function slugify(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+}
+
+function compact(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${Math.round(n / 1_000)}K`;
+  return `${Math.round(n)}`;
 }
