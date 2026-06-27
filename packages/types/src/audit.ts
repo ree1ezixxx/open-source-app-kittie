@@ -80,6 +80,20 @@ export interface EvidenceCard {
   observedAt?: string | null;
 }
 
+/** An evidence-backed, agent-ready build brief derived from an AuditReport
+ *  (#175). The "clone button" output — a spec handoff, never a runtime. */
+export interface BuildBrief {
+  idea: string;
+  markdown: string; // full human-readable brief
+  githubIssues: string; // markdown checklist of issue stubs
+  claudeCodePrompt: string;
+  codexPrompt: string;
+  rorkPrompt: string;
+  mcpCall: string;
+  json: string; // compact machine spec
+  doNotBuild: string[];
+}
+
 /** The full audit for one app. Grows slice by slice (more scores/evidence). */
 export interface AuditReport {
   appId: string;

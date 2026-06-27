@@ -9,6 +9,7 @@ export * from "./io.js";
 export * from "./lock.js";
 export * from "./render.js";
 export * from "./advise.js";
+export { generateBuildBrief } from "./audit-brief.js";
 export {
   BuildContextManager,
   createBuildContextManager,

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import type { AuditReport, SourceStatus } from "@kittie/types";
-import { getAudit } from "../lib/api";
+import type { AuditReport, BuildBrief, SourceStatus } from "@kittie/types";
+import { getAudit, getBuildBrief } from "../lib/api";
 import "./audit.css";
 
 // Audit Engine — first surface (epic #168, slice #170). Renders an AuditReport
@@ -115,6 +115,8 @@ export function AuditPage() {
         </div>
       </section>
 
+      {appId && <BriefExport appId={appId} />}
+
       <footer className="audit-foot">
         Generated {new Date(report.generatedAt).toLocaleString()} · estimates are modelled, not
         ground truth.
@@ -125,4 +127,86 @@ export function AuditPage() {
 
 function SourceBadge({ status }: { status: SourceStatus }) {
   return <span className={`audit-srcbadge src-${status}`}>{status}</span>;
+}
+
+const BRIEF_FORMATS: { key: keyof BuildBrief; label: string; ext: string }[] = [
+  { key: "markdown", label: "Markdown", ext: "md" },
+  { key: "githubIssues", label: "GitHub issues", ext: "md" },
+  { key: "claudeCodePrompt", label: "Claude Code", ext: "txt" },
+  { key: "codexPrompt", label: "Codex", ext: "txt" },
+  { key: "rorkPrompt", label: "Rork", ext: "txt" },
+  { key: "json", label: "JSON", ext: "json" },
+  { key: "mcpCall", label: "MCP call", ext: "txt" },
+];
+
+function BriefExport({ appId }: { appId: string }) {
+  const [brief, setBrief] = useState<BuildBrief | null>(null);
+  const [fmt, setFmt] = useState<keyof BuildBrief>("markdown");
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const load = () => {
+    setLoading(true);
+    setErr(null);
+    getBuildBrief(appId)
+      .then(setBrief)
+      .catch((e) => setErr(e.message))
+      .finally(() => setLoading(false));
+  };
+
+  const content = brief ? String(brief[fmt] ?? "") : "";
+
+  const copy = () => {
+    if (navigator.clipboard) navigator.clipboard.writeText(content).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1400);
+  };
+
+  const download = () => {
+    const ext = BRIEF_FORMATS.find((f) => f.key === fmt)?.ext ?? "txt";
+    const blob = new Blob([content], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `build-brief.${ext}`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <section className="audit-export">
+      <h2>Export to builder</h2>
+      {!brief && (
+        <button className="audit-btn primary" onClick={load} disabled={loading}>
+          {loading ? "Generating…" : "Generate build brief"}
+        </button>
+      )}
+      {err && <div className="audit-msg">{err}</div>}
+      {brief && (
+        <>
+          <div className="audit-fmt-tabs">
+            {BRIEF_FORMATS.map((f) => (
+              <button
+                key={f.key}
+                className={`audit-fmt ${fmt === f.key ? "active" : ""}`}
+                onClick={() => setFmt(f.key)}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+          <div className="audit-export-actions">
+            <button className="audit-btn" onClick={copy}>
+              {copied ? "Copied ✓" : "Copy"}
+            </button>
+            <button className="audit-btn" onClick={download}>
+              Download
+            </button>
+          </div>
+          <pre className="audit-brief-code">{content}</pre>
+        </>
+      )}
+    </section>
+  );
 }

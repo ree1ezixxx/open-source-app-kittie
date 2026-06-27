@@ -4,6 +4,7 @@ import type {
   AppListItem,
   AppSearchParams,
   AuditReport,
+  BuildBrief,
   ChartType,
   PaginatedResponse,
   Review,
@@ -80,6 +81,14 @@ export async function getAudit(appId: string, signal?: AbortSignal): Promise<Aud
   const res = await fetch(`${BASE}/audit?app=${encodeURIComponent(appId)}`, { signal });
   if (!res.ok) throw new Error(`Failed to load audit (${res.status})`);
   const body = (await res.json()) as { data: AuditReport };
+  return body.data;
+}
+
+/** Agent-ready build brief derived from the audit (#175). */
+export async function getBuildBrief(appId: string, signal?: AbortSignal): Promise<BuildBrief> {
+  const res = await fetch(`${BASE}/audit/brief?app=${encodeURIComponent(appId)}`, { signal });
+  if (!res.ok) throw new Error(`Failed to load build brief (${res.status})`);
+  const body = (await res.json()) as { data: BuildBrief };
   return body.data;
 }
 
