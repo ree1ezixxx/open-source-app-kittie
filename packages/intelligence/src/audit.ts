@@ -1,10 +1,11 @@
-import type { AuditReport, SubScore, EvidenceCard, SourceStatus, SourceSummary, PainCluster } from "@kittie/types";
+import type { AuditReport, SubScore, SubScoreName, EvidenceCard, SourceStatus, SourceSummary, PainCluster } from "@kittie/types";
 import type { AppSignals } from "./types.js";
 import { computeGrowthScore, computeGrowthPct, growthSourceStatuses } from "./growth.js";
 import { computeConfidence } from "./confidence.js";
 import { analyzePain, MIN_PAIN_SAMPLE, type PainReviewInput } from "./reviews/pain.js";
 import { estimateRevenue, estimateDownloads } from "./revenue.js";
 import { computeMonetisation } from "./calibration.js";
+import { computeBuildability } from "./buildability.js";
 
 // Audit aggregator (epic #168, slice #170): compose sub-scores + evidence +
 // confidence into an AuditReport. Pure + deterministic — `generatedAt` is passed
@@ -51,6 +52,16 @@ export function buildAuditReport(input: AuditInput, generatedAt: string): AuditR
   };
 
   const scores: SubScore[] = [momentum];
+
+  // ── Demand (#174 placeholder) — leading signals not yet connected ────────
+  scores.push({
+    name: "demand",
+    label: "Demand",
+    value: null,
+    sourceStatus: "unavailable",
+    inputs: {},
+    note: "Leading demand signals (Google Trends / social) not yet connected",
+  });
 
   // ── Evidence cards (momentum only this slice) ────────────────────────────
   const evidence: EvidenceCard[] = [];
@@ -155,6 +166,25 @@ export function buildAuditReport(input: AuditInput, generatedAt: string): AuditR
     observedAt: generatedAt,
   });
 
+  // ── Buildability (#174) — ease of shipping a wedge fast ──────────────────
+  const build = computeBuildability({ category: signals.category, iapCount: signals.iapCount });
+  scores.push({
+    name: "buildability",
+    label: "Buildability",
+    value: build.score,
+    sourceStatus: signals.category ? "available" : "partial",
+    inputs: {
+      regulatoryRisk: build.factors.regulatoryRisk,
+      assetBurden: build.factors.assetBurden,
+      featureComplexity: build.factors.featureComplexity,
+    },
+    note: build.note,
+  });
+
+  // Stable display order for the six-score panel.
+  const ORDER: SubScoreName[] = ["momentum", "demand", "pain", "monetisation", "buildability"];
+  scores.sort((a, b) => ORDER.indexOf(a.name) - ORDER.indexOf(b.name));
+
   // ── Source strip — explicit per-signal availability (#171) ───────────────
   const st = growthSourceStatuses(signals);
   const sources: SourceSummary[] = [
@@ -179,6 +209,12 @@ export function buildAuditReport(input: AuditInput, generatedAt: string): AuditR
       status: mon.calibrated ? "available" : "unavailable",
       note: mon.calibrated ? undefined : "No Google Play install data — estimate uncalibrated",
     },
+    {
+      key: "demand",
+      label: "Demand signals",
+      status: "unavailable",
+      note: "Google Trends / social not yet connected",
+    },
   ];
 
   // ── Confidence — across the live evidence sources ────────────────────────
@@ -186,7 +222,7 @@ export function buildAuditReport(input: AuditInput, generatedAt: string): AuditR
     (hasReviewPrior ? 1 : 0) + (hasRankPrior ? 1 : 0) + (painStatus === "available" ? 1 : 0);
   const confidence = computeConfidence({
     sourcesPresent,
-    sourcesExpected: 3, // review-delta + rank-delta + review-text
+    sourcesExpected: 4, // review-delta + rank-delta + review-text + demand (leading)
     sampleSize: Math.max(signals.reviewCount, pain.sampleSize),
     freshness: hasReviewPrior ? "fresh" : "unknown",
     agreement: 0.6,

@@ -106,6 +106,23 @@ describe("buildAuditReport", () => {
     expect(cal.sources.find((s) => s.key === "play-installs")!.status).toBe("available");
   });
 
+  it("emits all five sub-scores in panel order; Demand unavailable, Buildability real (#174)", () => {
+    const report = buildAuditReport(input(), AT);
+    expect(report.scores.map((s) => s.name)).toEqual([
+      "momentum",
+      "demand",
+      "pain",
+      "monetisation",
+      "buildability",
+    ]);
+    const demand = report.scores.find((s) => s.name === "demand")!;
+    expect(demand.value).toBeNull();
+    expect(demand.sourceStatus).toBe("unavailable");
+    const build = report.scores.find((s) => s.name === "buildability")!;
+    expect(build.value).not.toBeNull();
+    expect(build.sourceStatus).toBe("available");
+  });
+
   it("carries app identity + iso timestamp through", () => {
     const report = buildAuditReport(input(), AT);
     expect(report.appId).toBe("app_1");

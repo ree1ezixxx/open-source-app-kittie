@@ -29,6 +29,11 @@ export {
   type MonetisationInput,
   type MonetisationResult,
 } from "./calibration.js";
+export {
+  computeBuildability,
+  type BuildabilityInput,
+  type BuildabilityResult,
+} from "./buildability.js";
 export { classifyReview } from "./reviewClassifier.js";
 export type { ClassifiableReview } from "./reviewClassifier.js";
 export type {
