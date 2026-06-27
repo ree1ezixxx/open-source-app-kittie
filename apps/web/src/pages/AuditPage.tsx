@@ -79,6 +79,26 @@ export function AuditPage() {
         ))}
       </section>
 
+      {report.painClusters && report.painClusters.length > 0 && (
+        <section className="audit-pain">
+          <h2>User pain · buildable angles</h2>
+          <div className="audit-cards">
+            {report.painClusters.slice(0, 6).map((p) => (
+              <div className="audit-card" key={p.theme}>
+                <div className="audit-card-top">
+                  <span className="audit-card-kind">{p.theme}</span>
+                  <span className="audit-pain-freq">{p.frequency}× · {Math.round(p.share * 100)}%</span>
+                </div>
+                <div className="audit-card-title">{p.opportunity}</div>
+                {p.exampleReviews[0] && (
+                  <div className="audit-pain-quote">"{p.exampleReviews[0]}"</div>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       <section className="audit-evidence">
         <h2>Evidence</h2>
         <div className="audit-cards">

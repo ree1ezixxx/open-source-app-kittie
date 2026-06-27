@@ -69,6 +69,29 @@ describe("buildAuditReport", () => {
     expect(byKey.ads?.note).toBeTruthy();
   });
 
+  it("folds review pain into a Pain score + clusters + evidence (#172)", () => {
+    const reviews = [
+      ...Array.from({ length: 9 }, () => ({ text: "too expensive, paywall rip off", rating: 1 })),
+      { text: "love it", rating: 5 },
+    ];
+    const report = buildAuditReport({ ...input(), reviews }, AT);
+    const pain = report.scores.find((s) => s.name === "pain")!;
+    expect(pain.sourceStatus).toBe("available");
+    expect(pain.value).not.toBeNull();
+    expect(report.painClusters?.[0]?.theme).toBe("Pricing & paywalls");
+    expect(report.evidence.some((e) => e.kind === "pain")).toBe(true);
+  });
+
+  it("with no reviews: Pain is unavailable, value null, never fabricated (#172)", () => {
+    const report = buildAuditReport(input(), AT);
+    const pain = report.scores.find((s) => s.name === "pain")!;
+    expect(pain.sourceStatus).toBe("unavailable");
+    expect(pain.value).toBeNull();
+    expect(report.painClusters).toEqual([]);
+    const reviewText = report.sources.find((s) => s.key === "review-text")!;
+    expect(reviewText.status).toBe("unavailable");
+  });
+
   it("carries app identity + iso timestamp through", () => {
     const report = buildAuditReport(input(), AT);
     expect(report.appId).toBe("app_1");

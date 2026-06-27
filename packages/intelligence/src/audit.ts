@@ -1,7 +1,8 @@
-import type { AuditReport, SubScore, EvidenceCard, SourceStatus, SourceSummary } from "@kittie/types";
+import type { AuditReport, SubScore, EvidenceCard, SourceStatus, SourceSummary, PainCluster } from "@kittie/types";
 import type { AppSignals } from "./types.js";
 import { computeGrowthScore, computeGrowthPct, growthSourceStatuses } from "./growth.js";
 import { computeConfidence } from "./confidence.js";
+import { analyzePain, MIN_PAIN_SAMPLE, type PainReviewInput } from "./reviews/pain.js";
 
 // Audit aggregator (epic #168, slice #170): compose sub-scores + evidence +
 // confidence into an AuditReport. Pure + deterministic — `generatedAt` is passed
@@ -11,6 +12,8 @@ import { computeConfidence } from "./confidence.js";
 export interface AuditInput {
   app: { id: string; name: string; category: string | null; iconUrl?: string | null };
   signals: AppSignals;
+  /** Review text for pain-cluster mining (#172). Omit ⇒ Pain unavailable. */
+  reviews?: PainReviewInput[];
 }
 
 export function buildAuditReport(input: AuditInput, generatedAt: string): AuditReport {
@@ -84,6 +87,35 @@ export function buildAuditReport(input: AuditInput, generatedAt: string): AuditR
     });
   }
 
+  // ── Pain (#172) — mined from review text ─────────────────────────────────
+  const pain = analyzePain(input.reviews ?? []);
+  const painStatus: SourceStatus =
+    pain.sampleSize === 0 ? "unavailable" : pain.sampleSize < MIN_PAIN_SAMPLE ? "partial" : "available";
+  scores.push({
+    name: "pain",
+    label: "Pain",
+    value: pain.score,
+    sourceStatus: painStatus,
+    inputs: { reviews: pain.sampleSize, clusters: pain.clusters.length },
+    note:
+      pain.sampleSize === 0
+        ? "No reviews ingested yet"
+        : pain.sampleSize < MIN_PAIN_SAMPLE
+          ? `Thin review sample (n=${pain.sampleSize})`
+          : undefined,
+  });
+  for (const cluster of pain.clusters.slice(0, 3)) {
+    evidence.push({
+      id: `pain-${slugify(cluster.theme)}`,
+      kind: "pain",
+      title: `${cluster.frequency} reviews · ${cluster.theme}`,
+      detail: cluster.opportunity,
+      sourceStatus: painStatus,
+      observedAt: generatedAt,
+    });
+  }
+  const painClusters: PainCluster[] = pain.clusters;
+
   // ── Source strip — explicit per-signal availability (#171) ───────────────
   const st = growthSourceStatuses(signals);
   const sources: SourceSummary[] = [
@@ -96,14 +128,21 @@ export function buildAuditReport(input: AuditInput, generatedAt: string): AuditR
       note: st.ads === "unavailable" ? "Meta ad feed not yet connected" : undefined,
     },
     { key: "updates", label: "Update cadence", status: st.updates },
+    {
+      key: "review-text",
+      label: "Review text",
+      status: painStatus,
+      note: painStatus === "unavailable" ? "No reviews ingested for this app yet" : undefined,
+    },
   ];
 
-  // ── Confidence — momentum has two possible sources this slice ─────────────
-  const sourcesPresent = (hasReviewPrior ? 1 : 0) + (hasRankPrior ? 1 : 0);
+  // ── Confidence — across the live evidence sources ────────────────────────
+  const sourcesPresent =
+    (hasReviewPrior ? 1 : 0) + (hasRankPrior ? 1 : 0) + (painStatus === "available" ? 1 : 0);
   const confidence = computeConfidence({
     sourcesPresent,
-    sourcesExpected: 2, // review-delta + rank-delta
-    sampleSize: signals.reviewCount,
+    sourcesExpected: 3, // review-delta + rank-delta + review-text
+    sampleSize: Math.max(signals.reviewCount, pain.sampleSize),
     freshness: hasReviewPrior ? "fresh" : "unknown",
     agreement: 0.6,
   });
@@ -118,5 +157,10 @@ export function buildAuditReport(input: AuditInput, generatedAt: string): AuditR
     confidence,
     sources,
     evidence,
+    painClusters,
   };
+}
+
+function slugify(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 }

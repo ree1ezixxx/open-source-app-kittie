@@ -58,6 +58,17 @@ export interface SourceSummary {
   note?: string;
 }
 
+/** A recurring user-pain theme mined from reviews (#172). Each is a buildable
+ *  angle: a concentrated complaint is an opportunity. */
+export interface PainCluster {
+  theme: string;
+  frequency: number; // # of analysed reviews mentioning it
+  share: number; // 0..1 of analysed reviews
+  negativeShare: number; // 0..1 of mentions from low-rating (≤3) reviews
+  exampleReviews: string[];
+  opportunity: string;
+}
+
 /** A single traceable piece of evidence behind the recommendation. */
 export interface EvidenceCard {
   id: string;
@@ -80,4 +91,5 @@ export interface AuditReport {
   confidence: ConfidenceScore;
   sources: SourceSummary[];
   evidence: EvidenceCard[];
+  painClusters?: PainCluster[];
 }

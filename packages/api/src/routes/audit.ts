@@ -1,6 +1,6 @@
 import { Hono } from "hono";
-import { getSnapshotContext } from "@kittie/db";
-import { signalsFromContext, buildAuditReport } from "@kittie/intelligence";
+import { getSnapshotContext, getRecentReviewsForApp } from "@kittie/db";
+import { signalsFromContext, buildAuditReport, type PainReviewInput } from "@kittie/intelligence";
 import { getDb } from "../lib/db.js";
 
 // GET /api/v1/audit?app=<id> — the audit engine's first surface (epic #168).
@@ -11,10 +11,18 @@ auditRouter.get("/", async (c) => {
   const appId = c.req.query("app");
   if (!appId) return c.json({ error: "Query param 'app' is required" }, 400);
 
-  const ctx = await getSnapshotContext(getDb(), appId, "7d");
+  const db = getDb();
+  const ctx = await getSnapshotContext(db, appId, "7d");
   if (!ctx) return c.json({ error: "App not found" }, 404);
 
   const signals = signalsFromContext(ctx);
+  const reviewRows = await getRecentReviewsForApp(db, appId, 200);
+  const reviews: PainReviewInput[] = reviewRows.map((r) => ({
+    text: [r.title, r.body].filter(Boolean).join(". "),
+    rating: r.rating,
+    date: r.reviewedAt instanceof Date ? r.reviewedAt.toISOString() : null,
+  }));
+
   const report = buildAuditReport(
     {
       app: {
@@ -24,6 +32,7 @@ auditRouter.get("/", async (c) => {
         iconUrl: ctx.app.iconUrl,
       },
       signals,
+      reviews,
     },
     new Date().toISOString(),
   );

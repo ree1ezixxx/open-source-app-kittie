@@ -16,6 +16,12 @@ export { resolveKeywordPosition, type RankResolverHit } from "./keyword-rank.js"
 export { signalsFromContext } from "./signals.js";
 export { computeConfidence, type ConfidenceInput } from "./confidence.js";
 export { buildAuditReport, type AuditInput } from "./audit.js";
+export {
+  analyzePain,
+  MIN_PAIN_SAMPLE,
+  type PainReviewInput,
+  type PainAnalysis,
+} from "./reviews/pain.js";
 export { classifyReview } from "./reviewClassifier.js";
 export type { ClassifiableReview } from "./reviewClassifier.js";
 export type {

@@ -97,6 +97,25 @@ export async function getRecentReviewTagsForApps(
   return out;
 }
 
+/** Recent reviews (rating + text) for one app — feeds pain-cluster mining (#172). */
+export async function getRecentReviewsForApp(
+  db: Db,
+  appId: string,
+  limit = 200,
+): Promise<Array<{ rating: number; title: string | null; body: string; reviewedAt: Date }>> {
+  return db
+    .select({
+      rating: reviews.rating,
+      title: reviews.title,
+      body: reviews.body,
+      reviewedAt: reviews.reviewedAt,
+    })
+    .from(reviews)
+    .where(eq(reviews.appId, appId))
+    .orderBy(desc(reviews.reviewedAt))
+    .limit(limit);
+}
+
 export async function loadAppRelations(db: Db, appId: string) {
   const [iapRows, metaRows, creatorRows, adRows, reviewRows] = await Promise.all([
     db.select().from(iaps).where(eq(iaps.appId, appId)),
