@@ -49,6 +49,15 @@ export type EvidenceKind =
   | "keyword"
   | "ad";
 
+/** Per-signal availability, surfaced as badges so missing data is explicit
+ *  (e.g. "ads: unavailable") rather than silently scored as zero (#171). */
+export interface SourceSummary {
+  key: string;
+  label: string;
+  status: SourceStatus;
+  note?: string;
+}
+
 /** A single traceable piece of evidence behind the recommendation. */
 export interface EvidenceCard {
   id: string;
@@ -69,5 +78,6 @@ export interface AuditReport {
   generatedAt: string; // ISO
   scores: SubScore[];
   confidence: ConfidenceScore;
+  sources: SourceSummary[];
   evidence: EvidenceCard[];
 }

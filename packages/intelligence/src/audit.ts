@@ -1,6 +1,6 @@
-import type { AuditReport, SubScore, EvidenceCard, SourceStatus } from "@kittie/types";
+import type { AuditReport, SubScore, EvidenceCard, SourceStatus, SourceSummary } from "@kittie/types";
 import type { AppSignals } from "./types.js";
-import { computeGrowthScore, computeGrowthPct } from "./growth.js";
+import { computeGrowthScore, computeGrowthPct, growthSourceStatuses } from "./growth.js";
 import { computeConfidence } from "./confidence.js";
 
 // Audit aggregator (epic #168, slice #170): compose sub-scores + evidence +
@@ -84,6 +84,20 @@ export function buildAuditReport(input: AuditInput, generatedAt: string): AuditR
     });
   }
 
+  // ── Source strip — explicit per-signal availability (#171) ───────────────
+  const st = growthSourceStatuses(signals);
+  const sources: SourceSummary[] = [
+    { key: "reviews", label: "Reviews", status: st.reviews },
+    { key: "chart-rank", label: "Chart rank", status: st.chartRank },
+    {
+      key: "ads",
+      label: "Ads",
+      status: st.ads,
+      note: st.ads === "unavailable" ? "Meta ad feed not yet connected" : undefined,
+    },
+    { key: "updates", label: "Update cadence", status: st.updates },
+  ];
+
   // ── Confidence — momentum has two possible sources this slice ─────────────
   const sourcesPresent = (hasReviewPrior ? 1 : 0) + (hasRankPrior ? 1 : 0);
   const confidence = computeConfidence({
@@ -102,6 +116,7 @@ export function buildAuditReport(input: AuditInput, generatedAt: string): AuditR
     generatedAt,
     scores,
     confidence,
+    sources,
     evidence,
   };
 }

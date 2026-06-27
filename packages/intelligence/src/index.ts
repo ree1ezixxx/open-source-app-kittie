@@ -1,8 +1,10 @@
 export {
   computeGrowthPct,
   computeGrowthScore,
+  growthSourceStatuses,
   isFirstMover,
   reviewGrowth7d,
+  type GrowthSourceStatuses,
 } from "./growth.js";
 export {
   estimateRevenue,

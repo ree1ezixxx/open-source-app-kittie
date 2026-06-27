@@ -61,6 +61,14 @@ describe("buildAuditReport", () => {
     expect(report.evidence.find((e) => e.id === "mom-review-velocity")).toBeUndefined();
   });
 
+  it("surfaces a source strip with ads unavailable and reviews available (#171)", () => {
+    const report = buildAuditReport(input(), AT);
+    const byKey = Object.fromEntries(report.sources.map((s) => [s.key, s]));
+    expect(byKey.reviews?.status).toBe("available");
+    expect(byKey.ads?.status).toBe("unavailable");
+    expect(byKey.ads?.note).toBeTruthy();
+  });
+
   it("carries app identity + iso timestamp through", () => {
     const report = buildAuditReport(input(), AT);
     expect(report.appId).toBe("app_1");

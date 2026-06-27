@@ -47,6 +47,23 @@
   color: var(--text-tertiary, #737373);
 }
 
+.audit-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border-soft, #ececec);
+  border-bottom: 1px solid var(--border-soft, #ececec);
+}
+.audit-source-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-secondary, #404040);
+}
+
 .audit-scores {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));

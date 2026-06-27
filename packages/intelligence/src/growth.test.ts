@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { computeGrowthPct } from "./growth.js";
+import { computeGrowthPct, computeGrowthScore, growthSourceStatuses } from "./growth.js";
 import type { AppSignals } from "./types.js";
 
 const signals = (over: Partial<AppSignals>): AppSignals => ({
@@ -58,5 +58,59 @@ describe("computeGrowthPct", () => {
     },
   ])("$label → $expected%", ({ s, period, expected }) => {
     expect(computeGrowthPct(s, period)).toBe(expected);
+  });
+});
+
+describe("computeGrowthScore — source-status reweight (#171)", () => {
+  it("strong review growth with NO other signals is not dragged toward 50", () => {
+    // reviews-only, big positive delta: missing rank/ads/updates must not dilute.
+    const score = computeGrowthScore(
+      signals({ reviewCount: 200, reviewCountPrior: 100, priorDays: 7 }),
+      "7d",
+    );
+    expect(score).toBeGreaterThan(80); // old fixed-weight formula would cap ~67
+  });
+
+  it("no live signals at all → neutral 50, never 0", () => {
+    const score = computeGrowthScore(
+      signals({ reviewCountPrior: null, chartRank: null, chartRankPrior: null, updatedAt: null }),
+      "7d",
+    );
+    expect(score).toBe(50);
+  });
+
+  it("dormant ads do not change the score (weight redistributed)", () => {
+    const base = signals({
+      reviewCount: 150,
+      reviewCountPrior: 100,
+      chartRank: 10,
+      chartRankPrior: 25,
+      updatedAt: new Date(),
+    });
+    const withoutAds = computeGrowthScore(base, "7d");
+    const adsStubbedZero = computeGrowthScore(
+      { ...base, metaAdCount: 0, metaAdCountPrior: null },
+      "7d",
+    );
+    expect(adsStubbedZero).toBe(withoutAds); // ads absent ⇒ ignored, not a 0 drag
+  });
+});
+
+describe("growthSourceStatuses (#171)", () => {
+  it("flags ads unavailable and reviews available from priors", () => {
+    const st = growthSourceStatuses(
+      signals({ reviewCountPrior: 100, chartRank: 5, chartRankPrior: 9 }),
+    );
+    expect(st.reviews).toBe("available");
+    expect(st.chartRank).toBe("available");
+    expect(st.ads).toBe("unavailable");
+  });
+
+  it("reviews/rank are partial when current data exists but no prior", () => {
+    const st = growthSourceStatuses(
+      signals({ reviewCountPrior: null, chartRank: 5, chartRankPrior: null }),
+    );
+    expect(st.reviews).toBe("partial");
+    expect(st.chartRank).toBe("partial");
   });
 });

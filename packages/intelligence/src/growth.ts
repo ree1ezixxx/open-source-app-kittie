@@ -1,4 +1,4 @@
-import type { GrowthPeriod } from "@kittie/types";
+import type { GrowthPeriod, SourceStatus } from "@kittie/types";
 import type { AppSignals } from "./types.js";
 import { GROWTH_PERIOD_DAYS } from "./types.js";
 
@@ -58,16 +58,70 @@ function toGrowthScore(raw: number): number {
   return Math.round(Math.min(Math.max((raw + 1) * 50, 0), 100) * 10) / 10;
 }
 
-/** Composite growth score 0–100 for a given window. */
+/** Is each growth signal actually backed by data? Absent ⇒ its weight is
+ *  redistributed, never counted as a neutral 0 (honest scoring — #171). */
+function reviewPresent(s: AppSignals): boolean {
+  return s.reviewCountPrior != null;
+}
+function rankPresent(s: AppSignals): boolean {
+  return s.chartRank != null && s.chartRankPrior != null;
+}
+function adsPresent(s: AppSignals): boolean {
+  return s.metaAdCount > 0 || s.metaAdCountPrior != null;
+}
+function updatesPresent(s: AppSignals): boolean {
+  return s.updatedAt != null;
+}
+
+/**
+ * Composite growth score 0–100 for a given window.
+ *
+ * Only signals with real data contribute, and the score is normalised over the
+ * weight of the **present** signals. A missing source (e.g. the dormant Meta-ad
+ * feed) therefore does not drag the score toward the neutral midpoint — its
+ * weight is redistributed across the live signals. Missing data lowers
+ * *confidence* (computed elsewhere), not the value.
+ */
 export function computeGrowthScore(signals: AppSignals, period: GrowthPeriod = "7d"): number {
   const periodDays = GROWTH_PERIOD_DAYS[period];
-  const raw =
-    GROWTH_WEIGHTS.reviewDelta * reviewDeltaScore(signals, periodDays) +
-    GROWTH_WEIGHTS.rankDelta * rankDeltaScore(signals) +
-    GROWTH_WEIGHTS.adCreativeDelta * adCreativeDeltaScore(signals) +
-    GROWTH_WEIGHTS.updateRecency * updateRecencyScore(signals.updatedAt);
+  const components = [
+    { w: GROWTH_WEIGHTS.reviewDelta, s: reviewDeltaScore(signals, periodDays), present: reviewPresent(signals) },
+    { w: GROWTH_WEIGHTS.rankDelta, s: rankDeltaScore(signals), present: rankPresent(signals) },
+    { w: GROWTH_WEIGHTS.adCreativeDelta, s: adCreativeDeltaScore(signals), present: adsPresent(signals) },
+    { w: GROWTH_WEIGHTS.updateRecency, s: updateRecencyScore(signals.updatedAt), present: updatesPresent(signals) },
+  ];
 
+  const active = components.filter((c) => c.present);
+  const totalWeight = active.reduce((sum, c) => sum + c.w, 0);
+  if (totalWeight === 0) return toGrowthScore(0); // no live signal → neutral 50
+
+  const raw = active.reduce((sum, c) => sum + c.w * c.s, 0) / totalWeight;
   return toGrowthScore(raw);
+}
+
+/** Per-signal source status for the audit's `sources` strip (#171). */
+export interface GrowthSourceStatuses {
+  reviews: SourceStatus;
+  chartRank: SourceStatus;
+  ads: SourceStatus;
+  updates: SourceStatus;
+}
+
+export function growthSourceStatuses(signals: AppSignals): GrowthSourceStatuses {
+  return {
+    reviews: reviewPresent(signals)
+      ? "available"
+      : signals.reviewCount > 0
+        ? "partial" // have a current count, no prior to compare yet
+        : "unavailable",
+    chartRank: rankPresent(signals)
+      ? "available"
+      : signals.chartRank != null
+        ? "partial"
+        : "unavailable",
+    ads: adsPresent(signals) ? "available" : "unavailable",
+    updates: updatesPresent(signals) ? "available" : "unavailable",
+  };
 }
 
 export function isFirstMover(signals: AppSignals, growthScore: number): boolean {

@@ -50,6 +50,14 @@ export function AuditPage() {
         )}
       </header>
 
+      <section className="audit-sources" aria-label="Signal sources">
+        {report.sources.map((s) => (
+          <span className="audit-source-chip" key={s.key} title={s.note ?? ""}>
+            {s.label}: <SourceBadge status={s.status} />
+          </span>
+        ))}
+      </section>
+
       <section className="audit-scores">
         {report.scores.map((s) => (
           <div className="audit-score" key={s.name}>
