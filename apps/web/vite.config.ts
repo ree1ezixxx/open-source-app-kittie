@@ -8,10 +8,10 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     server: {
-      // Canonical dev port is ALWAYS 5175 (strictPort:false → vite only falls back to the
-      // next free port if 5175 is genuinely occupied — i.e. an error/conflict, never by choice).
-      port: 5175,
-      strictPort: false,
+      // PROTOTYPE branch (redesign/trending-ideas): isolated on 5180 so it never
+      // contaminates the canonical web port 5175. strictPort → fail loud if taken.
+      port: 5180,
+      strictPort: true,
       proxy: {
         "/api": apiOrigin,
       },
