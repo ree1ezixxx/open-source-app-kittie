@@ -1,0 +1,99 @@
+/* Audit Engine page (epic #168, slice #170) — minimal, uses app theme tokens. */
+.audit-page {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 32px clamp(16px, 4vw, 40px) 80px;
+  font-family: var(--font-mono, ui-monospace, monospace), system-ui;
+  color: var(--text, #0a0a0a);
+}
+.audit-msg {
+  color: var(--text-tertiary, #737373);
+  padding-top: 80px;
+}
+
+.audit-eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent-text, #4d7c0f);
+  margin-bottom: 10px;
+}
+.audit-head h1 {
+  font-size: clamp(26px, 4vw, 38px);
+  letter-spacing: -0.03em;
+  margin: 0 0 8px;
+}
+.audit-sub {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  color: var(--text-secondary, #404040);
+  font-size: 13px;
+}
+.audit-conf {
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-weight: 600;
+}
+.conf-high { background: color-mix(in srgb, #16a34a 14%, transparent); color: #15803d; }
+.conf-medium { background: color-mix(in srgb, #d97706 16%, transparent); color: #b45309; }
+.conf-low { background: color-mix(in srgb, #e8590c 14%, transparent); color: #c2410c; }
+.conf-experimental { background: color-mix(in srgb, #6b7280 16%, transparent); color: #4b5563; }
+.audit-conf-reasons {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-tertiary, #737373);
+}
+
+.audit-scores {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin: 28px 0;
+}
+.audit-score {
+  border: 1px solid var(--border, #e5e5e5);
+  border-radius: 12px;
+  padding: 14px 16px;
+  background: var(--panel, #fff);
+}
+.audit-score-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.audit-score-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; }
+.audit-score-value { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; }
+.audit-score-max { font-size: 13px; color: var(--text-tertiary, #737373); font-weight: 400; }
+.audit-meter { height: 5px; border-radius: 999px; background: var(--surface, #f5f5f5); margin-top: 8px; overflow: hidden; }
+.audit-meter i { display: block; height: 100%; background: var(--accent, #adfa1b); }
+.audit-score-note { margin-top: 8px; font-size: 11px; color: var(--text-tertiary, #737373); line-height: 1.4; }
+
+.audit-evidence h2 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-tertiary, #737373);
+  margin: 0 0 14px;
+}
+.audit-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.audit-card {
+  border: 1px solid var(--border, #e5e5e5);
+  border-radius: 12px;
+  padding: 14px 16px;
+  background: var(--panel, #fff);
+}
+.audit-card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.audit-card-kind { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-tertiary, #737373); }
+.audit-card-title { font-weight: 600; font-size: 14px; margin-bottom: 4px; letter-spacing: -0.01em; }
+.audit-card-detail { font-size: 12.5px; color: var(--text-secondary, #404040); line-height: 1.4; }
+
+.audit-srcbadge { font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; padding: 2px 7px; border-radius: 999px; border: 1px solid var(--border, #e5e5e5); }
+.src-available { color: #15803d; border-color: color-mix(in srgb, #16a34a 40%, transparent); }
+.src-partial { color: #b45309; border-color: color-mix(in srgb, #d97706 40%, transparent); }
+.src-unavailable { color: var(--text-tertiary, #737373); }
+
+.audit-foot { margin-top: 36px; font-size: 11px; color: var(--text-tertiary, #737373); }

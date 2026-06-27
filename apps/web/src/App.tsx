@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useLocation, useParams } from "react-router-do
 import { Sidebar } from "./components/Sidebar";
 import { ExplorePage } from "./pages/ExplorePage";
 import { AppDetailPage } from "./pages/AppDetailPage";
+import { AuditPage } from "./pages/AuditPage";
 import { AdsLibraryPage } from "./pages/AdsLibraryPage";
 import { OrganicPage } from "./pages/OrganicPage";
 import { HighlightsPage } from "./pages/HighlightsPage";
@@ -58,6 +59,7 @@ export function App() {
         />
         <Route path="/apps/:id" element={<AppDetailPage theme={theme} onToggleTheme={toggleTheme} />} />
         <Route path="/app/:slug" element={<AppDetailPage theme={theme} onToggleTheme={toggleTheme} />} />
+        <Route path="/audit" element={<AuditPage />} />
 
         <Route path="/dashboard/ads" element={<AdsLibraryPage theme={theme} onToggleTheme={toggleTheme} />} />
         <Route path="/dashboard/organic" element={<OrganicPage theme={theme} onToggleTheme={toggleTheme} />} />
