@@ -3,6 +3,7 @@ import type {
   AppHistoricalPoint,
   AppListItem,
   AppSearchParams,
+  AuditReport,
   ChartType,
   PaginatedResponse,
   Review,
@@ -71,6 +72,14 @@ export async function getApp(id: string, signal?: AbortSignal): Promise<AppDetai
   const res = await fetch(`${BASE}/apps/${encodeURIComponent(id)}`, { signal });
   if (!res.ok) throw new Error(`Failed to load app (${res.status})`);
   const body = (await res.json()) as { data: AppDetail };
+  return body.data;
+}
+
+export async function getAuditReport(appId: string, signal?: AbortSignal): Promise<AuditReport> {
+  const q = new URLSearchParams({ app: appId });
+  const res = await fetch(`${BASE}/audit?${q.toString()}`, { signal });
+  if (!res.ok) throw new Error(`Failed to load audit (${res.status})`);
+  const body = (await res.json()) as { data: AuditReport };
   return body.data;
 }
 

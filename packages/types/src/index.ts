@@ -1,6 +1,7 @@
 export * from "./provenance.js";
 export * from "./decision-packet.js";
 export * from "./app-intelligence.js";
+export * from "./audit.js";
 
 // `export *` re-exports but creates no local binding — import the name explicitly
 // so `AppDetail.decisionPacket` can reference it as a type within this module.

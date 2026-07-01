@@ -5,6 +5,13 @@ export {
   reviewGrowth7d,
 } from "./growth.js";
 export {
+  buildAuditReport,
+  computeConfidenceScore,
+  type BuildAuditReportInput,
+  type ConfidenceInput,
+  type ConfidenceSignal,
+} from "./audit.js";
+export {
   estimateRevenue,
   estimateDownloads,
   rankDecay,
