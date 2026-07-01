@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildKeywordGenerationInput,
+  InvalidKeywordError,
   normalizeGeneratedKeywords,
 } from "./tracked-app-service.js";
 
@@ -34,5 +35,9 @@ describe("tracked app generated keywords", () => {
 
     expect(parsed.title).toBe("Mahjong Solitaire");
     expect(parsed.description).toHaveLength(2_500);
+  });
+
+  it("exports InvalidKeywordError for route handling", () => {
+    expect(new InvalidKeywordError().message).toBe("keyword is invalid");
   });
 });

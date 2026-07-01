@@ -341,7 +341,7 @@ export const trackedAppKeywords = sqliteTable(
     createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
   },
   (t) => [
-    uniqueIndex("tracked_app_keywords_unique_idx").on(t.trackedAppId, t.keyword),
+    uniqueIndex("tracked_app_keywords_unique_idx").on(t.trackedAppId, t.country, t.keyword),
     index("tracked_app_keywords_tracked_app_idx").on(t.trackedAppId),
     index("tracked_app_keywords_app_idx").on(t.appId, t.country),
   ],

@@ -1,4 +1,7 @@
 import {
+  addKeywordForTrackedApp,
+  deleteKeywordForTrackedApp,
+  filterGeneratedKeywordsForCountry,
   getAppRowById,
   getGeneratedKeywordInputHash,
   getTrackedApp,
@@ -23,7 +26,7 @@ import type { Store } from "@kittie/types";
 
 import { getDb } from "../lib/db.js";
 import { cachedGenerate, generate, hashInput, isGeminiConfigured } from "../lib/gemini.js";
-import { SUPPORTED_MARKETS } from "./keyword-service.js";
+import { getKeywordDifficulty, getRelatedKeywords, SUPPORTED_MARKETS } from "./keyword-service.js";
 
 const GENERATED_KEYWORD_KIND = "tracked_app_keywords";
 const GENERATED_KEYWORD_LIMIT = 250;
@@ -70,6 +73,13 @@ export function buildKeywordGenerationInput(app: AppKeywordMetadata): string {
     category: app.category ?? "",
     description: app.description?.slice(0, 2_500) ?? "",
   });
+}
+
+export class InvalidKeywordError extends Error {
+  constructor(message = "keyword is invalid") {
+    super(message);
+    this.name = "InvalidKeywordError";
+  }
 }
 
 function normalizeKeyword(raw: string): string | null {
@@ -214,6 +224,80 @@ export async function removeTrackedApp(
   await dbUntrackApp(getDb(), appId, store, country);
 }
 
+function requireNormalizedKeyword(raw: string): string {
+  const normalized = normalizeKeyword(raw);
+  if (!normalized) throw new InvalidKeywordError();
+  return normalized;
+}
+
+export async function addCustomKeywordToTrackedApp(
+  trackedAppId: string,
+  keyword: string,
+  country: string,
+): Promise<TrackedAppRankingsResult | null> {
+  const normalized = requireNormalizedKeyword(keyword);
+
+  const db = getDb();
+  const tracked = await getTrackedAppById(db, trackedAppId);
+  if (!tracked) return null;
+
+  const market = country.toUpperCase();
+  const generated = await listGeneratedKeywordsForTrackedApp(db, trackedAppId);
+  if (generated.some((row) => row.keyword === normalized && (row.source === "ai" || row.country === market))) {
+    return listRankingsForTrackedApp(trackedAppId, { country: market });
+  }
+
+  await getKeywordDifficulty(normalized, market, tracked.store, { forceRefresh: true });
+  await addKeywordForTrackedApp(db, {
+    trackedAppId,
+    appId: tracked.appId,
+    store: tracked.store,
+    country: market,
+    keyword: normalized,
+    inputHash: `custom:${market}`,
+    source: "custom",
+  });
+
+  return listRankingsForTrackedApp(trackedAppId, { country: market, forceRefresh: true });
+}
+
+export async function removeKeywordFromTrackedApp(
+  trackedAppId: string,
+  keyword: string,
+  country: string,
+): Promise<TrackedAppRankingsResult | null> {
+  const normalized = requireNormalizedKeyword(keyword);
+
+  const db = getDb();
+  const tracked = await getTrackedAppById(db, trackedAppId);
+  if (!tracked) return null;
+
+  const market = country.toUpperCase();
+  const generated = await listGeneratedKeywordsForTrackedApp(db, trackedAppId);
+  const row = generated.find(
+    (entry) => entry.keyword === normalized && entry.source === "custom" && entry.country === market,
+  ) ?? generated.find((entry) => entry.keyword === normalized && entry.source === "ai");
+  if (row) {
+    await deleteKeywordForTrackedApp(db, trackedAppId, row.country, normalized);
+  }
+  return listRankingsForTrackedApp(trackedAppId, { country: market });
+}
+
+export async function findSimilarTrackedAppKeywords(
+  trackedAppId: string,
+  keyword: string,
+  country: string,
+  limit = 8,
+): Promise<string[] | null> {
+  const normalized = requireNormalizedKeyword(keyword);
+
+  const tracked = await getTrackedAppById(getDb(), trackedAppId);
+  if (!tracked) return null;
+
+  const ideas = await getRelatedKeywords(normalized, country.toUpperCase(), tracked.store, limit);
+  return normalizeGeneratedKeywords(ideas, limit).filter((idea) => idea !== normalized);
+}
+
 export interface TrackedAppRankingsResult {
   rows: TrackedAppKeywordRankingEntry[];
   history: TrackedAppPositionSeries[];
@@ -261,8 +345,11 @@ export async function listRankingsForTrackedApp(
   const tracked = await getTrackedAppById(db, trackedAppId);
   if (!tracked) return null;
 
-  const generated = await listGeneratedKeywordsForTrackedApp(db, trackedAppId);
   const country = (options.country ?? tracked.country).toUpperCase();
+  const generated = filterGeneratedKeywordsForCountry(
+    await listGeneratedKeywordsForTrackedApp(db, trackedAppId),
+    country,
+  );
   let synced = 0;
   let failed = 0;
   let analyzedAt = tracked.lastAnalyzedAt;
@@ -306,7 +393,6 @@ export async function syncRankingsForTrackedAppMarkets(
   const tracked = await getTrackedAppById(db, trackedAppId);
   if (!tracked) return null;
 
-  const generated = await listGeneratedKeywordsForTrackedApp(db, trackedAppId);
   const valid = new Set<string>(TRACKED_APP_RANK_MARKETS);
   const countries = (options.countries ?? TRACKED_APP_RANK_MARKETS)
     .map((c) => c.toUpperCase())
@@ -326,6 +412,10 @@ export async function syncRankingsForTrackedAppMarkets(
   });
 
   for (const country of countries) {
+    const generated = filterGeneratedKeywordsForCountry(
+      await listGeneratedKeywordsForTrackedApp(db, trackedAppId),
+      country,
+    );
     const result = await syncRankingsForMarket(db, tracked, generated, country, observedAt);
     synced += result.synced;
     failed += result.failed;

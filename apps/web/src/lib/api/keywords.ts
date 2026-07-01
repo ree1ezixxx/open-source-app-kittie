@@ -231,6 +231,58 @@ export async function fetchTrackedAppRankingsWithHistory(
   };
 }
 
+export async function addTrackedAppKeyword(
+  trackedAppId: string,
+  keyword: string,
+  country = "US",
+): Promise<TrackedAppRankingsPayload> {
+  const res = await fetch(`${BASE}/keywords/tracked-apps/${trackedAppId}/keywords`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ keyword, country }),
+  });
+  if (!res.ok) throw new Error(`Add keyword failed (${res.status})`);
+  const body = (await res.json()) as {
+    data: TrackedAppKeywordRanking[];
+    meta?: { history?: TrackedAppPositionSeries[] };
+  };
+  return {
+    rankings: body.data.map((row) => ({ ...row, topApps: [...(row.topApps ?? [])].sort((a, b) => a.rank - b.rank) })),
+    history: body.meta?.history ?? [],
+  };
+}
+
+export async function removeTrackedAppKeyword(
+  trackedAppId: string,
+  keyword: string,
+  country = "US",
+): Promise<TrackedAppRankingsPayload> {
+  const q = new URLSearchParams({ keyword, country });
+  const res = await fetch(`${BASE}/keywords/tracked-apps/${trackedAppId}/keywords?${q}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(`Remove keyword failed (${res.status})`);
+  const body = (await res.json()) as {
+    data: TrackedAppKeywordRanking[];
+    meta?: { history?: TrackedAppPositionSeries[] };
+  };
+  return {
+    rankings: body.data.map((row) => ({ ...row, topApps: [...(row.topApps ?? [])].sort((a, b) => a.rank - b.rank) })),
+    history: body.meta?.history ?? [],
+  };
+}
+
+export async function fetchTrackedAppSimilarKeywords(
+  trackedAppId: string,
+  keyword: string,
+  country = "US",
+  signal?: AbortSignal,
+): Promise<string[]> {
+  const q = new URLSearchParams({ keyword, country });
+  const res = await fetch(`${BASE}/keywords/tracked-apps/${trackedAppId}/keywords/similar?${q}`, { signal });
+  if (!res.ok) throw new Error(`Similar keywords failed (${res.status})`);
+  const body = (await res.json()) as { data: string[] };
+  return body.data;
+}
+
 export async function fetchTrackedAppRankings(
   trackedAppId: string,
   signal?: AbortSignal,

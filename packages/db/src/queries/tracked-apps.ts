@@ -33,6 +33,7 @@ export interface GeneratedTrackedAppKeyword {
   store: Store;
   country: string;
   keyword: string;
+  source: string;
   createdAt: Date;
 }
 
@@ -162,7 +163,12 @@ export async function replaceGeneratedKeywordsForTrackedApp(
   await db.transaction(async (tx) => {
     await tx
       .delete(trackedAppKeywords)
-      .where(eq(trackedAppKeywords.trackedAppId, input.trackedAppId));
+      .where(
+        and(
+          eq(trackedAppKeywords.trackedAppId, input.trackedAppId),
+          eq(trackedAppKeywords.source, "ai"),
+        ),
+      );
 
     if (input.keywords.length > 0) {
       await tx.insert(trackedAppKeywords).values(
@@ -180,10 +186,100 @@ export async function replaceGeneratedKeywordsForTrackedApp(
       );
     }
 
+    const rows = await tx
+      .select({ id: trackedAppKeywords.id })
+      .from(trackedAppKeywords)
+      .where(eq(trackedAppKeywords.trackedAppId, input.trackedAppId));
+
     await tx
       .update(trackedApps)
-      .set({ generatedKeywordCount: input.keywords.length })
+      .set({ generatedKeywordCount: rows.length })
       .where(eq(trackedApps.id, input.trackedAppId));
+  });
+}
+
+/** Add one user-supplied keyword to a tracked app without replacing AI keywords. */
+export async function addKeywordForTrackedApp(
+  db: Db,
+  input: {
+    trackedAppId: string;
+    appId: string;
+    store: Store;
+    country: string;
+    keyword: string;
+    inputHash: string;
+    source: string;
+  },
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    const country = input.country.toUpperCase();
+    const existing = await tx
+      .select({ id: trackedAppKeywords.id })
+      .from(trackedAppKeywords)
+      .where(
+        and(
+          eq(trackedAppKeywords.trackedAppId, input.trackedAppId),
+          eq(trackedAppKeywords.country, country),
+          eq(trackedAppKeywords.keyword, input.keyword),
+        ),
+      )
+      .limit(1);
+
+    if (existing.length === 0) {
+      await tx
+        .insert(trackedAppKeywords)
+        .values({
+          id: randomUUID(),
+          trackedAppId: input.trackedAppId,
+          appId: input.appId,
+          store: input.store,
+          country,
+          keyword: input.keyword,
+          inputHash: input.inputHash,
+          source: input.source,
+          createdAt: new Date(),
+        });
+    }
+
+    const rows = await tx
+      .select({ id: trackedAppKeywords.id })
+      .from(trackedAppKeywords)
+      .where(eq(trackedAppKeywords.trackedAppId, input.trackedAppId));
+
+    await tx
+      .update(trackedApps)
+      .set({ generatedKeywordCount: rows.length })
+      .where(eq(trackedApps.id, input.trackedAppId));
+  });
+}
+
+/** Remove one keyword from a tracked app's durable keyword set. */
+export async function deleteKeywordForTrackedApp(
+  db: Db,
+  trackedAppId: string,
+  country: string,
+  keyword: string,
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(trackedAppKeywords)
+      .where(
+        and(
+          eq(trackedAppKeywords.trackedAppId, trackedAppId),
+          eq(trackedAppKeywords.country, country.toUpperCase()),
+          eq(trackedAppKeywords.keyword, keyword),
+        ),
+      );
+
+    const rows = await tx
+      .select({ id: trackedAppKeywords.id })
+      .from(trackedAppKeywords)
+      .where(eq(trackedAppKeywords.trackedAppId, trackedAppId));
+
+    await tx
+      .update(trackedApps)
+      .set({ generatedKeywordCount: rows.length })
+      .where(eq(trackedApps.id, trackedAppId));
   });
 }
 
@@ -228,8 +324,17 @@ export async function listGeneratedKeywordsForTrackedApp(
     store: row.store as Store,
     country: row.country,
     keyword: row.keyword,
+    source: row.source,
     createdAt: row.createdAt,
   }));
+}
+
+export function filterGeneratedKeywordsForCountry(
+  generated: GeneratedTrackedAppKeyword[],
+  country: string,
+): GeneratedTrackedAppKeyword[] {
+  const market = country.toUpperCase();
+  return generated.filter((row) => row.source === "ai" || row.country === market);
 }
 
 /** Append one observed Keyword ranking. Null rank means the app was not in the fetched result window. */
@@ -342,7 +447,8 @@ export async function listTrackedAppKeywordRankings(
   if (generated.length === 0) return [];
 
   const market = country?.toUpperCase();
-  const keywordIds = keywordIdsForGeneratedKeywords(generated, market);
+  const visible = market ? filterGeneratedKeywordsForCountry(generated, market) : generated;
+  const keywordIds = keywordIdsForGeneratedKeywords(visible, market);
   const keywordRows = await db
     .select()
     .from(keywords)
@@ -361,11 +467,11 @@ export async function listTrackedAppKeywordRankings(
     .orderBy(desc(keywordRankings.observedAt));
   const latestRankByKeywordId = latestRankObservations(rankingRows);
   const historyByKeywordId = new Map(
-    buildPositionHistorySeries({ generated, rankingRows, country: market })
+    buildPositionHistorySeries({ generated: visible, rankingRows, country: market })
       .map((row) => [row.keywordId, row]),
   );
 
-  return generated.map((row) => {
+  return visible.map((row) => {
     const rowCountry = market ?? row.country;
     const keywordId = makeKeywordLookupId(row.store, rowCountry, row.keyword);
     const metrics = keywordById.has(keywordId) ? keywordRowToDifficulty(keywordById.get(keywordId)!) : null;
@@ -399,7 +505,8 @@ export async function listTrackedAppPositionHistory(
   if (generated.length === 0) return [];
 
   const market = country?.toUpperCase();
-  const keywordIds = keywordIdsForGeneratedKeywords(generated, market);
+  const visible = market ? filterGeneratedKeywordsForCountry(generated, market) : generated;
+  const keywordIds = keywordIdsForGeneratedKeywords(visible, market);
   const rankingRows = await db
     .select({
       keywordId: keywordRankings.keywordId,
@@ -415,7 +522,7 @@ export async function listTrackedAppPositionHistory(
     )
     .orderBy(asc(keywordRankings.observedAt));
 
-  return buildPositionHistorySeries({ generated, rankingRows, country: market });
+  return buildPositionHistorySeries({ generated: visible, rankingRows, country: market });
 }
 
 /** Remove an app from the tracked list. */

@@ -183,6 +183,13 @@
       "when": 1782258607932,
       "tag": "0025_amazing_pepper_potts",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1782897109352,
+      "tag": "0026_strong_tomorrow_man",
+      "breakpoints": true
     }
   ]
 }

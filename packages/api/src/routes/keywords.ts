@@ -14,10 +14,14 @@ import {
   SUPPORTED_MARKETS,
 } from "../services/keyword-service.js";
 import {
+  addCustomKeywordToTrackedApp,
   addTrackedApp,
   addTrackedAppWithProgress,
+  findSimilarTrackedAppKeywords,
+  InvalidKeywordError,
   listRankingsForTrackedApp,
   listTracked as listTrackedApps,
+  removeKeywordFromTrackedApp,
   removeTrackedApp,
   syncRankingsForTrackedAppMarkets,
   type TrackedAppSyncProgress,
@@ -149,6 +153,73 @@ keywordsRouter.get("/tracked-apps/:id/rankings", async (c) => {
       history: result.history,
     },
   });
+});
+
+keywordsRouter.post("/tracked-apps/:id/keywords", async (c) => {
+  const id = c.req.param("id");
+  const body = await c.req.json().catch(() => ({}));
+  const keyword = typeof body.keyword === "string" ? body.keyword.trim() : "";
+  const country = (typeof body.country === "string" && body.country.trim()) || "US";
+  if (!keyword) return c.json({ error: "keyword is required" }, 400);
+
+  try {
+    const result = await addCustomKeywordToTrackedApp(id, keyword, country.toUpperCase());
+    if (!result) return c.json({ error: "tracked app not found" }, 404);
+    return c.json({
+      data: result.rows,
+      meta: {
+        source: "tracked-app-keywords",
+        country: country.toUpperCase(),
+        synced: result.synced,
+        failed: result.failed,
+        analyzedAt: result.analyzedAt?.toISOString() ?? null,
+        history: result.history,
+      },
+    });
+  } catch (error) {
+    if (error instanceof InvalidKeywordError) return c.json({ error: error.message }, 400);
+    throw error;
+  }
+});
+
+keywordsRouter.delete("/tracked-apps/:id/keywords", async (c) => {
+  const id = c.req.param("id");
+  const keyword = c.req.query("keyword")?.trim() ?? "";
+  const country = (c.req.query("country") ?? "US").toUpperCase();
+  if (!keyword) return c.json({ error: "keyword is required" }, 400);
+
+  try {
+    const result = await removeKeywordFromTrackedApp(id, keyword, country);
+    if (!result) return c.json({ error: "tracked app not found" }, 404);
+    return c.json({
+      data: result.rows,
+      meta: {
+        source: "tracked-app-keywords",
+        country,
+        history: result.history,
+      },
+    });
+  } catch (error) {
+    if (error instanceof InvalidKeywordError) return c.json({ error: error.message }, 400);
+    throw error;
+  }
+});
+
+keywordsRouter.get("/tracked-apps/:id/keywords/similar", async (c) => {
+  const id = c.req.param("id");
+  const keyword = c.req.query("keyword")?.trim() ?? "";
+  const country = (c.req.query("country") ?? "US").toUpperCase();
+  const limit = Math.min(Number(c.req.query("limit") ?? 8) || 8, 12);
+  if (!keyword) return c.json({ error: "keyword is required" }, 400);
+
+  try {
+    const data = await findSimilarTrackedAppKeywords(id, keyword, country, limit);
+    if (!data) return c.json({ error: "tracked app not found" }, 404);
+    return c.json({ data, meta: { source: "store-autocomplete", keyword, country } });
+  } catch (error) {
+    if (error instanceof InvalidKeywordError) return c.json({ error: error.message }, 400);
+    throw error;
+  }
 });
 
 keywordsRouter.get("/tracked-apps/:id/rankings/stream", (c) => {
