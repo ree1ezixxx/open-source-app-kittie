@@ -33,6 +33,11 @@ export {
   type MissingIntelligenceSource,
 } from "./intelligence-response.js";
 export {
+  buildCategoryPulseResponse,
+  type BuildCategoryPulseInput,
+  type CategoryPulseAppInput,
+} from "./trends.js";
+export {
   computeDemandSignal,
   type DemandSignal,
   type DemandSignalInput,

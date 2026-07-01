@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { similarRouter } from "./similar.js";
 import { validateRouter } from "./validate.js";
 import { teardownRouter } from "./teardown.js";
+import { trendsRouter } from "./trends.js";
 import { appDetailRouter } from "./app-detail.js";
 
 /**
@@ -13,6 +14,7 @@ import { appDetailRouter } from "./app-detail.js";
 export const appIntelligenceRouter = new Hono();
 
 appIntelligenceRouter.route("/similar", similarRouter);
+appIntelligenceRouter.route("/trends", trendsRouter);
 appIntelligenceRouter.route("/validate", validateRouter);
 appIntelligenceRouter.route("/", appDetailRouter);
 appIntelligenceRouter.route("/", teardownRouter);

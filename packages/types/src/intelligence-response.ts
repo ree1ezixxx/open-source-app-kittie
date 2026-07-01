@@ -103,6 +103,35 @@ export interface IntelligenceResponseEnvelope<
   metadata: IntelligenceResponseMetadata;
 }
 
+export interface TrendAppMovement {
+  reviewGrowth: number | null;
+  reviewGrowthPct: number | null;
+  rankDelta: number | null;
+  growthScore: number | null;
+}
+
+export interface TrendAppResult {
+  rank: number;
+  appId: string;
+  store: string;
+  title: string;
+  developer: string;
+  category: string | null;
+  rating: number | null;
+  reviewCount: number;
+  movement: TrendAppMovement;
+  evidenceIds: string[];
+}
+
+export interface TrendsResponseData {
+  category: string | null;
+  country: string;
+  growthPeriod: string;
+  limit: number;
+  snapshotDate: string | null;
+  apps: TrendAppResult[];
+}
+
 export type ReportFormat = "json" | "markdown" | "html";
 
 export type ReportStatus = "queued" | "running" | "complete" | "partial" | "failed";
