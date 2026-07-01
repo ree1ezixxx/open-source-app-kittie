@@ -4,6 +4,7 @@ import { SUPPORTED_COUNTRIES } from "./mock/fixtures.js";
 import { adsRouter } from "./routes/ads.js";
 import { aiRouter } from "./routes/ai.js";
 import { appEngineRouter } from "./routes/app-engine.js";
+import { appIntelligenceRouter } from "./routes/app-intelligence/index.js";
 import { appsRouter } from "./routes/apps.js";
 import { chartsRouter } from "./routes/charts.js";
 import { builderRouter } from "./routes/builder.js";
@@ -37,6 +38,7 @@ export function createApp() {
   v1.route("/ads", adsRouter);
   v1.route("/ai", aiRouter);
   v1.route("/app-engine", appEngineRouter);
+  v1.route("/app-intelligence", appIntelligenceRouter);
   v1.route("/apps", appsRouter);
   v1.route("/builder", builderRouter);
   v1.route("/charts", chartsRouter);

@@ -5,7 +5,10 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import type { AppSearchParams } from "@kittie/types";
+import type { AppSearchParams, Store } from "@kittie/types";
+import { createBuildContextManager, type ProfileUserValues } from "@kittie/build-context";
+import { synthesizeOpportunity, type MarketApp } from "@kittie/intelligence";
+import { listTools } from "./tools.js";
 
 const API_BASE = process.env.KITTIE_API_URL ?? "http://localhost:3009";
 
@@ -25,208 +28,29 @@ async function apiPost<T>(path: string, body: unknown): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+// Server-wide instructions: tell the connected agent WHEN and WHY to reach for
+// Kittie across tools, so it self-invokes at the right moments (L5 hardening).
+const KITTIE_INSTRUCTIONS = [
+  "Kittie is the market-awareness layer for building a mobile app. Use it BEFORE",
+  "and DURING a build to ground product decisions in real App Store evidence —",
+  "never guess the market.",
+  "",
+  "Reach for it when you: validate whether an app idea is worth building, choose",
+  "which feature to implement next, name/position the app for ASO, study what real",
+  "users of competitors complain about, or check momentum in a niche.",
+  "",
+  "Honesty: download/revenue figures are MODELLED ESTIMATES (labelled). Blocked or",
+  "un-fetched sources return empty with a reason — never fabricated. Treat an empty",
+  "result as 'not collected', not as a market fact (e.g. no Meta ads != no demand).",
+].join("\n");
+
 const server = new Server(
-  { name: "kittie", version: "0.2.0" },
-  { capabilities: { tools: {} } },
+  { name: "kittie", version: "0.3.0" },
+  { capabilities: { tools: {} }, instructions: KITTIE_INSTRUCTIONS },
 );
 
-// NOTE on data honesty (true across every tool): download and revenue figures are
-// MODELLED ESTIMATES, labelled as such — not ground truth. Blocked sources (e.g. Meta
-// ads) return empty, never fabricated. App ids look like `apple:123456789` / `google:com.x`.
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: [
-    {
-      name: "search_apps",
-      description:
-        "Search and rank the mobile-app catalog (iOS + Android) by text, category, store, market, " +
-        "modelled metrics, growth and presence signals. Returns a paginated list, each row carrying a " +
-        "live growth score and a review-count trend. Downloads/revenue are MODELLED estimates. Use this " +
-        "to find or screen apps; for the fastest-rising opportunities use find_rising_apps instead.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          search: { type: "string", description: "Substring match on title/developer/description." },
-          source: { type: "string", enum: ["apple", "google"], description: "Limit to one store." },
-          categories: { type: "string", description: "CSV of exact store categories." },
-          countries: { type: "string", description: "CSV ISO markets (default US view)." },
-          sortBy: {
-            type: "string",
-            enum: ["growth", "revenue", "downloads", "reviews", "rating", "trending", "rankDelta", "newest", "released", "updated"],
-            description: "Sort key. growth/revenue/downloads/trending/rankDelta are computed live.",
-          },
-          sortOrder: { type: "string", enum: ["asc", "desc"] },
-          growthPeriod: { type: "string", enum: ["7d", "14d", "30d", "60d", "90d"], description: "Window for growth scoring." },
-          growthType: { type: "string", enum: ["all", "positive", "negative"] },
-          minRevenue: { type: "number", description: "Min modelled monthly revenue (USD)." },
-          minDownloads: { type: "number", description: "Min modelled monthly downloads." },
-          minRating: { type: "number", description: "Min average rating (0–5)." },
-          minReviews: { type: "number" },
-          priceType: { type: "string", enum: ["all", "free", "paid"] },
-          releasedAfter: { type: "number", description: "Unix seconds — released on/after." },
-          hasMetaAds: { type: "boolean", description: "Only apps with Meta ad activity (may be empty pending ingest)." },
-          limit: { type: "number", description: "Page size (≤100)." },
-          cursor: { type: "string", description: "Pagination cursor from a prior response." },
-        },
-      },
-    },
-    {
-      name: "find_rising_apps",
-      description:
-        "Find fast-rising, first-mover app opportunities: apps with the strongest positive growth over a " +
-        "window, returned with their growth %, chart rank movement and modelled revenue/downloads. This is " +
-        "the headline 'is this a rising opportunity?' verb — a thin, opinionated wrapper over search_apps " +
-        "(sortBy=growth, positive growth only). Narrow by category, store or market.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          category: { type: "string", description: "Single category to scope to (optional)." },
-          source: { type: "string", enum: ["apple", "google"] },
-          country: { type: "string", description: "ISO market (default US)." },
-          growthPeriod: { type: "string", enum: ["7d", "14d", "30d", "60d", "90d"], default: "30d" },
-          minRevenue: { type: "number", description: "Optional floor on modelled monthly revenue (USD)." },
-          limit: { type: "number", default: 25 },
-        },
-      },
-    },
-    {
-      name: "get_trending_charts",
-      description:
-        "Top store rankings (Trending) for a store/type/market, with each app's day-over-day rank movement. " +
-        "Resolves the latest clean ranking from chart snapshots; returns empty (date:null) when there is no " +
-        "clean source — never a fabricated chart. Use for 'what's #1 in Finance on the US App Store today'.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          store: { type: "string", enum: ["apple", "google"] },
-          type: { type: "string", enum: ["free", "paid", "grossing"], default: "free" },
-          country: { type: "string", default: "US" },
-          category: { type: "string", description: "Genre for a sub-chart; omit for overall." },
-          limit: { type: "number", default: 100, description: "Rows (≤100)." },
-        },
-        required: ["store"],
-      },
-    },
-    {
-      name: "get_app_detail",
-      description:
-        "Full profile for one app: listing facts, latest modelled estimates, growth, and signals. " +
-        "Pass an id from search_apps/find_rising_apps (e.g. `apple:123456789`).",
-      inputSchema: {
-        type: "object",
-        properties: { id: { type: "string" } },
-        required: ["id"],
-      },
-    },
-    {
-      name: "get_app_history",
-      description:
-        "Daily historical series for one app (review count, rating, chart rank) — the raw trend behind the " +
-        "growth/rank-movement signals. Pass an app id.",
-      inputSchema: {
-        type: "object",
-        properties: { id: { type: "string" } },
-        required: ["id"],
-      },
-    },
-    {
-      name: "get_keyword_difficulty",
-      description:
-        "ASO difficulty for a single keyword in a market: how hard it is to rank for, with the supporting " +
-        "signal. Use to size an ASO opportunity before committing to a keyword.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          keyword: { type: "string" },
-          country: { type: "string", default: "US" },
-          store: { type: "string", enum: ["apple", "google"], default: "apple" },
-        },
-        required: ["keyword"],
-      },
-    },
-    {
-      name: "batch_keyword_difficulty",
-      description: "ASO difficulty for many keywords at once (each: keyword + optional country/store). Cheaper than N single calls.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          keywords: {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                keyword: { type: "string" },
-                country: { type: "string" },
-                store: { type: "string", enum: ["apple", "google"] },
-              },
-              required: ["keyword"],
-            },
-          },
-        },
-        required: ["keywords"],
-      },
-    },
-    {
-      name: "get_keyword_markets",
-      description:
-        "Cross-market ASO metrics for one keyword — its difficulty across many countries at once, the " +
-        "opportunity-finder for 'which market is this keyword easiest in'.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          keyword: { type: "string" },
-          store: { type: "string", enum: ["apple", "google"], default: "apple" },
-          countries: { type: "string", description: "CSV ISO markets (≤16); omit for the supported set." },
-        },
-        required: ["keyword"],
-      },
-    },
-    {
-      name: "get_related_keywords",
-      description: "Related keyword ideas for a seed (store autocomplete). Feed the results to batch_keyword_difficulty to score them.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          keyword: { type: "string" },
-          country: { type: "string", default: "US" },
-          store: { type: "string", enum: ["apple", "google"], default: "apple" },
-          limit: { type: "number", default: 20 },
-        },
-        required: ["keyword"],
-      },
-    },
-    {
-      name: "get_supported_countries",
-      description: "List the ISO market codes covered for ASO/chart lookups.",
-      inputSchema: { type: "object", properties: {} },
-    },
-    {
-      name: "get_app_reviews",
-      description:
-        "Recent user reviews for an app, each with stored sentiment and topic/improvement-area tags — the " +
-        "raw material for 'what do users complain about'. Pass an app id.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          appId: { type: "string" },
-          country: { type: "string", default: "US" },
-          limit: { type: "number", default: 50, description: "Max reviews (≤500)." },
-        },
-        required: ["appId"],
-      },
-    },
-    {
-      name: "clone_ios_app",
-      description:
-        "Generate a complete, buildable SwiftUI iOS app that clones a trending app's core UX. " +
-        "Returns an app blueprint plus every source file (project.yml + Swift) for an xcodegen project, " +
-        "ready to write to disk and `xcodegen generate && xcodebuild`. Pass the app id from search_apps/get_app_detail.",
-      inputSchema: {
-        type: "object",
-        properties: { appId: { type: "string" } },
-        required: ["appId"],
-      },
-    },
-  ],
+  tools: listTools(),
 }));
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
@@ -355,6 +179,84 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!appId) throw new Error("appId is required");
         result = await apiPost("/api/v1/clone/ios", { appId });
         break;
+      }
+      case "research_market_opportunity": {
+        const { niche, source, country = "US", limit = 25 } = (args ?? {}) as {
+          niche?: string;
+          source?: string;
+          country?: string;
+          limit?: number;
+        };
+        if (!niche) throw new Error("niche is required");
+        const qs = new URLSearchParams({ search: niche, countries: country, limit: String(Math.min(limit, 50)) });
+        if (source) qs.set("source", source);
+        const res = await apiGet<{ data?: MarketApp[] }>(`/api/v1/apps?${qs}`);
+        const apps = (res.data ?? []).map((a) => ({
+          id: a.id,
+          store: a.store,
+          title: a.title,
+          rating: a.rating,
+          reviewCount: a.reviewCount,
+        }));
+        // Read context once: rails point at start_mobile_build only when none exists,
+        // and a verdict is recorded back into the context when one does (close the loop).
+        const mgr = createBuildContextManager();
+        const hasContext = mgr.exists();
+        const packet = synthesizeOpportunity({
+          niche,
+          apps,
+          reviewThemes: null,
+          observedAt: new Date().toISOString(),
+          snapshotId: `snap_${Date.now()}`,
+          hasBuildContext: hasContext,
+        });
+        if (hasContext) {
+          // Non-fatal: a context-write failure must never fail the research call itself.
+          try {
+            mgr.recordDecision(packet);
+          } catch {
+            /* swallow — the verdict is still returned to the agent */
+          }
+        }
+        return {
+          content: [{ type: "text", text: JSON.stringify(packet, null, 2) }],
+          structuredContent: packet as unknown as Record<string, unknown>,
+        };
+      }
+      case "start_mobile_build": {
+        const a = (args ?? {}) as {
+          idea?: string;
+          audience?: string;
+          platforms?: string[];
+          markets?: string[];
+          monetisation?: string;
+          constraints?: string[];
+        };
+        if (!a.idea) throw new Error("idea is required");
+        const profile: Partial<ProfileUserValues> = { idea: a.idea };
+        if (a.audience != null) profile.audience = a.audience;
+        if (a.platforms) profile.platforms = a.platforms as Store[];
+        if (a.markets) profile.markets = a.markets;
+        if (a.monetisation != null) profile.monetisation = a.monetisation;
+        if (a.constraints) profile.constraints = a.constraints;
+        const mgr = createBuildContextManager();
+        if (mgr.exists()) mgr.update({ profile });
+        else mgr.create({ profile });
+        const digest = mgr.get();
+        return {
+          content: [{ type: "text", text: JSON.stringify(digest, null, 2) }],
+          structuredContent: digest as unknown as Record<string, unknown>,
+        };
+      }
+      case "get_build_context": {
+        const { include } = (args ?? {}) as { include?: Array<"decisions" | "full"> };
+        const mgr = createBuildContextManager();
+        if (!mgr.exists()) throw new Error("No build context yet — call start_mobile_build first.");
+        const digest = mgr.get({ include });
+        return {
+          content: [{ type: "text", text: JSON.stringify(digest, null, 2) }],
+          structuredContent: digest as unknown as Record<string, unknown>,
+        };
       }
       default:
         throw new Error(`Unknown tool: ${name}`);

@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "3492774d-4013-4462-a478-4d04a84ba157",
+  "id": "d7df71b5-ee30-4476-98de-b7cd30b0291a",
   "prevId": "cc33a128-3025-4c8b-936f-e5d55655fe3a",
   "tables": {
     "ai_generations": {
@@ -693,6 +693,13 @@
           "name": "apps_last_attempted_idx",
           "columns": [
             "last_attempted_at"
+          ],
+          "isUnique": false
+        },
+        "apps_released_at_idx": {
+          "name": "apps_released_at_idx",
+          "columns": [
+            "released_at"
           ],
           "isUnique": false
         }
@@ -1740,7 +1747,6 @@
           "name": "tracked_app_keywords_unique_idx",
           "columns": [
             "tracked_app_id",
-            "country",
             "keyword"
           ],
           "isUnique": true

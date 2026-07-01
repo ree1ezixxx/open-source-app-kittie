@@ -1,3 +1,11 @@
+export * from "./provenance.js";
+export * from "./decision-packet.js";
+export * from "./app-intelligence.js";
+
+// `export *` re-exports but creates no local binding — import the name explicitly
+// so `AppDetail.decisionPacket` can reference it as a type within this module.
+import type { DecisionPacket } from "./decision-packet.js";
+
 /** Store identifier — one App per store listing. */
 export type Store = "apple" | "google";
 
@@ -100,7 +108,11 @@ export interface AppSearchParams {
   languages?: string;
   developer?: string;
   releasedAfter?: number;
+  /** Epoch seconds — only apps released on/before this date. Pairs with releasedAfter for a range. */
+  releasedBefore?: number;
   updatedAfter?: number;
+  /** Epoch seconds — only apps updated on/before this date. Pairs with updatedAfter for a range. */
+  updatedBefore?: number;
   sortBy?: AppSortField;
   sortOrder?: SortOrder;
   limit?: number;
@@ -156,6 +168,14 @@ export interface AppDetail extends AppListItem {
   appleSearchAds: AppleSearchAd[];
   creators: CreatorPartnership[];
   historicals: AppHistoricalPoint[];
+  /**
+   * Market-opportunity decision for this app's category, synthesised from
+   * observed category peers (`synthesizeOpportunity`). Optional — omitted when
+   * the app has no category to reason about. Confidence/coverage are computed,
+   * never decorative: blocked sources (ad data, un-mined review themes) are
+   * declared in `coverage.missing`, never fabricated.
+   */
+  decisionPacket?: DecisionPacket;
 }
 
 export interface AppIap {
@@ -252,3 +272,11 @@ export interface PaginatedResponse<T> {
     totalCount: number;
   };
 }
+
+export {
+  defaultExploreAppQuery,
+  landingWarmQueries,
+  pulseAppQueries,
+  releasedAfterDaysAgo,
+  sevenDayReleasedAfterEpoch,
+} from "./landing-queries.js";

@@ -5,6 +5,7 @@ const KEY = "kittie-theme";
 
 function read(): Theme {
   const saved = localStorage.getItem(KEY);
+  // Canonical UI is LIGHT-first (the App Teardown design); dark stays available via toggle.
   return saved === "dark" ? "dark" : "light";
 }
 

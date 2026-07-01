@@ -61,9 +61,17 @@ export function matchesSearch(row: ScoredAppRow, params: AppSearchParams): boole
     const released = item.releasedAt ? Math.floor(new Date(item.releasedAt).getTime() / 1000) : null;
     if (released == null || released < params.releasedAfter) return false;
   }
+  if (params.releasedBefore != null) {
+    const released = item.releasedAt ? Math.floor(new Date(item.releasedAt).getTime() / 1000) : null;
+    if (released == null || released > params.releasedBefore) return false;
+  }
   if (params.updatedAfter != null) {
     const updated = item.updatedAt ? Math.floor(new Date(item.updatedAt).getTime() / 1000) : null;
     if (updated == null || updated < params.updatedAfter) return false;
+  }
+  if (params.updatedBefore != null) {
+    const updated = item.updatedAt ? Math.floor(new Date(item.updatedAt).getTime() / 1000) : null;
+    if (updated == null || updated > params.updatedBefore) return false;
   }
 
   if (params.minGrowth != null && (item.growthScore ?? 0) < params.minGrowth) return false;
@@ -101,6 +109,36 @@ export function matchesSearch(row: ScoredAppRow, params: AppSearchParams): boole
   return true;
 }
 
+// ── Keyset pagination cursor ────────────────────────────────────────────────
+// The keyset fast-path (searchAppsFromDb) paginates in SQL with a (sortValue, id)
+// boundary instead of materialising a 5000-row pool. The cursor carries the sort
+// column value of the page's last row + that row's app id. Versioned + base64 JSON.
+// Legacy bare-id cursors (a plain app-id string, not a JSON array) decode to null →
+// the caller resolves position the old way, so mid-session clients never break.
+const KEYSET_CURSOR_VERSION = 1;
+
+export function encodeKeysetCursor(sortValue: number | null, appId: string): string {
+  return Buffer.from(JSON.stringify([KEYSET_CURSOR_VERSION, sortValue, appId])).toString("base64");
+}
+
+export function decodeKeysetCursor(cursor: string | undefined): { sortValue: number | null; appId: string } | null {
+  if (!cursor) return null;
+  try {
+    const parsed: unknown = JSON.parse(Buffer.from(cursor, "base64").toString("utf8"));
+    if (
+      !Array.isArray(parsed) ||
+      parsed[0] !== KEYSET_CURSOR_VERSION ||
+      !(typeof parsed[1] === "number" || parsed[1] === null) ||
+      typeof parsed[2] !== "string"
+    ) {
+      return null;
+    }
+    return { sortValue: parsed[1], appId: parsed[2] };
+  } catch {
+    return null;
+  }
+}
+
 /** Growth score filters run in-memory only — SQL total must not include them. */
 export function hasLiveGrowthFilter(params: AppSearchParams): boolean {
   return (
@@ -109,6 +147,49 @@ export function hasLiveGrowthFilter(params: AppSearchParams): boolean {
     params.minGrowth != null ||
     params.maxGrowth != null
   );
+}
+
+/** True when matchesSearch could drop pool rows in JS — on a modelled estimate
+ *  (downloads/revenue/growth), a relation/meta flag (ads/creators/email/website), or a
+ *  field not 1:1 with the SQL candidate filters (free-text search, languages, price,
+ *  released/updated windows). When NONE of these are set, the SQL candidate set already
+ *  IS the result set, so the page can be sliced from the SQL order without scoring the
+ *  whole pool. (minRating/maxRating, min/maxReviews, categories, source, developer are
+ *  applied identically in SQL and re-checked consistently here — they don't disqualify.) */
+export function dropsRowsInMemory(params: AppSearchParams): boolean {
+  return params.search != null || dropsRowsInMemoryExceptSearch(params);
+}
+
+/** dropsRowsInMemory minus the free-text-search check — the FTS keyset handles the search
+ *  text in SQL, so it only needs the OTHER in-memory-dropping filters to be absent. */
+function dropsRowsInMemoryExceptSearch(params: AppSearchParams): boolean {
+  return (
+    params.minDownloads != null ||
+    params.maxDownloads != null ||
+    params.minRevenue != null ||
+    params.maxRevenue != null ||
+    hasLiveGrowthFilter(params) ||
+    params.hasMetaAds != null ||
+    params.hasAppleAds != null ||
+    params.hasCreators != null ||
+    params.hasEmails != null ||
+    params.hasWebsite != null ||
+    params.languages != null ||
+    params.priceType != null ||
+    params.releasedAfter != null ||
+    params.releasedBefore != null ||
+    params.updatedAfter != null ||
+    params.updatedBefore != null
+  );
+}
+
+/** The FTS search candidate can be ordered by the sort column + scored PAGE-ONLY (instead
+ *  of scoring the 5000-row relevance pool) when a free-text search is the ONLY in-memory-
+ *  dropping filter AND it uses the default text fields — then matchesSearch (which passes
+ *  on the FTS title/developer match) drops nothing, so the SQL page IS the result page.
+ *  The caller also requires keysetColumn(params) != null. */
+export function searchKeysetSafe(params: AppSearchParams): boolean {
+  return params.search != null && params.textSearchFields == null && !dropsRowsInMemoryExceptSearch(params);
 }
 
 function sortValue(item: AppListItem, sortBy: AppSearchParams["sortBy"]): number | string | null {

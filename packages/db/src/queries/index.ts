@@ -20,8 +20,11 @@ export {
 } from "./snapshot-assembly.js";
 export {
   appsWithAppleAds,
+  appsWithAppleAdsForIds,
   appsWithCreators,
+  appsWithCreatorsForIds,
   getAppById as getAppRowById,
+  getRecentReviewTagsForApps,
   listAppIaps,
   listAppsByIds,
   listFreshSet,

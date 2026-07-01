@@ -36,7 +36,7 @@ export function PageShell({
           <div className="page-title-wrap">
             {icon && <div className="page-icon">{icon}</div>}
             <div>
-              <div className="page-title">{title}</div>
+              <h1 className="page-title">{title}</h1>
               {sub && <div className="page-sub">{sub}</div>}
             </div>
           </div>

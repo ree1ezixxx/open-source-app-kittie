@@ -14,9 +14,11 @@ import { inArray, count } from "drizzle-orm";
 import { lookupAppleApp } from "@kittie/ingest";
 import {
   type AppSignals,
+  type MarketApp,
   estimateDownloads,
   estimateRevenue,
   GROWTH_PERIOD_DAYS,
+  synthesizeOpportunity,
 } from "@kittie/intelligence";
 import type {
   AppDetail,
@@ -26,6 +28,7 @@ import type {
   CreatorPartnership,
   AppListItem,
   AppSearchParams,
+  DecisionPacket,
   MetaAdCreative,
   PaginatedResponse,
   Review,
@@ -36,14 +39,27 @@ import {
   invalidateAppReadCaches as invalidateAppQueryReadCaches,
   getRankDeltasFor,
   getSparklinesFor,
+  keysetColumn,
   listCategoryFacetsFromDb,
+  poolIsInFinalOrder,
   searchAppCandidates,
+  searchAppCandidatesKeyset,
+  searchAppCandidatesKeysetFts,
 } from "./app-query.js";
-import { matchesSearch, paginateApps, sortApps, hasLiveGrowthFilter } from "./filter-sort.js";
+import {
+  decodeKeysetCursor,
+  dropsRowsInMemory,
+  encodeKeysetCursor,
+  hasLiveGrowthFilter,
+  matchesSearch,
+  paginateApps,
+  searchKeysetSafe,
+  sortApps,
+} from "./filter-sort.js";
 
 export type { CategoryFacet } from "./app-query.js";
 
-const APP_SEARCH_CACHE_TTL_MS = 60_000;
+const APP_SEARCH_CACHE_TTL_MS = 300_000;
 const APP_SEARCH_CACHE_MAX = 100;
 const appSearchCache = new Map<string, { value: PaginatedResponse<AppListItem>; at: number }>();
 
@@ -131,11 +147,74 @@ export async function searchAppsFromDb(params: AppSearchParams): Promise<Paginat
   if (cached && Date.now() - cached.at < APP_SEARCH_CACHE_TTL_MS) return cached.value;
 
   const period = params.growthPeriod ?? "7d";
+
+  // Keyset fast-path: a SQL-native DESC sort whose raw column orders byte-identically to
+  // the legacy sortApps path (keysetColumn != null), no in-memory-dropping filter, and
+  // either no cursor or a keyset (tuple) cursor. Paginate in SQL with a (sortValue, id)
+  // boundary + LIMIT pageSize — the candidate scan is ~50 rows, not the 5000-row
+  // POOL_CAP. A legacy bare-id cursor decodes to null and falls through to the pool path
+  // below, so a mid-session client holding an old cursor keeps working unchanged.
+  const keysetCursor = decodeKeysetCursor(params.cursor);
+  if (
+    keysetColumn(params) !== null &&
+    (!dropsRowsInMemory(params) || searchKeysetSafe(params)) &&
+    (params.cursor == null || keysetCursor !== null)
+  ) {
+    const limit = params.limit ?? 20;
+    // FTS keyset when the (only) drop-filter is a free-text search; the plain keyset
+    // candidate otherwise. Both return a single keyset page ordered by the sort column.
+    const kpool = params.search
+      ? await searchAppCandidatesKeysetFts(params, keysetCursor, limit)
+      : await searchAppCandidatesKeyset(params, keysetCursor, limit);
+    if (!kpool) return rememberAppSearch(cacheKey, { data: [], pagination: { nextCursor: null, totalCount: 0 } });
+    const rows = await buildScoredAppRows(kpool.ids, period, kpool.marketCountry, new Map<string, number>());
+    const data = rows.map((r) => r.item);
+    const last = data.at(-1);
+    // Full page → there may be more; short page → end. (Keyset removes the legacy
+    // POOL_CAP pagination ceiling, so deep pages past ~5000 now continue instead of
+    // resetting — a strict improvement over the old behavior.) The cursor's sortValue is
+    // the CANDIDATE scan's column value (kpool.sortValues), not the scored item's, so a
+    // newer partial-day snapshot can't shift the boundary and re-emit rows.
+    const nextCursor =
+      data.length === limit && last ? encodeKeysetCursor(kpool.sortValues.get(last.id) ?? null, last.id) : null;
+    const sparklines = await getSparklinesFor(data.map((d) => d.id), kpool.marketCountry);
+    return rememberAppSearch(cacheKey, {
+      data: data.map((item) => ({ ...item, sparkline: sparklines.get(item.id) ?? [] })),
+      pagination: { nextCursor, totalCount: kpool.totalCount },
+    });
+  }
+
   const pool = await searchAppCandidates(params);
   if (!pool) return rememberAppSearch(cacheKey, { data: [], pagination: { nextCursor: null, totalCount: 0 } });
 
   const { totalCount, ids, marketCountry } = pool;
-  const rankDeltas = await getRankDeltasFor(ids, marketCountry);
+
+  // Fast path: when the SQL candidate set already IS the result set in final order
+  // (SQL-native DESC sort, no in-memory-dropping filter), the page can be sliced
+  // straight off `ids` and only those ~50 rows scored — instead of scoring the whole
+  // ~5000-row pool just to slice 50. Same rows, same order; cuts cold p95 ~3-4×.
+  if (poolIsInFinalOrder(params) && !dropsRowsInMemory(params)) {
+    const limit = params.limit ?? 20;
+    let start = 0;
+    if (params.cursor) {
+      const idx = ids.indexOf(params.cursor);
+      start = idx >= 0 ? idx + 1 : 0;
+    }
+    const pageIds = ids.slice(start, start + limit);
+    const pageRows = await buildScoredAppRows(pageIds, period, marketCountry, new Map<string, number>());
+    const pageData = pageRows.map((r) => r.item);
+    const pageNextCursor = start + limit < ids.length ? (pageData.at(-1)?.id ?? null) : null;
+    const pageSparklines = await getSparklinesFor(pageData.map((d) => d.id), marketCountry);
+    return rememberAppSearch(cacheKey, {
+      data: pageData.map((item) => ({ ...item, sparkline: pageSparklines.get(item.id) ?? [] })),
+      pagination: { nextCursor: pageNextCursor, totalCount },
+    });
+  }
+
+  const rankDeltas =
+    params.sortBy === "rankDelta"
+      ? await getRankDeltasFor(ids, marketCountry)
+      : new Map<string, number>();
   const rows = await buildScoredAppRows(ids, period, marketCountry, rankDeltas);
   const filtered = rows.filter((row) => matchesSearch(row, params));
   const sorted = sortApps(filtered, params);
@@ -237,6 +316,50 @@ async function backfillListingFacts<
   }
 }
 
+/**
+ * Synthesise this app's category-opportunity DecisionPacket from OBSERVED peers:
+ * the app's category is the niche, its most-reviewed category peers are the
+ * competitor sample. Honest by construction — ad data and un-mined review themes
+ * are declared in `coverage.missing` (so coverage is never `full`), confidence
+ * scales with the real peer sample, and a category-less app yields no packet
+ * (we never invent a niche). Never throws: a peer-fetch/synthesis failure returns
+ * undefined so the detail fetch is unaffected.
+ */
+async function buildCategoryOpportunity(
+  category: string | null,
+  selfId: string,
+  snapshotId: string,
+  observedAt: string,
+): Promise<DecisionPacket | undefined> {
+  if (!category) return undefined;
+  try {
+    const peerRes = await searchAppsFromDb({
+      categories: category,
+      sortBy: "reviews",
+      sortOrder: "desc",
+      limit: 50,
+    });
+    const peers: MarketApp[] = peerRes.data
+      .filter((p) => p.id !== selfId)
+      .map((p) => ({
+        id: p.id,
+        store: p.store,
+        title: p.title,
+        rating: p.rating,
+        reviewCount: p.reviewCount,
+      }));
+    return synthesizeOpportunity({
+      niche: category,
+      apps: peers,
+      reviewThemes: null,
+      observedAt,
+      snapshotId,
+    });
+  } catch {
+    return undefined;
+  }
+}
+
 export async function getAppByIdFromDb(id: string): Promise<AppDetail | null> {
   const db = getDb();
   const row = await getAppRowById(db, id);
@@ -267,8 +390,16 @@ export async function getAppByIdFromDb(id: string): Promise<AppDetail | null> {
     revenueEstimate: s.revenueEstimate,
   }));
 
+  const decisionPacket = await buildCategoryOpportunity(
+    list.category,
+    id,
+    ctx.latest.id,
+    ctx.latest.createdAt.toISOString(),
+  );
+
   return {
     ...list,
+    decisionPacket,
     description: app.description,
     screenshotUrls: parseJsonArray(app.screenshotUrls),
     websiteUrl: app.websiteUrl,

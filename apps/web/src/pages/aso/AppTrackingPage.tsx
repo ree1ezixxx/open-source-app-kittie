@@ -832,12 +832,6 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
                 <div className="opp-list">
                   {[0, 1, 2, 3].map((i) => <div key={i} className="skel" style={{ height: 46, borderRadius: 8 }} />)}
                 </div>
-              ) : rankings.length === 0 && !rankError ? (
-                <div className="aso-empty">
-                  <IconRank />
-                  <div className="t">No generated keywords yet</div>
-                  <div className="s">Add or refresh the app to sync live rankings across {MARKET_COUNT} markets.</div>
-                </div>
               ) : (
                 <>
                   <form
@@ -857,37 +851,45 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
                       <IconPlus /> Add keyword
                     </button>
                   </form>
-                  <div className="search track-rank-search">
-                    <IconSearch />
-                    <input value={rankSearch} onChange={(e) => setRankSearch(e.target.value)} placeholder="Search keywords…" spellCheck={false} />
-                  </div>
-                  {visibleRankings.length === 0 ? (
+                  {rankings.length === 0 && !rankError ? (
                     <div className="aso-empty">
-                      <IconSearch />
-                      <div className="t">No matching keywords</div>
-                      <div className="s">Clear the table search to see all generated rankings.</div>
+                      <IconRank />
+                      <div className="t">No generated keywords yet</div>
+                      <div className="s">Add a custom keyword in {rankCountry} or refresh the app to sync live rankings across {MARKET_COUNT} markets.</div>
                     </div>
                   ) : (
-                    <div className="kw-ideas-scroll">
-                      <table className="kw-ideas-table track-rank-table">
-                        <thead>
-                          <tr>
-                            <th>Keyword</th>
-                            <th className={`sortable ${rankSort === "position" ? "on" : ""}`} onClick={() => setRankingSort("position")}>
-                              Position {rankSort === "position" ? rankSortLabel : ""}
-                            </th>
-                            <th className={`sortable ${rankSort === "popularity" ? "on" : ""}`} onClick={() => setRankingSort("popularity")}>
-                              Popularity {rankSort === "popularity" ? rankSortLabel : ""}
-                            </th>
-                            <th className={`sortable ${rankSort === "difficulty" ? "on" : ""}`} onClick={() => setRankingSort("difficulty")}>
-                              Difficulty {rankSort === "difficulty" ? rankSortLabel : ""}
-                            </th>
-                            <th>Growth</th>
-                            <th className="kw-ideas-appshead">Ranking apps</th>
-                            <th>Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
+                    <>
+                      <div className="search track-rank-search">
+                        <IconSearch />
+                        <input value={rankSearch} onChange={(e) => setRankSearch(e.target.value)} placeholder="Search keywords…" spellCheck={false} />
+                      </div>
+                      {visibleRankings.length === 0 ? (
+                        <div className="aso-empty">
+                          <IconSearch />
+                          <div className="t">No matching keywords</div>
+                          <div className="s">Clear the table search to see all generated rankings.</div>
+                        </div>
+                      ) : (
+                        <div className="kw-ideas-scroll">
+                          <table className="kw-ideas-table track-rank-table">
+                            <thead>
+                              <tr>
+                                <th>Keyword</th>
+                                <th className={`sortable ${rankSort === "position" ? "on" : ""}`} onClick={() => setRankingSort("position")}>
+                                  Position {rankSort === "position" ? rankSortLabel : ""}
+                                </th>
+                                <th className={`sortable ${rankSort === "popularity" ? "on" : ""}`} onClick={() => setRankingSort("popularity")}>
+                                  Popularity {rankSort === "popularity" ? rankSortLabel : ""}
+                                </th>
+                                <th className={`sortable ${rankSort === "difficulty" ? "on" : ""}`} onClick={() => setRankingSort("difficulty")}>
+                                  Difficulty {rankSort === "difficulty" ? rankSortLabel : ""}
+                                </th>
+                                <th>Growth</th>
+                                <th className="kw-ideas-appshead">Ranking apps</th>
+                                <th>Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
                           {visibleRankings.map((row) => {
                             const ideas = similar[row.keyword] ?? [];
                             return (
@@ -933,6 +935,8 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
                         </tbody>
                       </table>
                     </div>
+                      )}
+                    </>
                   )}
                 </>
               ))}

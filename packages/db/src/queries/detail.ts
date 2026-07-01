@@ -8,6 +8,7 @@ import {
   metaAds,
   reviews,
 } from "../schema.js";
+import { parseJsonArray } from "./signals.js";
 
 export async function getAppById(db: Db, id: string) {
   const [app] = await db.select().from(apps).where(eq(apps.id, id)).limit(1);
@@ -47,6 +48,53 @@ export async function updateAppListingFacts(
   facts: { fileSizeBytes: number | null; minOsVersion: string | null; sellerName: string | null },
 ): Promise<void> {
   await db.update(apps).set(facts).where(eq(apps.id, id));
+}
+
+/**
+ * Recent review tags (topics + improvement-areas) for a BOUNDED set of apps,
+ * newest-first, capped at `perApp` reviews per app. Powers the similar-apps
+ * "review-topic overlap" pass: two apps whose users complain about the same
+ * things are adjacent/analogue candidates. Selects only the tag columns (never
+ * bodies), so it stays light even for high-review apps. Returns the DISTINCT tag
+ * set seen across each app's latest `perApp` reviews; apps with no reviews are
+ * absent from the map.
+ */
+export async function getRecentReviewTagsForApps(
+  db: Db,
+  ids: string[],
+  perApp = 50,
+): Promise<Map<string, { topics: string[]; improvementAreas: string[] }>> {
+  const out = new Map<string, { topics: string[]; improvementAreas: string[] }>();
+  if (ids.length === 0) return out;
+  const seen = new Map<string, number>();
+  for (let i = 0; i < ids.length; i += 500) {
+    const rows = await db
+      .select({
+        appId: reviews.appId,
+        topics: reviews.topics,
+        improvementAreas: reviews.improvementAreas,
+      })
+      .from(reviews)
+      .where(inArray(reviews.appId, ids.slice(i, i + 500)))
+      .orderBy(desc(reviews.reviewedAt));
+    for (const r of rows) {
+      const n = seen.get(r.appId) ?? 0;
+      if (n >= perApp) continue;
+      seen.set(r.appId, n + 1);
+      let agg = out.get(r.appId);
+      if (!agg) {
+        agg = { topics: [], improvementAreas: [] };
+        out.set(r.appId, agg);
+      }
+      for (const t of parseJsonArray(r.topics)) {
+        if (!agg.topics.includes(t)) agg.topics.push(t);
+      }
+      for (const a of parseJsonArray(r.improvementAreas)) {
+        if (!agg.improvementAreas.includes(a)) agg.improvementAreas.push(a);
+      }
+    }
+  }
+  return out;
 }
 
 export async function loadAppRelations(db: Db, appId: string) {
@@ -106,7 +154,25 @@ export async function appsWithAppleAds(db: Db): Promise<Set<string>> {
   return new Set(rows.map((r) => r.appId));
 }
 
+export async function appsWithAppleAdsForIds(db: Db, ids: string[]): Promise<Set<string>> {
+  if (!ids.length) return new Set();
+  const rows = await db
+    .select({ appId: appleSearchAds.appId })
+    .from(appleSearchAds)
+    .where(inArray(appleSearchAds.appId, ids));
+  return new Set(rows.map((r) => r.appId));
+}
+
 export async function appsWithCreators(db: Db): Promise<Set<string>> {
   const rows = await db.select({ appId: creators.appId }).from(creators);
+  return new Set(rows.map((r) => r.appId));
+}
+
+export async function appsWithCreatorsForIds(db: Db, ids: string[]): Promise<Set<string>> {
+  if (!ids.length) return new Set();
+  const rows = await db
+    .select({ appId: creators.appId })
+    .from(creators)
+    .where(inArray(creators.appId, ids));
   return new Set(rows.map((r) => r.appId));
 }

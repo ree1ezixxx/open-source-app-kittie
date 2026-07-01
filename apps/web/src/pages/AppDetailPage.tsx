@@ -7,10 +7,14 @@ import type { Theme } from "../lib/theme";
 import { categoryColor, pillStyle } from "../lib/palette";
 import { formatCompact, formatMoney, formatRating, formatDate } from "../lib/format";
 import { MetricBar } from "../components/MetricBar";
+import { Segmented } from "../components/Segmented";
+import { TeardownCanvas } from "../components/teardown/TeardownCanvas";
+import { TeardownIntelligence } from "../components/teardown/TeardownIntelligence";
 import { DetailCard, EmptyCard, Fact } from "../components/DetailCard";
+import { DecisionPacketCard } from "../components/DecisionPacketCard";
+import { FreshnessBadge } from "../components/DecisionBadges";
 import { TrendPanel, type ChartMetric } from "../components/TrendPanel";
 import { SimilarApps } from "../components/SimilarApps";
-import { CloneToIosCard } from "../components/detail/CloneToIosCard";
 import { FavoriteToggle } from "../components/FavoriteToggle";
 import { Lightbox } from "../components/Lightbox";
 import {
@@ -26,6 +30,7 @@ import {
   IconMoon,
   IconExternal,
   IconImage,
+  IconVideo,
   IconGlobe,
   IconMessage,
 } from "../icons";
@@ -45,6 +50,15 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
   const [error, setError] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<number | null>(null);
   const [chartMetric, setChartMetric] = useState<ChartMetric>("downloadsEstimate");
+  const [view, setView] = useState<"classic" | "teardown">(() =>
+    typeof sessionStorage !== "undefined" && sessionStorage.getItem("kittie-app-view") === "teardown"
+      ? "teardown"
+      : "classic",
+  );
+  // persist the chosen view so re-rooting (navigating to a competitor) keeps the canvas
+  useEffect(() => {
+    if (typeof sessionStorage !== "undefined") sessionStorage.setItem("kittie-app-view", view);
+  }, [view]);
   const [media, setMedia] = useState<{ status: "probing" | "ready"; working: string[] }>({
     status: "probing",
     working: [],
@@ -70,11 +84,15 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
   }, [id]);
 
   // Canonicalize the URL to the live-format slug (/app/app-<title>-id<storeAppId>).
+  // Guard on app.id === id: during a re-root navigation to a *different* app's /apps/:id,
+  // `app` is briefly the stale previous app — without this guard the effect (which re-runs
+  // because React Router recreates `navigate` on location change) would bounce the URL back
+  // to the stale app's canonical and the re-root would never land.
   useEffect(() => {
-    if (!app) return;
+    if (!app || app.id !== id) return;
     const canonical = `/app/${encodeURIComponent(appSlug(app))}`;
     if (window.location.pathname !== canonical) navigate(canonical, { replace: true });
-  }, [app, navigate]);
+  }, [app, navigate, id]);
 
   // SEO title (live parity).
   useEffect(() => {
@@ -126,6 +144,16 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
         <button className="btn" onClick={() => navigate(-1)}>
           <IconArrowLeft /> Back
         </button>
+        {app && (
+          <Segmented
+            value={view}
+            options={[
+              { id: "classic", label: "Classic" },
+              { id: "teardown", label: "Teardown" },
+            ]}
+            onChange={setView}
+          />
+        )}
         <div className="topbar-spacer" />
         {app && (
           <FavoriteToggle
@@ -150,6 +178,16 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
         </button>
       </div>
 
+      {view === "teardown" && app && !error && !loading ? (
+        // Enrich, don't replace: the canvas stays exactly as-is (bounded height),
+        // with the structured teardown intelligence flowed beneath it.
+        <div className="teardown-view">
+          <div className="teardown-canvas-wrap">
+            <TeardownCanvas app={app} reviews={reviews} />
+          </div>
+          <TeardownIntelligence app={app} />
+        </div>
+      ) : (
       <div className="detail-scroll" ref={scrollRef}>
         {error ? (
           <div className="center-state">
@@ -197,6 +235,28 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
               </div>
             </header>
 
+            {/* decision-first: the one dominant "why this market matters" verdict,
+                above the metric wall. Omitted when the app has no category packet. */}
+            {app.decisionPacket && (
+              <DecisionPacketCard packet={app.decisionPacket} category={app.category} />
+            )}
+
+            {/* truth-style headline stat cards: Creators · Ads · Size · Platforms · Rating */}
+            <div className="detail-stats">
+              <StatCard label="Creators" value={app.creators.length || "—"} />
+              <StatCard label="Meta Ads" value={app.metaAds.length || "—"} />
+              <StatCard
+                label={app.store === "apple" ? "Apple Search Ads" : "Google Play Ads"}
+                value={app.appleSearchAds.length || "—"}
+              />
+              <StatCard label="Size" value={formatBytes(app.fileSizeBytes)} />
+              <StatCard label="Platforms" value={app.store === "apple" ? "iOS" : "Android"} />
+              <StatCard
+                label="Rating"
+                value={app.rating != null ? `${formatRating(app.rating)} (${formatCompact(app.reviewCount)})` : "—"}
+              />
+            </div>
+
             {/* headline metrics — connected bar, click a segment to drive the chart */}
             <MetricBar
               segments={[
@@ -225,6 +285,22 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
                 },
               ]}
             />
+
+            {/* honest provenance: the headline numbers are modelled estimates,
+                tagged with the freshness of the snapshot they were computed from. */}
+            <div className="estimate-note">
+              <IconInfo />
+              <span>
+                Downloads &amp; revenue are <strong>modelled</strong> estimates, not observed.
+              </span>
+              <FreshnessBadge
+                date={
+                  app.historicals.length
+                    ? app.historicals[app.historicals.length - 1]!.date
+                    : null
+                }
+              />
+            </div>
 
             {/* trend chart */}
             <TrendPanel app={app} metric={chartMetric} />
@@ -361,9 +437,6 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
               )}
             </DetailCard>
 
-            {/* clone-to-iOS engine */}
-            <CloneToIosCard appId={app.id} />
-
             {/* similar apps */}
             <DetailCard title="Similar apps">
               <SimilarApps category={app.category} excludeId={app.id} />
@@ -394,6 +467,15 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
               </DetailCard>
             </div>
 
+            {/* organic content — TikTok/Instagram creator videos (truth parity); data-blocked */}
+            <DetailCard title="Organic Content">
+              <EmptyCard
+                icon={<IconVideo />}
+                title="No creator videos"
+                sub="TikTok & Instagram creator videos for this app aren’t ingested yet."
+              />
+            </DetailCard>
+
             {app.historicals.length < 2 && (
               <div className="notice">
                 <IconInfo />
@@ -403,6 +485,7 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
           </div>
         )}
       </div>
+      )}
 
       {app && lightbox !== null && media.working.length > 0 && (
         <Lightbox
@@ -463,6 +546,16 @@ function AiAbout({ appId }: { appId: string }) {
   );
 }
 
+/** Truth-style headline stat card (Creators / Meta Ads / Ads / Size / Platforms / Rating). */
+function StatCard({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="stat-card">
+      <span className="stat-card-label">{label}</span>
+      <span className="stat-card-value">{value}</span>
+    </div>
+  );
+}
+
 function LinkRow({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
   return (
     <div className="link-row">
@@ -476,16 +569,22 @@ function LinkRow({ icon, label, value }: { icon: ReactNode; label: string; value
 function DetailSkeleton() {
   return (
     <div className="detail-inner">
+      <div className="skel" style={{ width: 180, height: 12, marginBottom: 18, borderRadius: 4 }} />
       <div className="hero">
-        <div className="skel" style={{ width: 88, height: 88, borderRadius: 20 }} />
+        <div className="skel" style={{ width: 96, height: 96, borderRadius: 22, flexShrink: 0 }} />
         <div style={{ flex: 1 }}>
-          <div className="skel" style={{ width: "40%", height: 26, marginBottom: 10 }} />
-          <div className="skel" style={{ width: "25%", height: 13, marginBottom: 14 }} />
-          <div className="skel" style={{ width: "55%", height: 22 }} />
+          <div className="skel" style={{ width: "48%", height: 34, marginBottom: 10 }} />
+          <div className="skel" style={{ width: "28%", height: 12, marginBottom: 14 }} />
+          <div className="skel" style={{ width: "62%", height: 24 }} />
         </div>
       </div>
-      <div className="skel" style={{ height: 76, borderRadius: 14, marginTop: 16 }} />
-      <div className="skel" style={{ height: 372, borderRadius: 14, marginTop: 16 }} />
+      <div className="detail-skel-stats">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="skel" />
+        ))}
+      </div>
+      <div className="skel" style={{ height: 88, borderRadius: 18, marginTop: 14 }} />
+      <div className="skel" style={{ height: 372, borderRadius: 18, marginTop: 16 }} />
     </div>
   );
 }
