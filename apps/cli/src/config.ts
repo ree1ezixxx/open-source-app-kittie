@@ -6,7 +6,6 @@ export const DEFAULT_API_ORIGIN = "http://localhost:3008";
 
 export interface KittieConfig {
   apiOrigin?: string;
-  authToken?: string;
 }
 
 export interface ResolvedConfig {
@@ -28,7 +27,6 @@ export function readConfig(path = configPath()): KittieConfig {
   const parsed = JSON.parse(raw) as KittieConfig;
   return {
     apiOrigin: typeof parsed.apiOrigin === "string" ? parsed.apiOrigin : undefined,
-    authToken: typeof parsed.authToken === "string" ? parsed.authToken : undefined,
   };
 }
 
@@ -50,7 +48,7 @@ export function resolveConfig(options: { apiOrigin?: string; authToken?: string 
   const file = readConfig(path);
   const envOrigin = process.env.KITTIE_API_ORIGIN ?? process.env.KITTIE_API_URL;
   const origin = options.apiOrigin ?? envOrigin ?? file.apiOrigin ?? DEFAULT_API_ORIGIN;
-  const token = options.authToken ?? process.env.KITTIE_AUTH_TOKEN ?? file.authToken;
+  const token = options.authToken ?? process.env.KITTIE_AUTH_TOKEN;
 
   return {
     apiOrigin: normalizeOrigin(origin),

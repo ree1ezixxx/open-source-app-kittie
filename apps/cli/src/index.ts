@@ -23,8 +23,6 @@ const HELP = `Usage:
   kittie doctor [--json] [--api-origin <url>]
   kittie config show [--json]
   kittie config set apiOrigin <url>
-  kittie config set authToken <token>
-  kittie config unset authToken
 
 Existing app commands:
   kittie search [query] [--json]
@@ -69,7 +67,7 @@ function row(app: AppListItem): Record<string, string | number> {
     store: app.store,
     reviews: app.reviewCount,
     growth: app.growthScore?.toFixed(1) ?? "-",
-    revenue: formatMoney(app.revenueEstimate30d),
+    revenueEstimate30d: formatMoney(app.revenueEstimate30d),
     firstMover: app.isFirstMover ? "yes" : "no",
   };
 }
@@ -101,8 +99,8 @@ async function cmdDetail(id: string | undefined, options: GlobalOptions) {
       { field: "Category", value: app.category ?? "-" },
       { field: "Rating", value: `${app.rating ?? "-"} (${app.reviewCount} reviews)` },
       { field: "Growth score", value: `${app.growthScore ?? "-"}${app.isFirstMover ? " FIRST MOVER" : ""}` },
-      { field: "Revenue est 30d", value: formatMoney(app.revenueEstimate30d) },
-      { field: "Downloads est 30d", value: app.downloadsEstimate30d?.toLocaleString() ?? "-" },
+      { field: "Revenue estimate 30d", value: formatMoney(app.revenueEstimate30d) },
+      { field: "Downloads estimate 30d", value: app.downloadsEstimate30d?.toLocaleString() ?? "-" },
     ]),
   );
   if (app.description) console.log(`\n${app.description}`);
@@ -136,9 +134,9 @@ async function cmdDoctor(options: GlobalOptions) {
       status: health.status,
       latencyMs: Date.now() - started,
     };
+    if (!health.ok) process.exitCode = 1;
     if (options.json) return printJson(result);
     console.log(table([result]));
-    if (!health.ok) process.exitCode = 1;
   } catch (error) {
     const result = {
       ok: false,
@@ -146,9 +144,9 @@ async function cmdDoctor(options: GlobalOptions) {
       configSource: config.source,
       error: error instanceof Error ? error.message : String(error),
     };
+    process.exitCode = 1;
     if (options.json) return printJson(result);
     console.log(table([result]));
-    process.exitCode = 1;
   }
 }
 
@@ -160,7 +158,7 @@ function cmdConfig(args: string[], options: GlobalOptions) {
     const output = {
       path: resolved.path,
       apiOrigin: resolved.apiOrigin,
-      authToken: resolved.authToken ? "(set)" : null,
+      authToken: resolved.authToken ? "(set from flag/env)" : null,
       source: resolved.source,
     };
     if (options.json) return printJson(output);
@@ -170,9 +168,10 @@ function cmdConfig(args: string[], options: GlobalOptions) {
   if (action === "set") {
     const key = args[1];
     const value = args[2];
-    if (!key || !value) throw new Error("Usage: kittie config set <apiOrigin|authToken> <value>");
-    if (key !== "apiOrigin" && key !== "authToken") throw new Error(`Unknown config key: ${key}`);
-    const next = { ...pathConfig, [key]: key === "apiOrigin" ? normalizeOrigin(value) : value };
+    if (!key || !value) throw new Error("Usage: kittie config set apiOrigin <url>");
+    if (key === "authToken") throw new Error("Auth tokens must be provided with --token or KITTIE_AUTH_TOKEN");
+    if (key !== "apiOrigin") throw new Error(`Unknown config key: ${key}`);
+    const next = { ...pathConfig, [key]: normalizeOrigin(value) };
     writeConfig(next);
     console.log(`${key} saved`);
     return;
@@ -180,7 +179,8 @@ function cmdConfig(args: string[], options: GlobalOptions) {
 
   if (action === "unset") {
     const key = args[1];
-    if (key !== "apiOrigin" && key !== "authToken") throw new Error("Usage: kittie config unset <apiOrigin|authToken>");
+    if (key === "authToken") throw new Error("Auth tokens are not stored in kittie config");
+    if (key !== "apiOrigin") throw new Error("Usage: kittie config unset apiOrigin");
     const next = { ...pathConfig };
     delete next[key];
     writeConfig(next);

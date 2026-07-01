@@ -44,6 +44,12 @@ async function expectOkAsync(args: string[]) {
   return result.stdout;
 }
 
+async function expectFailAsync(args: string[]) {
+  const result = await runAsync(args);
+  assert.notEqual(result.status, 0, `${args.join(" ")} unexpectedly passed\n${result.stdout}`);
+  return result.stdout;
+}
+
 async function main() {
   try {
     const help = expectOk(["--help"]);
@@ -54,6 +60,9 @@ async function main() {
     const config = JSON.parse(expectOk(["config", "show", "--json"])) as { apiOrigin: string; source: string };
     assert.equal(config.apiOrigin, "http://127.0.0.1:45454");
     assert.equal(config.source, "file");
+    const tokenSet = run(["config", "set", "authToken", "secret"]);
+    assert.notEqual(tokenSet.status, 0);
+    assert.match(tokenSet.stderr, /Auth tokens must be provided/);
 
     const server = createServer((req, res) => {
       if (req.url === "/health") {
@@ -76,6 +85,29 @@ async function main() {
     assert.equal(doctor.ok, true);
     assert.equal(doctor.status, 200);
     await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+
+    const unhealthyServer = createServer((_req, res) => {
+      res.writeHead(503, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false }));
+    });
+    await new Promise<void>((resolve) => unhealthyServer.listen(0, "127.0.0.1", resolve));
+    const unhealthyAddress = unhealthyServer.address();
+    assert(unhealthyAddress && typeof unhealthyAddress === "object");
+    const unhealthyOrigin = `http://127.0.0.1:${unhealthyAddress.port}`;
+    const unhealthy = JSON.parse(await expectFailAsync(["doctor", "--api-origin", unhealthyOrigin, "--json"])) as {
+      ok: boolean;
+      status: number;
+    };
+    assert.equal(unhealthy.ok, false);
+    assert.equal(unhealthy.status, 503);
+    await new Promise<void>((resolve, reject) => unhealthyServer.close((err) => (err ? reject(err) : resolve())));
+
+    const failed = JSON.parse(await expectFailAsync(["doctor", "--api-origin", "http://127.0.0.1:1", "--json"])) as {
+      ok: boolean;
+      error: string;
+    };
+    assert.equal(failed.ok, false);
+    assert.match(failed.error, /fetch failed|bad port/i);
   } finally {
     rmSync(configHome, { recursive: true, force: true });
   }
