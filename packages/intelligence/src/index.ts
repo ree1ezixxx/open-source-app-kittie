@@ -27,6 +27,12 @@ export {
   type BuildDecisionInput,
 } from "./decision-packet.js";
 export {
+  buildIntelligenceResponse,
+  IntelligenceResponseContractError,
+  type BuildIntelligenceResponseInput,
+  type MissingIntelligenceSource,
+} from "./intelligence-response.js";
+export {
   computeDemandSignal,
   type DemandSignal,
   type DemandSignalInput,
