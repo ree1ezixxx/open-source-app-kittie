@@ -15,6 +15,15 @@ export async function getAppById(db: Db, id: string) {
   return app ?? null;
 }
 
+export async function getAppIdByStoreAppId(db: Db, store: "apple" | "google", storeAppId: string): Promise<string | null> {
+  const [app] = await db
+    .select({ id: apps.id })
+    .from(apps)
+    .where(sql`${apps.store} = ${store} and ${apps.storeAppId} = ${storeAppId}`)
+    .limit(1);
+  return app?.id ?? null;
+}
+
 /**
  * Hydrate a known set of apps by id — chunked so the SQLite variable limit is
  * never hit. The bounded counterpart to a full-catalog scan: callers that

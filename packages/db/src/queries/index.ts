@@ -24,6 +24,7 @@ export {
   appsWithCreators,
   appsWithCreatorsForIds,
   getAppById as getAppRowById,
+  getAppIdByStoreAppId,
   getRecentReviewTagsForApps,
   listAppIaps,
   listAppsByIds,
