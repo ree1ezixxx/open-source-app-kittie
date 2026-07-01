@@ -4,6 +4,7 @@ import { validateRouter } from "./validate.js";
 import { teardownRouter } from "./teardown.js";
 import { trendsRouter } from "./trends.js";
 import { appDetailRouter } from "./app-detail.js";
+import { compareAppsRouter } from "./compare-apps.js";
 
 /**
  * App-Intelligence router — mounts the per-module sub-routers under
@@ -14,6 +15,7 @@ import { appDetailRouter } from "./app-detail.js";
 export const appIntelligenceRouter = new Hono();
 
 appIntelligenceRouter.route("/similar", similarRouter);
+appIntelligenceRouter.route("/compare-apps", compareAppsRouter);
 appIntelligenceRouter.route("/trends", trendsRouter);
 appIntelligenceRouter.route("/validate", validateRouter);
 appIntelligenceRouter.route("/", appDetailRouter);
