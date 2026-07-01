@@ -11,7 +11,7 @@ import {
   updateAppListingFacts,
 } from "@kittie/db";
 import { inArray, count } from "drizzle-orm";
-import { lookupAppleApp } from "@kittie/ingest";
+import { fetchGoogleAppMetadata, lookupAppleApp, upsertApp, upsertMetricSnapshot } from "@kittie/ingest";
 import {
   type AppSignals,
   type MarketApp,
@@ -32,6 +32,7 @@ import type {
   MetaAdCreative,
   PaginatedResponse,
   Review,
+  Store,
 } from "@kittie/types";
 import { getDb } from "../lib/db.js";
 import { buildScoredAppRows, listItemFromContext } from "./app-list-scoring.js";
@@ -66,6 +67,86 @@ const appSearchCache = new Map<string, { value: PaginatedResponse<AppListItem>; 
 export function invalidateAppReadCaches(): void {
   appSearchCache.clear();
   invalidateAppQueryReadCaches();
+}
+
+export function parseStoreAppLookupId(id: string): { store: Store; storeAppId: string } | null {
+  const apple = /^apple:(\d+)$/.exec(id);
+  if (apple) return { store: "apple", storeAppId: apple[1]! };
+
+  const google = /^google:([a-z][\w]*(?:\.[\w]+)+)$/i.exec(id);
+  if (google) return { store: "google", storeAppId: google[1]! };
+
+  return null;
+}
+
+export async function ingestStoreAppById(id: string): Promise<string | null> {
+  const parsed = parseStoreAppLookupId(id);
+  if (!parsed) return null;
+
+  const db = getDb();
+  const snapshotDate = new Date().toISOString().slice(0, 10);
+
+  try {
+    if (parsed.store === "apple") {
+      const app = await lookupAppleApp(parsed.storeAppId);
+      if (!app) return null;
+      const appId = await upsertApp(db, {
+        store: "apple",
+        storeAppId: app.storeAppId,
+        bundleId: app.bundleId,
+        title: app.title,
+        developer: app.developer,
+        category: app.category,
+        iconUrl: app.iconUrl,
+        description: app.description,
+        websiteUrl: app.websiteUrl,
+        price: app.price,
+        contentRating: app.contentRating,
+        languages: app.languages,
+        screenshotUrls: app.screenshotUrls,
+        releasedAt: app.releasedAt,
+        updatedAt: app.updatedAt,
+      });
+      await upsertMetricSnapshot(db, {
+        appId,
+        snapshotDate,
+        reviewCount: app.reviewCount,
+        rating: app.rating,
+        chartCountry: "US",
+      });
+      invalidateAppReadCaches();
+      return appId;
+    }
+
+    const app = await fetchGoogleAppMetadata(parsed.storeAppId);
+    const appId = await upsertApp(db, {
+      store: "google",
+      storeAppId: app.storeAppId,
+      bundleId: app.bundleId,
+      title: app.title,
+      developer: app.developer,
+      category: app.category,
+      iconUrl: app.iconUrl,
+      description: app.description,
+      websiteUrl: app.websiteUrl,
+      price: app.price,
+      contentRating: app.contentRating,
+      screenshotUrls: app.screenshotUrls,
+      releasedAt: app.releasedAt,
+      updatedAt: app.updatedAt,
+    });
+    await upsertMetricSnapshot(db, {
+      appId,
+      snapshotDate,
+      reviewCount: app.reviewCount,
+      rating: app.rating,
+      chartCountry: "US",
+    });
+    invalidateAppReadCaches();
+    return appId;
+  } catch {
+    return null;
+  }
 }
 
 function appSearchCacheKey(params: AppSearchParams): string {
@@ -362,11 +443,17 @@ async function buildCategoryOpportunity(
 
 export async function getAppByIdFromDb(id: string): Promise<AppDetail | null> {
   const db = getDb();
-  const row = await getAppRowById(db, id);
+  let row = await getAppRowById(db, id);
+  if (!row && (await ingestStoreAppById(id))) {
+    row = await getAppRowById(db, id);
+  }
   if (!row) return null;
   const app = await backfillListingFacts(db, row);
 
-  const ctx = await getSnapshotContext(db, id, "7d");
+  let ctx = await getSnapshotContext(db, id, "7d");
+  if (!ctx && (await ingestStoreAppById(id))) {
+    ctx = await getSnapshotContext(db, id, "7d");
+  }
   if (!ctx) return null;
 
   const rankDeltas = await getRankDeltasFor([id]);

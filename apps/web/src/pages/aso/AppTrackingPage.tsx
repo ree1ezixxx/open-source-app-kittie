@@ -549,7 +549,7 @@ export function AppTrackingPage({ theme, onToggleTheme }: { theme: Theme; onTogg
         reviewCount: app.reviewCount,
       });
     } catch {
-      setUrlError("Couldn't find that app in our catalog.");
+      setUrlError("Couldn't resolve that store URL.");
     } finally {
       setUrlResolving(false);
     }
