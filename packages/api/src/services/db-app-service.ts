@@ -1,5 +1,6 @@
 import {
   countApps,
+  getAppIdByStoreAppId,
   getAppRowById,
   getSnapshotContext,
   iaps,
@@ -172,6 +173,10 @@ function toIso(d: Date | null | undefined): string | null {
 
 export async function dbHasApps(): Promise<boolean> {
   return (await countApps(getDb())) > 0;
+}
+
+export async function resolveStoreAppIdFromDb(store: Store, storeAppId: string): Promise<string | null> {
+  return getAppIdByStoreAppId(getDb(), store, storeAppId);
 }
 
 /** Minimal per-entry inputs the revenue/downloads model needs from a chart row. */
