@@ -14,6 +14,8 @@ import {
   getAppHistoricalsFromDb,
   getAppReviewsFromDb,
   listCategoryFacetsFromDb,
+  parseStoreAppLookupId,
+  resolveStoreAppIdFromDb,
   searchAppsFromDb,
   type CategoryFacet,
 } from "./db-app-service.js";
@@ -99,6 +101,22 @@ export async function searchApps(params: AppSearchParams): Promise<PaginatedResp
 export async function getAppById(id: string): Promise<AppDetail | null> {
   if (await dbHasApps()) return getAppByIdFromDb(id);
   const fixture = MOCK_APPS.find((a) => a.id === id);
+  return fixture ? toDetail(fixture) : null;
+}
+
+export async function getAppByAnyId(id: string): Promise<AppDetail | null> {
+  const direct = await getAppById(id);
+  if (direct) return direct;
+
+  const parsed = parseStoreAppLookupId(id);
+  if (!parsed) return null;
+
+  if (await dbHasApps()) {
+    const appId = await resolveStoreAppIdFromDb(parsed.store, parsed.storeAppId);
+    return appId ? getAppByIdFromDb(appId) : null;
+  }
+
+  const fixture = MOCK_APPS.find((a) => a.store === parsed.store && a.storeAppId === parsed.storeAppId);
   return fixture ? toDetail(fixture) : null;
 }
 
