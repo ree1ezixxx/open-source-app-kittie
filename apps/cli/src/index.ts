@@ -2,127 +2,222 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import type { AppListItem } from "@kittie/types";
-import { cloneIos, getAppDetail, searchApps } from "./client.js";
+import { cloneIos, getAppDetail, getHealth, searchApps } from "./client.js";
+import { DEFAULT_API_ORIGIN, normalizeOrigin, readConfig, resolveConfig, writeConfig } from "./config.js";
+import { formatMoney, printJson, table } from "./output.js";
 
-function formatMoney(n: number | null): string {
-  if (n == null) return "—";
-  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `$${(n / 1_000).toFixed(1)}K`;
-  return `$${n}`;
+interface GlobalOptions {
+  apiOrigin?: string;
+  authToken?: string;
+  json: boolean;
 }
 
-function formatRow(app: AppListItem): string {
-  const growth = app.growthScore?.toFixed(1) ?? "—";
-  const flag = app.isFirstMover ? " 🚀" : "";
-  return [
-    app.title.padEnd(22).slice(0, 22),
-    app.store.padEnd(6),
-    String(app.reviewCount).padStart(6),
-    growth.padStart(6),
-    formatMoney(app.revenueEstimate30d).padStart(8),
-    flag,
-  ].join("  ");
+interface ParsedArgs {
+  command?: string;
+  args: string[];
+  options: GlobalOptions;
 }
 
-async function cmdSearch(args: string[]) {
-  const search = args[0];
-  const result = await searchApps({ search, limit: 20, sortBy: "growth" });
-  printHeader();
-  for (const app of result.data) console.log(formatRow(app));
+const HELP = `Usage:
+  kittie help
+  kittie doctor [--json] [--api-origin <url>]
+  kittie config show [--json]
+  kittie config set apiOrigin <url>
+  kittie config set authToken <token>
+  kittie config unset authToken
+
+Existing app commands:
+  kittie search [query] [--json]
+  kittie trends [--json]
+  kittie detail <id> [--json]
+  kittie clone-ios <id> [--out <dir>]
+
+Config precedence:
+  --api-origin, KITTIE_API_ORIGIN, ~/.kittie/config.json, ${DEFAULT_API_ORIGIN}`;
+
+function parseArgs(argv: string[]): ParsedArgs {
+  const args: string[] = [];
+  const options: GlobalOptions = { json: false };
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (!arg) continue;
+    if (arg === "--json") {
+      options.json = true;
+    } else if (arg === "--api-origin" || arg === "--api-url") {
+      const value = argv[i + 1];
+      if (!value) throw new Error(`${arg} requires a URL`);
+      options.apiOrigin = value;
+      i += 1;
+    } else if (arg === "--token") {
+      const value = argv[i + 1];
+      if (!value) throw new Error("--token requires a value");
+      options.authToken = value;
+      i += 1;
+    } else if (arg === "-h" || arg === "--help") {
+      args.push("help");
+    } else {
+      args.push(arg);
+    }
+  }
+  const [command, ...rest] = args;
+  return { command, args: rest, options };
+}
+
+function row(app: AppListItem): Record<string, string | number> {
+  return {
+    title: app.title.slice(0, 28),
+    store: app.store,
+    reviews: app.reviewCount,
+    growth: app.growthScore?.toFixed(1) ?? "-",
+    revenue: formatMoney(app.revenueEstimate30d),
+    firstMover: app.isFirstMover ? "yes" : "no",
+  };
+}
+
+async function cmdSearch(args: string[], options: GlobalOptions) {
+  const config = resolveConfig(options);
+  const result = await searchApps({ search: args[0], limit: 20, sortBy: "growth" }, config);
+  if (options.json) return printJson(result);
+  console.log(table(result.data.map(row)));
   console.log(`\n${result.pagination.totalCount} apps`);
 }
 
-async function cmdTrends() {
-  const result = await searchApps({ sortBy: "growth", sortOrder: "desc", limit: 10 });
-  printHeader();
-  for (const app of result.data) console.log(formatRow(app));
+async function cmdTrends(options: GlobalOptions) {
+  const config = resolveConfig(options);
+  const result = await searchApps({ sortBy: "growth", sortOrder: "desc", limit: 10 }, config);
+  if (options.json) return printJson(result);
+  console.log(table(result.data.map(row)));
 }
 
-async function cmdDetail(id: string) {
-  const app = await getAppDetail(id);
-  console.log(`\n${app.title} (${app.store})`);
-  console.log(`Developer: ${app.developer}`);
-  console.log(`Category: ${app.category ?? "—"}`);
-  console.log(`Rating: ${app.rating ?? "—"} (${app.reviewCount} reviews)`);
-  console.log(`Growth score: ${app.growthScore ?? "—"}${app.isFirstMover ? " — FIRST MOVER" : ""}`);
-  console.log(`Revenue est (30d): ${formatMoney(app.revenueEstimate30d)}`);
-  console.log(`Downloads est (30d): ${app.downloadsEstimate30d?.toLocaleString() ?? "—"}`);
+async function cmdDetail(id: string | undefined, options: GlobalOptions) {
+  if (!id) throw new Error("App id required");
+  const config = resolveConfig(options);
+  const app = await getAppDetail(id, config);
+  if (options.json) return printJson(app);
+  console.log(
+    table([
+      { field: "Title", value: `${app.title} (${app.store})` },
+      { field: "Developer", value: app.developer },
+      { field: "Category", value: app.category ?? "-" },
+      { field: "Rating", value: `${app.rating ?? "-"} (${app.reviewCount} reviews)` },
+      { field: "Growth score", value: `${app.growthScore ?? "-"}${app.isFirstMover ? " FIRST MOVER" : ""}` },
+      { field: "Revenue est 30d", value: formatMoney(app.revenueEstimate30d) },
+      { field: "Downloads est 30d", value: app.downloadsEstimate30d?.toLocaleString() ?? "-" },
+    ]),
+  );
   if (app.description) console.log(`\n${app.description}`);
-  if (app.metaAds.length) console.log(`\nMeta ads: ${app.metaAds.length}`);
-  if (app.creators.length) console.log(`Creators: ${app.creators.map((c) => c.handle).join(", ")}`);
 }
 
-async function cmdCloneIos(args: string[]) {
+async function cmdCloneIos(args: string[], options: GlobalOptions) {
   const appId = args[0];
-  if (!appId) {
-    console.error("App id required:  pluto clone-ios <appId> [--out <dir>]");
-    process.exit(1);
-  }
+  if (!appId) throw new Error("App id required: kittie clone-ios <appId> [--out <dir>]");
   const outFlag = args.indexOf("--out");
-  const result = await cloneIos(appId);
+  const config = resolveConfig(options);
+  const result = await cloneIos(appId, config);
   const outDir = resolve(outFlag >= 0 && args[outFlag + 1] ? args[outFlag + 1]! : `./${result.projectName}`);
   for (const f of result.files) {
     const p = join(outDir, f.path);
     mkdirSync(dirname(p), { recursive: true });
     writeFileSync(p, f.contents);
   }
-  console.log(`\n🐱  Cloned "${result.sourceTitle}"  →  ${result.blueprint.appName}`);
-  console.log(`    ${result.blueprint.tagline}`);
-  console.log(`    accent ${result.blueprint.accentHex} · ${result.blueprint.primaryEntity} · ${result.aiGenerated ? "AI-designed" : "template"}${result.cached ? " (cached)" : ""}`);
-  console.log(`    screens: ${result.blueprint.tabs.map((t) => `${t.title}(${t.kind})`).join(", ")}`);
-  console.log(`\n    Wrote ${result.files.length} files to ${outDir}\n`);
-  console.log("    Build it:");
-  console.log(`      cd ${outDir}`);
-  for (const cmd of result.buildCommands) console.log(`      ${cmd}`);
-  console.log();
+  console.log(`Cloned "${result.sourceTitle}" -> ${result.blueprint.appName}`);
+  console.log(`Wrote ${result.files.length} files to ${outDir}`);
 }
 
-function printHeader() {
-  console.log(
-    ["Title".padEnd(22), "Store".padEnd(6), "Reviews".padStart(6), "Growth".padStart(6), "Revenue".padStart(8)].join(
-      "  ",
-    ),
-  );
-  console.log("-".repeat(60));
-}
-
-function usage() {
-  console.log(`Usage:
-  pluto search [query]          Search apps
-  pluto trends                  Top growth movers
-  pluto detail <id>             App detail
-  pluto clone-ios <id> [--out d]  Generate a buildable SwiftUI clone of a trending app`);
-}
-
-async function main() {
-  const [cmd, ...args] = process.argv.slice(2);
-
+async function cmdDoctor(options: GlobalOptions) {
+  const config = resolveConfig(options);
+  const started = Date.now();
   try {
-    switch (cmd) {
-      case "search":
-        await cmdSearch(args);
-        break;
-      case "trends":
-        await cmdTrends();
-        break;
-      case "detail":
-        if (!args[0]) {
-          console.error("App id required");
-          process.exit(1);
-        }
-        await cmdDetail(args[0]);
-        break;
-      case "clone-ios":
-        await cmdCloneIos(args);
-        break;
-      default:
-        usage();
-        process.exit(cmd ? 1 : 0);
-    }
-  } catch (err) {
-    console.error(err instanceof Error ? err.message : err);
-    process.exit(1);
+    const health = await getHealth(config);
+    const result = {
+      ok: health.ok,
+      apiOrigin: config.apiOrigin,
+      configSource: config.source,
+      status: health.status,
+      latencyMs: Date.now() - started,
+    };
+    if (options.json) return printJson(result);
+    console.log(table([result]));
+    if (!health.ok) process.exitCode = 1;
+  } catch (error) {
+    const result = {
+      ok: false,
+      apiOrigin: config.apiOrigin,
+      configSource: config.source,
+      error: error instanceof Error ? error.message : String(error),
+    };
+    if (options.json) return printJson(result);
+    console.log(table([result]));
+    process.exitCode = 1;
   }
 }
 
-main();
+function cmdConfig(args: string[], options: GlobalOptions) {
+  const action = args[0] ?? "show";
+  const pathConfig = readConfig();
+  if (action === "show") {
+    const resolved = resolveConfig(options);
+    const output = {
+      path: resolved.path,
+      apiOrigin: resolved.apiOrigin,
+      authToken: resolved.authToken ? "(set)" : null,
+      source: resolved.source,
+    };
+    if (options.json) return printJson(output);
+    return console.log(table([output]));
+  }
+
+  if (action === "set") {
+    const key = args[1];
+    const value = args[2];
+    if (!key || !value) throw new Error("Usage: kittie config set <apiOrigin|authToken> <value>");
+    if (key !== "apiOrigin" && key !== "authToken") throw new Error(`Unknown config key: ${key}`);
+    const next = { ...pathConfig, [key]: key === "apiOrigin" ? normalizeOrigin(value) : value };
+    writeConfig(next);
+    console.log(`${key} saved`);
+    return;
+  }
+
+  if (action === "unset") {
+    const key = args[1];
+    if (key !== "apiOrigin" && key !== "authToken") throw new Error("Usage: kittie config unset <apiOrigin|authToken>");
+    const next = { ...pathConfig };
+    delete next[key];
+    writeConfig(next);
+    console.log(`${key} unset`);
+    return;
+  }
+
+  throw new Error(`Unknown config action: ${action}`);
+}
+
+export async function run(argv = process.argv.slice(2)): Promise<void> {
+  const parsed = parseArgs(argv);
+  switch (parsed.command) {
+    case undefined:
+    case "help":
+      console.log(HELP);
+      return;
+    case "doctor":
+      return cmdDoctor(parsed.options);
+    case "config":
+      return cmdConfig(parsed.args, parsed.options);
+    case "search":
+      return cmdSearch(parsed.args, parsed.options);
+    case "trends":
+      return cmdTrends(parsed.options);
+    case "detail":
+      return cmdDetail(parsed.args[0], parsed.options);
+    case "clone-ios":
+      return cmdCloneIos(parsed.args, parsed.options);
+    default:
+      console.error(`Unknown command: ${parsed.command}\n`);
+      console.log(HELP);
+      process.exitCode = 1;
+  }
+}
+
+run().catch((err) => {
+  console.error(err instanceof Error ? err.message : err);
+  process.exit(1);
+});

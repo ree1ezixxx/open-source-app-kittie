@@ -4,12 +4,14 @@
   "private": true,
   "type": "module",
   "bin": {
+    "kittie": "./dist/index.js",
     "pluto": "./dist/index.js"
   },
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "dev": "tsx src/index.ts"
+    "dev": "tsx src/index.ts",
+    "smoke": "tsx src/smoke.ts"
   },
   "dependencies": {
     "@kittie/types": "workspace:*"
