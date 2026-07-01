@@ -274,7 +274,9 @@ export async function removeKeywordFromTrackedApp(
 
   const market = country.toUpperCase();
   const generated = await listGeneratedKeywordsForTrackedApp(db, trackedAppId);
-  const row = generated.find((entry) => entry.keyword === normalized);
+  const row = generated.find(
+    (entry) => entry.keyword === normalized && entry.source === "custom" && entry.country === market,
+  ) ?? generated.find((entry) => entry.keyword === normalized && entry.source === "ai");
   if (row) {
     await deleteKeywordForTrackedApp(db, trackedAppId, row.country, normalized);
   }
