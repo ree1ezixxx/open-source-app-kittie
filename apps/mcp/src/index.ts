@@ -11,10 +11,15 @@ import { synthesizeOpportunity, type MarketApp } from "@kittie/intelligence";
 import { listTools } from "./tools.js";
 import {
   appDetailIntelligencePath,
+  compareAppsRequest,
   findTrendingAppsPath,
+  resolveReportRequest,
   toAgentSafeError,
+  validateIdeaRequest,
   type FindTrendingAppsArgs,
+  type GenerateReportArgs,
 } from "./intelligence-tools.js";
+import { renderReport } from "./report-tool.js";
 
 const API_BASE = process.env.KITTIE_API_URL ?? "http://127.0.0.1:3008";
 
@@ -129,6 +134,39 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         // #182 trends/category-pulse intelligence.
         result = await apiGet(findTrendingAppsPath((args ?? {}) as FindTrendingAppsArgs));
         break;
+      }
+      case "compare_apps": {
+        // #183 compare-apps intelligence (validates 2+ refs before calling).
+        const { path, body } = compareAppsRequest((args ?? {}) as { apps?: unknown });
+        result = await apiPost(path, body);
+        break;
+      }
+      case "validate_app_idea": {
+        // #184 canonical validate-idea intelligence (`/validate-idea`).
+        const { path, body } = validateIdeaRequest((args ?? {}) as { idea?: unknown; store?: unknown; limit?: unknown });
+        result = await apiPost(path, body);
+        break;
+      }
+      case "generate_report": {
+        // #187 renderer: fetch the source intelligence from the API, render locally.
+        const req = resolveReportRequest((args ?? {}) as GenerateReportArgs);
+        const raw =
+          req.method === "GET" ? await apiGet<unknown>(req.path) : await apiPost<unknown>(req.path, req.body);
+        const envelope =
+          req.wrapped && raw && typeof raw === "object" && "data" in raw ? (raw as { data: unknown }).data : raw;
+        const report = renderReport(req.template, envelope, req.format);
+        return {
+          content: [{ type: "text", text: report.content }],
+          structuredContent: {
+            reportId: report.reportId,
+            template: report.template,
+            format: report.format,
+            contentType: report.contentType,
+            byteLength: report.byteLength,
+            title: report.title,
+            generatedAt: report.generatedAt,
+          },
+        };
       }
       case "get_app_history": {
         const id = (args as { id?: string })?.id;

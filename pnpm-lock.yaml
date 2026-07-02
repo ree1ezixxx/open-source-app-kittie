@@ -54,6 +54,9 @@ importers:
       '@kittie/intelligence':
         specifier: workspace:*
         version: link:../../packages/intelligence
+      '@kittie/reports':
+        specifier: workspace:*
+        version: link:../../packages/reports
       '@kittie/types':
         specifier: workspace:*
         version: link:../../packages/types

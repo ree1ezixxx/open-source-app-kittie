@@ -17,6 +17,7 @@
     "@modelcontextprotocol/sdk": "^1.12.1",
     "@kittie/build-context": "workspace:*",
     "@kittie/intelligence": "workspace:*",
+    "@kittie/reports": "workspace:*",
     "@kittie/types": "workspace:*"
   },
   "devDependencies": {

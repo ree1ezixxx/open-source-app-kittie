@@ -55,6 +55,117 @@ export function findTrendingAppsPath(args: FindTrendingAppsArgs = {}): string {
   return `${APP_INTELLIGENCE_BASE}/trends?${qs.toString()}`;
 }
 
+export const COMPARE_APPS_PATH = `${APP_INTELLIGENCE_BASE}/compare-apps`;
+export const VALIDATE_IDEA_PATH = `${APP_INTELLIGENCE_BASE}/validate-idea`;
+
+export interface AppRefInput {
+  appId?: string;
+  query?: string;
+  store?: string;
+}
+
+export interface CompareAppsRequest {
+  path: string;
+  body: { apps: AppRefInput[] };
+}
+
+/** #183 compare-apps. Requires 2+ resolvable app refs (each `appId` or `query`). */
+export function compareAppsRequest(args: { apps?: unknown }): CompareAppsRequest {
+  const apps = args.apps;
+  if (!Array.isArray(apps)) throw new Error("apps must be an array of { appId } or { query } refs");
+  if (apps.length < 2) throw new Error("compare_apps needs at least 2 apps");
+  const refs: AppRefInput[] = apps.map((raw, i) => {
+    if (!raw || typeof raw !== "object") throw new Error(`apps[${i}] must be an object with appId or query`);
+    const ref = raw as AppRefInput;
+    if (!ref.appId && !ref.query) throw new Error(`apps[${i}] needs an appId or a query`);
+    return ref;
+  });
+  return { path: COMPARE_APPS_PATH, body: { apps: refs } };
+}
+
+export interface ValidateIdeaRequest {
+  path: string;
+  body: { idea: string; store?: string; limit?: number };
+}
+
+/** Canonical #184 validate-idea path (`/validate-idea`, not the retired `/validate`). */
+export function validateIdeaRequest(args: { idea?: unknown; store?: unknown; limit?: unknown }): ValidateIdeaRequest {
+  const idea = typeof args.idea === "string" ? args.idea.trim() : "";
+  if (idea.length === 0) throw new Error("validate_app_idea requires a non-empty idea");
+  const body: { idea: string; store?: string; limit?: number } = { idea };
+  if (args.store === "apple" || args.store === "google") body.store = args.store;
+  if (typeof args.limit === "number" && Number.isFinite(args.limit)) {
+    body.limit = Math.min(Math.max(Math.trunc(args.limit), 1), MAX_LIMIT);
+  }
+  return { path: VALIDATE_IDEA_PATH, body };
+}
+
+export type ReportTemplateName = "app_teardown" | "category_pulse" | "build_brief";
+export type ReportRenderFormat = "json" | "markdown" | "html";
+
+const REPORT_TEMPLATES: readonly ReportTemplateName[] = ["app_teardown", "category_pulse", "build_brief"];
+const REPORT_FORMATS: readonly ReportRenderFormat[] = ["json", "markdown", "html"];
+
+export interface GenerateReportArgs {
+  template?: unknown;
+  format?: unknown;
+  appId?: unknown;
+  idea?: unknown;
+  store?: unknown;
+  category?: unknown;
+  country?: unknown;
+  period?: unknown;
+  limit?: unknown;
+}
+
+export interface ResolvedReportRequest {
+  template: ReportTemplateName;
+  format: ReportRenderFormat;
+  method: "GET" | "POST";
+  path: string;
+  body?: unknown;
+  /** true → the API response is `{ data: envelope }` and must be unwrapped. */
+  wrapped: boolean;
+}
+
+/**
+ * Resolve a `generate_report` call to the API endpoint that produces its source
+ * intelligence. Rejects unknown templates/formats and missing required inputs.
+ */
+export function resolveReportRequest(args: GenerateReportArgs): ResolvedReportRequest {
+  const template = args.template;
+  if (typeof template !== "string" || !REPORT_TEMPLATES.includes(template as ReportTemplateName)) {
+    throw new Error(`template must be one of: ${REPORT_TEMPLATES.join(", ")}`);
+  }
+  const format: ReportRenderFormat =
+    args.format === undefined
+      ? "json"
+      : REPORT_FORMATS.includes(args.format as ReportRenderFormat)
+        ? (args.format as ReportRenderFormat)
+        : (() => {
+            throw new Error(`format must be one of: ${REPORT_FORMATS.join(", ")}`);
+          })();
+
+  switch (template as ReportTemplateName) {
+    case "app_teardown": {
+      const appId = typeof args.appId === "string" ? args.appId : "";
+      return { template: "app_teardown", format, method: "GET", path: appDetailIntelligencePath(appId), wrapped: true };
+    }
+    case "category_pulse": {
+      const trendArgs: FindTrendingAppsArgs = {};
+      if (typeof args.category === "string") trendArgs.category = args.category;
+      if (typeof args.country === "string") trendArgs.country = args.country;
+      if (typeof args.period === "string") trendArgs.period = args.period as TrendPeriod;
+      if (typeof args.limit === "number") trendArgs.limit = args.limit;
+      return { template: "category_pulse", format, method: "GET", path: findTrendingAppsPath(trendArgs), wrapped: false };
+    }
+    case "build_brief": {
+      const { path, body } = validateIdeaRequest({ idea: args.idea, store: args.store, limit: args.limit });
+      return { template: "build_brief", format, method: "POST", path, body, wrapped: true };
+    }
+  }
+}
+
 /** Turn any thrown value into an MCP tool error result an agent can read. */
 export function toAgentSafeError(err: unknown): CallToolResult {
   const text = err instanceof Error ? err.message : String(err);
