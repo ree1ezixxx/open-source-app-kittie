@@ -27,6 +27,7 @@ import {
   uniqueIndex,
   customType,
 } from "drizzle-orm/pg-core";
+import { pgSearchVectorExpr } from "./fts-normalize.js";
 
 const ts = (name: string) => timestamp(name, { withTimezone: true });
 
@@ -68,9 +69,10 @@ export const apps = pgTable(
     // Native pg full-text search (#244): the pg counterpart of SQLite's `apps_fts`
     // FTS5 virtual table. Generated STORED so it self-syncs (no triggers), over the
     // SAME fields FTS5 indexes (title + developer — NOT description, deliberately).
-    // 'simple' config: no stemming/stopwords, matching FTS5's unicode61 tokenizer.
+    // The document expression (fts-normalize.ts) folds diacritics + compound joiners
+    // to match FTS5's unicode61 tokenization; 'simple' config = no stemming/stopwords.
     searchTsv: tsvector("search_tsv").generatedAlwaysAs(
-      (): SQL => sql`to_tsvector('simple', coalesce("title", '') || ' ' || coalesce("developer", ''))`,
+      (): SQL => sql.raw(pgSearchVectorExpr(`coalesce("title", '') || ' ' || coalesce("developer", '')`)),
     ),
   },
   (t) => [

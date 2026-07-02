@@ -236,6 +236,8 @@ describe("query modules on Postgres (pglite)", () => {
     await seedApp(db, { id: "apple:2", title: "Focus Timer", reviews: 10 });
 
     expect(toPgTsQuery("Candy Cru")).toBe("candy:* & cru:*");
+    expect(toPgTsQuery("Pokémon")).toBe("pokemon:*"); // query-side diacritic fold
+    expect(toPgTsQuery("Node.js")).toBe("node:* & js:*"); // joiner split
     expect(toPgTsQuery("!!!")).toBeNull();
     expect(appsFtsQuery(db, "!!!")).toBeNull();
 

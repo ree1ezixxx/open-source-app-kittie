@@ -1,2 +1,0 @@
-ALTER TABLE "apps" ADD COLUMN "search_tsv" "tsvector" GENERATED ALWAYS AS (to_tsvector('simple', coalesce("title", '') || ' ' || coalesce("developer", ''))) STORED;--> statement-breakpoint
-CREATE INDEX "apps_search_tsv_idx" ON "apps" USING gin ("search_tsv");

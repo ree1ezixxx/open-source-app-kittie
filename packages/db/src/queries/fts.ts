@@ -1,6 +1,7 @@
 import { sql, type SQL } from "drizzle-orm";
 import type { Db } from "../client.js";
 import { dbAll, dbGet, dbRun, isPostgres } from "../dialect.js";
+import { foldSearchText, pgSearchVectorExpr } from "../fts-normalize.js";
 
 /**
  * Full-text search over app title + developer. Replaces the leading-wildcard
@@ -14,10 +15,12 @@ import { dbAll, dbGet, dbRun, isPostgres } from "../dialect.js";
  *   - SQLite: FTS5 virtual table `apps_fts` + sync triggers + `MATCH` (unchanged).
  *   - Postgres: a generated STORED `tsvector` column `apps.search_tsv` + GIN index
  *     (self-syncing — no triggers), queried with `@@ to_tsquery('simple', …)` and
- *     ranked by `ts_rank`. The tsquery is built from the SAME tokenizer as the FTS5
- *     match string (each token becomes a `:*` prefix term, AND-combined), so both
- *     dialects return the same token-prefix results. The 'simple' config does no
- *     stemming / stopword removal, matching FTS5's unicode61 tokenizer.
+ *     ranked by `ts_rank`. Parity with FTS5's unicode61 tokenizer needs more than
+ *     the 'simple' config (no stemming/stopwords): unicode61 also FOLDS DIACRITICS
+ *     ("Pokémon" → pokemon) and splits on ALL non-alphanumerics ("Node.js" → node,
+ *     js — pg's parser would keep it as one host-lexeme). So one shared fold map
+ *     (fts-normalize.ts) is applied to BOTH the document expression and the query
+ *     tokens; the parity tests drive both engines and assert identical results.
  */
 
 /** Build an FTS5 MATCH expression: each token becomes a prefix term, AND-combined.
@@ -28,12 +31,14 @@ export function toFtsMatch(query: string): string | null {
   return tokens.map((t) => `${t}*`).join(" ");
 }
 
-/** Build a Postgres tsquery string with the SAME semantics as {@link toFtsMatch}:
- *  each token becomes a `:*` prefix term, `&`-combined. "Candy Cru" → `candy:* & cru:*`.
- *  Tokens are alnum runs from our own tokenizer (never raw user text), so the string is
- *  always valid `to_tsquery` input. Returns null when the query has no usable token. */
+/** Build a Postgres tsquery string with the SAME semantics as FTS5's MATCH on
+ *  unicode61: the query text is diacritic-folded (like the `search_tsv` document —
+ *  "Pokémon" → pokemon), then each token becomes a `:*` prefix term, `&`-combined.
+ *  "Candy Cru" → `candy:* & cru:*`. Tokens are alnum runs from our own tokenizer
+ *  (never raw user text), so the string is always valid `to_tsquery` input.
+ *  Returns null when the query has no usable token. */
 export function toPgTsQuery(query: string): string | null {
-  const tokens = ftsTokens(query);
+  const tokens = ftsTokens(foldSearchText(query));
   if (!tokens.length) return null;
   return tokens.map((t) => `${t}:*`).join(" & ");
 }
@@ -90,10 +95,13 @@ export function appsFtsQuery(db: Db, query: string): AppsFtsQuery | null {
  *    STORED needs no backfill or triggers — Postgres computes it on write. */
 export async function ensureAppsFts(db: Db): Promise<void> {
   if (isPostgres(db)) {
+    // Same document expression as the schema.pg.ts generated column (single
+    // source of truth in fts-normalize.ts) — a db that got the column from the
+    // migration and one that got it from here index text identically.
     await dbRun(
       db,
       sql`ALTER TABLE apps ADD COLUMN IF NOT EXISTS search_tsv tsvector
-      GENERATED ALWAYS AS (to_tsvector('simple', coalesce("title", '') || ' ' || coalesce("developer", ''))) STORED`,
+      GENERATED ALWAYS AS (${sql.raw(pgSearchVectorExpr(`coalesce("title", '') || ' ' || coalesce("developer", '')`))}) STORED`,
     );
     await dbRun(db, sql`CREATE INDEX IF NOT EXISTS apps_search_tsv_idx ON apps USING gin (search_tsv)`);
     return;
