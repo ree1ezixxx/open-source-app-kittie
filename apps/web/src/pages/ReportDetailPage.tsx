@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { PageShell } from "../components/PageShell";
 import { EmptyState } from "../components/EmptyState";
 import type { Theme } from "../lib/theme";
@@ -26,7 +26,15 @@ function isTemplate(v: string | undefined): v is ReportTemplateId {
 
 export function ReportDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => void }) {
   const { template } = useParams<{ template: string }>();
-  const [params, setParams] = useState<ReportParams>({ country: "US", period: "7d" });
+  const [search] = useSearchParams();
+  // Seed inputs from the query string so /ask (and shared links) can deep-link.
+  const [params, setParams] = useState<ReportParams>({
+    appId: search.get("appId") ?? undefined,
+    idea: search.get("idea") ?? undefined,
+    category: search.get("category") ?? undefined,
+    country: search.get("country") ?? "US",
+    period: search.get("period") ?? "7d",
+  });
   const [report, setReport] = useState<GeneratedReport | null>(null);
   const [format, setFormat] = useState<ReportFormatId>("markdown");
   const [loading, setLoading] = useState(false);

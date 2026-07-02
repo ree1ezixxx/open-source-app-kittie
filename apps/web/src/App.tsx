@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { Sidebar } from "./components/Sidebar";
 import { ExplorePage } from "./pages/ExplorePage";
+import { AskPage } from "./pages/AskPage";
 import { ReportsPage } from "./pages/ReportsPage";
 import { ReportDetailPage } from "./pages/ReportDetailPage";
 import { AppDetailPage } from "./pages/AppDetailPage";
@@ -95,6 +96,9 @@ export function App() {
         <Route path="/reviews/reviews" element={<RedirectWithSearch to="/dashboard/reviews/feed" />} />
         <Route path="/reviews/:tab" element={<LegacyReviewsRedirect />} />
         <Route path="/mcp" element={<McpLandingPage theme={theme} onToggleTheme={toggleTheme} />} />
+
+        {/* Ask (thin deterministic front door) */}
+        <Route path="/ask" element={<AskPage theme={theme} onToggleTheme={toggleTheme} />} />
 
         {/* Reports (thin, local-first) */}
         <Route path="/reports" element={<ReportsPage theme={theme} onToggleTheme={toggleTheme} />} />
