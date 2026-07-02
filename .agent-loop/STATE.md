@@ -10,9 +10,7 @@ Repo: `ree1ezixxx/open-source-app-kittie` · Coordinator worktree: `open-source-
 
 | PR | Issue | Title | Status | Next |
 |---|---|---|---|---|
-| #200 | (ci-triage seed) | fix: data-sweeps checkout ref | `needs:review` | claude-review-loop |
-| #199 | #183 | Add compare-apps intelligence path | `needs:review` | claude-review-loop |
-| #198 | #185 | Scaffold local-first CLI | `needs:review` | claude-review-loop |
+| #198 | #185 | Scaffold local-first CLI | `needs:rework` | Codex reworks reviewer findings |
 
 ## Completed
 
@@ -21,6 +19,9 @@ Repo: `ree1ezixxx/open-source-app-kittie` · Coordinator worktree: `open-source-
 | 2026-07-01 | #180 | #195 | Locked intelligence response contracts |
 | 2026-07-01 | #181 | #196 | Grounded app-detail intelligence path |
 | 2026-07-01 | #182 | #197 | Trends / category-pulse intelligence path |
+| 2026-07-02 | (infra) | #201 | Bootstrap .agent-loop/ STATE + pr-lifecycle |
+| 2026-07-02 | #183 | #199 | Compare-apps intelligence path (coordinator-merged) |
+| 2026-07-02 | (ci-triage seed) | #200 | data-sweeps checkout ref fix (coordinator-merged) |
 
 ## Claude/Human Review Pile
 
@@ -35,21 +36,23 @@ Repo: `ree1ezixxx/open-source-app-kittie` · Coordinator worktree: `open-source-
 
 ## Blocked (`blocked:dependency`)
 
-- #186 Wire CLI commands — blocked on #185 (PR #198, in review)
+- #186 Wire CLI commands — blocked on #185 (PR #198 in rework)
 - #188 App-teardown/category-pulse reports — blocked on #187
 - #189 Build-brief report — blocked on #187
 - #191 MCP compare/validate/report tools — blocked on #190
-- #193 Reports web surface — blocked on #187
+- #193 Reports web surface — blocked on #187 (note: #183 dep now cleared via #199)
 
 ## Metrics
 
-- Merged this cycle: 0 (since last sync)
-- Open PRs: 4 (#198, #199, #200 + none yet from tonight's loops)
+- Merged: 3 this cycle (#199, #200, #201) — first coordinator-merged PRs
+- Open PRs: 1 (#198, needs:rework)
 
 ## Last Run
 
-**2026-07-02 · reconcile #1 (bootstrap)** — created this file from a live
-`gh pr list` / `gh issue list` pull. Delta: n/a (first snapshot). Opened PR
-#200 (ci-triage seed fix) same pass.
+**2026-07-02 · reconcile #3** — merge gate went live after session left auto mode.
+Coordinator merged #199 + #200 (both independently reviewed by the review worker,
+verdicts confirmed). #198 routed to Codex rework. Board: 1 open PR, 3 ready issues
+(#184/#187/#190), worker 5 still drain-gated. Committed STATE.md directly to main
+(coordinator operational file; main is unprotected; avoids review-queue churn).
 
-(no prior run)
+**2026-07-02 · reconcile #1 (bootstrap)** — created this file; opened PR #200.
