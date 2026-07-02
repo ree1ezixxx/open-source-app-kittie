@@ -16,7 +16,7 @@ import {
   type FindTrendingAppsArgs,
 } from "./intelligence-tools.js";
 
-const API_BASE = process.env.KITTIE_API_URL ?? "http://localhost:3009";
+const API_BASE = process.env.KITTIE_API_URL ?? "http://127.0.0.1:3008";
 
 async function apiGet<T>(path: string): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`);

@@ -31,7 +31,7 @@ App ids look like `apple:123456789` or `google:com.example.app`.
 ## Connect
 
 The server speaks MCP over **stdio**. It calls the Kittie REST API; point it at a running API with
-`KITTIE_API_URL` (default `http://localhost:3009`).
+`KITTIE_API_URL` (default `http://127.0.0.1:3008`).
 
 Claude Desktop / Cursor / any MCP client (`mcpServers` config):
 
