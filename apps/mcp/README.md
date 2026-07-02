@@ -17,6 +17,9 @@ a buildable iOS clone of an app.
 | `get_trending_charts` | Top store rankings (free/paid/grossing) per market with day-over-day rank movement. Honest empty when no clean source. |
 | `find_trending_apps` | Fastest-rising apps for a category/market over a period, as an evidence- & confidence-aware trends response (rank movement, review growth, modelled growth score, caveats). Honest empty when no clean snapshot. |
 | `get_app_detail` | Full intelligence profile for one app: listing facts, observed signals, modelled estimates, plus supporting evidence, a confidence score and caveats. |
+| `compare_apps` | Compare 2+ apps (by id or query) across normalised dimensions with leader/gap insights, evidence and confidence. |
+| `validate_app_idea` | Validate a plain-language idea → verdict, risks, opportunities, ranked competitor evidence, confidence and caveats (canonical `/validate-idea`). |
+| `generate_report` | Render a local-first, evidence-backed report (`app_teardown` / `category_pulse` / `build_brief`) as markdown/html/json; returns metadata + content. |
 | `get_app_history` | Daily review / rating / chart-rank series for one app. |
 | `get_keyword_difficulty` | ASO difficulty for one keyword in a market. |
 | `batch_keyword_difficulty` | ASO difficulty for many keywords at once. |

@@ -153,6 +153,73 @@ export const BASE_TOOLS = [
     },
   },
   {
+    name: "compare_apps",
+    description:
+      "Compare 2+ apps side by side as an evidence- and confidence-aware response: normalised dimensions " +
+      "(rating, reviews, growth, modelled revenue/downloads, chart rank…), each app's values, and " +
+      "leader/gap/missing-data insights. Pass apps by id (`apple:123` / `google:com.x`) or a free-text " +
+      "query that must resolve to one app. Downloads/revenue are MODELLED estimates.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        apps: {
+          type: "array",
+          minItems: 2,
+          description: "Two or more app refs; each is { appId } or { query }, optionally with a store.",
+          items: {
+            type: "object",
+            properties: {
+              appId: { type: "string" },
+              query: { type: "string" },
+              store: { type: "string", enum: ["apple", "google"] },
+            },
+          },
+        },
+      },
+      required: ["apps"],
+    },
+  },
+  {
+    name: "validate_app_idea",
+    description:
+      "Validate a plain-language app idea against the live market: returns a controlled verdict, risks, " +
+      "opportunities, ranked competitor evidence, a confidence score and caveats — on the shared " +
+      "intelligence envelope. Deterministic (no LLM guesses); thin evidence yields an honest " +
+      "low-confidence verdict rather than false certainty.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        idea: { type: "string", description: "The app idea, in plain language." },
+        store: { type: "string", enum: ["apple", "google"], description: "Restrict competitor search to one store." },
+        limit: { type: "number", description: "Max competitors considered (≤50)." },
+      },
+      required: ["idea"],
+    },
+  },
+  {
+    name: "generate_report",
+    description:
+      "Generate a local-first, evidence-backed report and return its metadata + rendered content. " +
+      "Templates: `app_teardown` (needs `appId`), `category_pulse` (`category`/`country`/`period`), " +
+      "`build_brief` (needs `idea`). Output `markdown`/`html`/`json` (default json). Evidence, " +
+      "confidence and caveats are preserved in every format; derived brief sections are labelled.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        template: { type: "string", enum: ["app_teardown", "category_pulse", "build_brief"] },
+        format: { type: "string", enum: ["json", "markdown", "html"], default: "json" },
+        appId: { type: "string", description: "For app_teardown." },
+        idea: { type: "string", description: "For build_brief." },
+        store: { type: "string", enum: ["apple", "google"], description: "For build_brief." },
+        category: { type: "string", description: "For category_pulse." },
+        country: { type: "string", default: "US", description: "For category_pulse." },
+        period: { type: "string", enum: ["7d", "14d", "30d", "60d", "90d"], default: "7d", description: "For category_pulse." },
+        limit: { type: "number", description: "For category_pulse / build_brief." },
+      },
+      required: ["template"],
+    },
+  },
+  {
     name: "get_app_history",
     description:
       "Daily historical series for one app (review count, rating, chart rank) — the raw trend behind the " +
