@@ -6,7 +6,7 @@
 import type {
   AppDetailIntelligenceResponse,
   CompareAppsIntelligenceResponse,
-  ValidateAppIdeaResult,
+  ValidateIdeaIntelligenceResponse,
 } from "@kittie/types";
 import { renderTable } from "./output.js";
 import type { TrendsIntelligenceResponse } from "./intelligence-client.js";
@@ -83,16 +83,21 @@ export function formatCompare(res: CompareAppsIntelligenceResponse): string {
   return lines.join("\n");
 }
 
-export function formatValidate(res: ValidateAppIdeaResult): string {
+export function formatValidate(res: ValidateIdeaIntelligenceResponse): string {
+  const { data } = res;
+  const topNames = data.competitors.slice(0, 3).map((c) => c.title).join(", ");
   const lines = [
-    `Verdict: ${res.verdict}`,
-    `Confidence: ${res.packet.confidence.score.toFixed(2)}`,
-    `Competitors: ${res.competitors.length} — ${res.competitorSummary}`,
+    `Verdict: ${data.verdict}`,
+    `Confidence: ${res.confidence.score.toFixed(2)} (${res.confidence.label})`,
+    `Likely category: ${data.likelyCategory ?? "—"}`,
+    `Competitors: ${data.competitors.length}${topNames ? ` — top: ${topNames}` : ""}`,
   ];
-  if (res.recommendedAngle) lines.push(`Angle: ${res.recommendedAngle}`);
-  if (res.mvp.length > 0) lines.push("MVP:", ...res.mvp.map((m) => `  - ${m}`));
-  if (res.risks.length > 0) lines.push("Risks:", ...res.risks.map((r) => `  - ${r}`));
-  lines.push(`Evidence: ${res.packet.evidence.length} item(s)`);
-  lines.push("", res.agentSummary);
+  if (data.risks.length > 0) lines.push("Risks:", ...data.risks.map((r) => `  - ${r.message}`));
+  if (data.opportunities.length > 0) {
+    lines.push("Opportunities:", ...data.opportunities.map((o) => `  - ${o.message}`));
+  }
+  lines.push(`Evidence: ${res.evidence.length} item(s)`);
+  lines.push(...caveatBlock(res.caveats));
+  lines.push("", data.verdictReason);
   return lines.join("\n");
 }

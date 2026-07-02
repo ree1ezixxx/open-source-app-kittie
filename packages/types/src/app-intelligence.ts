@@ -1,15 +1,12 @@
 /**
  * App-Intelligence P0 contracts — the shared I/O shapes for the agent-facing
- * `find_similar_apps` and `validate_app_idea` tools (Lane A foundation).
- *
- * Anchored on the canonical `DecisionPacket`/`Provenanced` honesty primitives —
- * this module deliberately does NOT re-declare a confidence/evidence/next-action
- * model. Confidence, evidence, coverage (what was missing) and recommended next
- * tools all live inside the embedded `DecisionPacket`; the types here add only
- * the P0-specific *interpretation* layer (how an idea was read, how apps were
- * matched, and the deterministic score breakdown) on top of it.
+ * `find_similar_apps` tool plus the idea-interpretation and deterministic
+ * scoring vocabulary shared with the canonical validate-idea path
+ * (`validate-idea-intelligence.ts`, #184). The legacy DecisionPacket-anchored
+ * `validate_app_idea` result contract was retired when the #180-envelope
+ * validate-idea response became canonical (coordinator ruling on #184).
  */
-import type { Confidence, DecisionPacket } from "./decision-packet.js";
+import type { Confidence } from "./decision-packet.js";
 import type { ValueKind } from "./provenance.js";
 import type { AppListItem, Store } from "./index.js";
 
@@ -111,8 +108,8 @@ export interface IdeaScoreBreakdown {
 
 /**
  * Controlled verdict vocabulary (§5.6) — NOT free text, so agents can branch on
- * it. `not_enough_data` is the honest sink when evidence is thin or the LLM
- * narrative degraded on a Gemini quota error.
+ * it. `not_enough_data` is the honest sink when evidence is thin or the idea is
+ * too ambiguous to match competitors reliably.
  */
 export type IdeaVerdict =
   | "strong_opportunity"
@@ -122,39 +119,3 @@ export type IdeaVerdict =
   | "unvalidated"
   | "not_enough_data";
 
-/** Input to `validate_app_idea`. */
-export interface ValidateAppIdeaInput {
-  /** The app idea to validate, in free text. */
-  idea: string;
-  /** Restrict competitor search to one store; default = both. */
-  store?: Store;
-}
-
-/**
- * Result of `validate_app_idea` — a structured report anchored on `DecisionPacket`.
- * Canonical evidence/confidence/coverage/next-actions live in `packet`; the
- * fields here are the validate-specific interpretation layer on top of it.
- * `confidence === packet.confidence` and `evidence === packet.evidence`.
- */
-export interface ValidateAppIdeaResult {
-  /** How the idea was read into categories/keywords. */
-  interpretedIdea: InterpretedIdea;
-  /** Competitor set the verdict was reasoned from (via `find_similar_apps`). */
-  competitors: SimilarApp[];
-  /** Short prose summary of the competitive landscape. */
-  competitorSummary: string;
-  /** Deterministic score breakdown (§5.5). */
-  scores: IdeaScoreBreakdown;
-  /** Controlled verdict label (§5.6); mirrors `packet.decision`. */
-  verdict: IdeaVerdict;
-  /** LLM-generated (cached) differentiation angle; `null` when degraded on quota. */
-  recommendedAngle: string | null;
-  /** LLM-generated (cached) minimal MVP feature set; empty when degraded. */
-  mvp: string[];
-  /** Key risks for this idea. */
-  risks: string[];
-  /** Canonical decision — evidence, confidence, coverage.missing, recommendedActions, snapshotId. */
-  packet: DecisionPacket;
-  /** One-paragraph readout an external agent can act on without parsing `packet`. */
-  agentSummary: string;
-}

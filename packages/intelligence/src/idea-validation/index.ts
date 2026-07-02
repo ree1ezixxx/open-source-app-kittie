@@ -85,15 +85,19 @@ export function scoreIdea(input: IdeaScoringInput): IdeaScoreBreakdown {
 /**
  * Map the deterministic scores onto the controlled §5.6 verdict vocabulary.
  * `unvalidated` = no competitors (demand unproven); `not_enough_data` = the
- * catalog has namesakes but no real signal to judge on.
+ * catalog has namesakes but no real signal to judge on. `ambiguous` = the idea
+ * parsed to no usable keywords, so any competitor match is noise — an agent
+ * branching on the verdict must never see a strong label from an unparseable
+ * idea, only the honest low-information sink.
  */
 export function deriveVerdict(
   scores: IdeaScoreBreakdown,
   competitorCount: number,
   evidenceThin: boolean,
+  ambiguous = false,
 ): IdeaVerdict {
   if (competitorCount === 0) return "unvalidated";
-  if (evidenceThin) return "not_enough_data";
+  if (ambiguous || evidenceThin) return "not_enough_data";
   const sat = scores.marketSaturation.score;
   const diff = scores.differentiation.score;
   const dem = scores.demandSignal.score;
@@ -106,52 +110,4 @@ export function deriveVerdict(
   // strong demand + differentiation marking the best case.
   if (dem >= 0.45 && diff >= 0.4) return "strong_opportunity";
   return "has_room";
-}
-
-/** Plain-language competitive-landscape summary. */
-export function summarizeCompetitors(
-  competitors: SimilarApp[],
-  reviewThemes: string[],
-): string {
-  if (competitors.length === 0) return "No competitors surfaced in the catalog.";
-  const direct = competitors.filter((c) => c.similarityClass === "direct").length;
-  const top = [...competitors]
-    .sort((a, b) => b.app.reviewCount - a.app.reviewCount)
-    .slice(0, 3)
-    .map(
-      (c) =>
-        `${c.app.title} (${c.app.reviewCount.toLocaleString()} reviews${
-          c.app.rating != null ? `, ${c.app.rating.toFixed(1)}★` : ""
-        })`,
-    );
-  const themes = reviewThemes.length
-    ? ` Recurring complaints: ${reviewThemes.slice(0, 5).join(", ")}.`
-    : "";
-  return `${competitors.length} competitor(s) (${direct} direct). Top: ${top.join("; ")}.${themes}`;
-}
-
-const VERDICT_PHRASE: Record<IdeaVerdict, string> = {
-  strong_opportunity: "a strong opportunity",
-  has_room: "has room for a focused entrant",
-  crowded: "crowded",
-  saturated: "saturated",
-  unvalidated: "unvalidated — no competitors found, demand unproven",
-  not_enough_data: "not assessable — too little market data",
-};
-
-/** One-paragraph readout an external agent can act on without parsing the report. */
-export function buildValidateAgentSummary(
-  idea: string,
-  verdict: IdeaVerdict,
-  scores: IdeaScoreBreakdown,
-  competitors: SimilarApp[],
-  recommendedAngle: string | null,
-): string {
-  const angle = recommendedAngle ? ` Suggested angle: ${recommendedAngle}` : "";
-  return (
-    `Verdict: "${idea}" is ${VERDICT_PHRASE[verdict]}. ` +
-    `${competitors.length} competitor(s); saturation ${scores.marketSaturation.score}, ` +
-    `demand ${scores.demandSignal.score}, differentiation ${scores.differentiation.score}, ` +
-    `incumbent strength ${scores.competitorQuality.score}.${angle}`
-  );
 }

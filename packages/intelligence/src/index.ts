@@ -43,6 +43,11 @@ export {
   type BuildCompareAppsInput,
 } from "./compare-apps.js";
 export {
+  buildValidateIdeaResponse,
+  ValidateIdeaInputError,
+  type BuildValidateIdeaInput,
+} from "./validate-idea.js";
+export {
   computeDemandSignal,
   type DemandSignal,
   type DemandSignalInput,
@@ -87,8 +92,6 @@ export {
 export {
   scoreIdea,
   deriveVerdict,
-  summarizeCompetitors,
-  buildValidateAgentSummary,
   type IdeaScoringInput,
 } from "./idea-validation/index.js";
 

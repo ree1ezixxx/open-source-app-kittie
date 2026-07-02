@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type {
   AppDetailIntelligenceResponse,
   CompareAppsIntelligenceResponse,
-  ValidateAppIdeaResult,
+  ValidateIdeaIntelligenceResponse,
 } from "@kittie/types";
 import {
   formatAppIntelligence,
@@ -57,15 +57,21 @@ const compareRes = {
 } as unknown as CompareAppsIntelligenceResponse;
 
 const validateRes = {
-  verdict: "has_room",
-  competitors: [{}, {}],
-  competitorSummary: "Crowded but with a gap for students.",
-  recommendedAngle: "Exam-week planning.",
-  mvp: ["Timer", "Streaks"],
-  risks: ["Crowded category"],
-  packet: { confidence: { score: 0.59, reasons: [] }, evidence: [{}, {}] },
-  agentSummary: "Has room: differentiate on exam-week planning.",
-} as unknown as ValidateAppIdeaResult;
+  responseType: "idea_validation",
+  status: "partial",
+  data: {
+    idea: "a focus timer for students",
+    verdict: "has_room",
+    verdictReason: "Has room: differentiate on exam-week planning.",
+    likelyCategory: "Productivity",
+    competitors: [{ title: "Focus Timer" }, { title: "Deep Focus" }],
+    risks: [{ message: "Crowded category", evidenceIds: [] }],
+    opportunities: [{ message: "Complaints about sync bugs", evidenceIds: [] }],
+  },
+  evidence: [{}, {}],
+  confidence: { score: 0.59, label: "low", reasons: [] },
+  caveats: [],
+} as unknown as ValidateIdeaIntelligenceResponse;
 
 describe("formatAppIntelligence", () => {
   it("shows app facts, estimates, confidence, and caveats", () => {
@@ -104,12 +110,15 @@ describe("formatCompare", () => {
 });
 
 describe("formatValidate", () => {
-  it("shows verdict, confidence, evidence count, risks, and summary", () => {
+  it("shows verdict, confidence, evidence count, risks, opportunities, and reason", () => {
     const out = formatValidate(validateRes);
     expect(out).toContain("Verdict: has_room");
-    expect(out).toContain("Confidence: 0.59");
+    expect(out).toContain("Confidence: 0.59 (low)");
+    expect(out).toContain("Likely category: Productivity");
+    expect(out).toContain("Competitors: 2 — top: Focus Timer, Deep Focus");
     expect(out).toContain("Evidence: 2 item(s)");
     expect(out).toContain("Crowded category");
+    expect(out).toContain("Complaints about sync bugs");
     expect(out).toContain("differentiate on exam-week planning");
   });
 });

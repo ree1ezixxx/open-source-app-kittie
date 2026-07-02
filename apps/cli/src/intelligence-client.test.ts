@@ -63,10 +63,10 @@ describe("compareApps", () => {
 });
 
 describe("validateIdea", () => {
-  it("POSTs the idea and returns the top-level result", async () => {
-    const seen = stubFetch({ verdict: "has_room", marker: 4 });
+  it("POSTs the idea to the canonical validate-idea path and unwraps { data }", async () => {
+    const seen = stubFetch({ data: { responseType: "idea_validation", marker: 4 } });
     const res = (await validateIdea({ idea: "a focus timer" })) as unknown as { marker: number };
-    expect(seen.url).toContain("/api/v1/app-intelligence/validate");
+    expect(seen.url).toContain("/api/v1/app-intelligence/validate-idea");
     expect(JSON.parse(String(seen.init?.body))).toEqual({ idea: "a focus timer" });
     expect(res.marker).toBe(4);
   });
