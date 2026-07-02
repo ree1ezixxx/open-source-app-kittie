@@ -26,65 +26,65 @@ import {
 type Item = { to: string; label: string; icon: typeof IconDatabase; badge?: "total" };
 type Group = { label: string; items: Item[]; collapsible?: boolean };
 
-// Information architecture mirrors the live appkittie.com left-nav exactly (groups,
-// order, labels). Brand aside, the clone matches truth's taxonomy 1:1. Clone-only
-// surfaces with no truth equivalent (Builder, App Engine) are kept as routes but
-// omitted from the nav so the sidebar is a faithful clone.
-const PRIMARY: Group[] = [
-  {
-    label: "Explore",
-    items: [
-      { to: "/dashboard/pulse", label: "Pulse", icon: IconTrending },
-      { to: "/dashboard/explore", label: "Apps", icon: IconDatabase, badge: "total" },
-      { to: "/dashboard/ads", label: "Ads", icon: IconImage },
-      { to: "/dashboard/organic", label: "Organic", icon: IconVideo },
-      { to: "/dashboard/highlights", label: "Highlights", icon: IconSpark },
-      { to: "/dashboard/trending", label: "Trending", icon: IconTrending },
-      { to: "/dashboard/rising", label: "Rising", icon: IconRising },
-    ],
-  },
-  {
-    label: "Your apps",
-    items: [{ to: "/dashboard/favorites", label: "Favorites", icon: IconStar }],
-  },
-  {
-    label: "ASO",
-    items: [
-      { to: "/dashboard/aso/apps", label: "App Tracking", icon: IconGrid },
-      { to: "/dashboard/aso/keywords", label: "Keyword Explorer", icon: IconSearch },
-      { to: "/dashboard/aso/screenshots", label: "Screenshots", icon: IconImage },
-      { to: "/dashboard/aso/screenshot-translation", label: "Translations", icon: IconGlobe },
-    ],
-  },
-  {
-    label: "Analytics",
-    items: [{ to: "/dashboard/reviews", label: "Reviews", icon: IconMessage }],
-  },
-  {
-    label: "App ideas",
-    items: [{ to: "/dashboard/hot-ideas", label: "Hot ideas", icon: IconBulb }],
-  },
-  // New product surface (post-pivot): the market-awareness layer. Not part of the
-  // appkittie clone taxonomy above — it's the decision loop the pivot is built around.
+// Engine-first IA (#194, #179): the primary nav is the intelligence product —
+// Ask (front door), Reports, App Intelligence — plus Developers (MCP / API).
+// The many appkittie-clone dashboards are NOT deleted; they move under a
+// collapsed "Dashboards (legacy)" group so every route stays reachable while the
+// new surfaces prove coverage. Nothing here removes a route or a page.
+export const PRIMARY: Group[] = [
   {
     label: "Intelligence",
-    items: [{ to: "/intelligence", label: "App Intelligence", icon: IconSparkles }],
+    items: [
+      { to: "/ask", label: "Ask", icon: IconMessage },
+      { to: "/reports", label: "Reports", icon: IconGrid },
+      { to: "/intelligence", label: "App Intelligence", icon: IconSparkles },
+    ],
   },
 ];
 
-const DEVELOPERS: Group = {
-  label: "API",
+export const DEVELOPERS: Group = {
+  label: "Developers",
   items: [
-    { to: "/settings/api-keys", label: "API Keys", icon: IconKey },
     { to: "/mcp", label: "MCP", icon: IconTerminal },
     { to: "/docs", label: "API Docs", icon: IconBook },
+    { to: "/settings/api-keys", label: "API Keys", icon: IconKey },
   ],
 };
 
-const TOOLS: Group = {
-  label: "Tools",
-  items: [{ to: "/tools/pricing-calculator", label: "Pricing Calculator", icon: IconCoin }],
+// Legacy appkittie dashboards — kept reachable (collapsed by default), not
+// removed. The group auto-expands when one of its routes is active.
+export const LEGACY: Group = {
+  label: "Dashboards (legacy)",
+  collapsible: true,
+  items: [
+    { to: "/dashboard/pulse", label: "Pulse", icon: IconTrending },
+    { to: "/dashboard/explore", label: "Apps", icon: IconDatabase, badge: "total" },
+    { to: "/dashboard/ads", label: "Ads", icon: IconImage },
+    { to: "/dashboard/organic", label: "Organic", icon: IconVideo },
+    { to: "/dashboard/highlights", label: "Highlights", icon: IconSpark },
+    { to: "/dashboard/trending", label: "Trending", icon: IconTrending },
+    { to: "/dashboard/rising", label: "Rising", icon: IconRising },
+    { to: "/dashboard/favorites", label: "Favorites", icon: IconStar },
+    { to: "/dashboard/aso/apps", label: "App Tracking", icon: IconGrid },
+    { to: "/dashboard/aso/keywords", label: "Keyword Explorer", icon: IconSearch },
+    { to: "/dashboard/aso/screenshots", label: "Screenshots", icon: IconImage },
+    { to: "/dashboard/aso/screenshot-translation", label: "Translations", icon: IconGlobe },
+    { to: "/dashboard/reviews", label: "Reviews", icon: IconMessage },
+    { to: "/dashboard/hot-ideas", label: "Hot ideas", icon: IconBulb },
+    { to: "/tools/pricing-calculator", label: "Pricing Calculator", icon: IconCoin },
+  ],
 };
+
+export const FOOT_ITEM: Item = { to: "/settings", label: "Settings", icon: IconSettings };
+
+/** Every destination the sidebar links to — the primary IA plus Developers,
+ *  the legacy dashboards group, and the Settings foot. */
+export const SIDEBAR_LINKS: string[] = [
+  ...PRIMARY.flatMap((g) => g.items),
+  ...DEVELOPERS.items,
+  ...LEGACY.items,
+  FOOT_ITEM,
+].map((it) => it.to);
 
 const NAV_OPEN_KEY = "kittie-nav-open";
 
@@ -158,7 +158,7 @@ export function Sidebar({ total = 0 }: { total?: number }) {
     <aside className="sidebar">
       <button
         className="brand"
-        onClick={() => nav("/dashboard/explore")}
+        onClick={() => nav("/ask")}
         style={{ border: "none", background: "none", cursor: "pointer", width: "100%" }}
       >
         <div className="brand-mark">
@@ -172,10 +172,10 @@ export function Sidebar({ total = 0 }: { total?: number }) {
 
       {PRIMARY.map(renderGroup)}
       {renderGroup(DEVELOPERS)}
-      {renderGroup(TOOLS)}
+      {renderGroup(LEGACY)}
 
       <div className="sidebar-foot">
-        {renderItem({ to: "/settings", label: "Settings", icon: IconSettings })}
+        {renderItem(FOOT_ITEM)}
         <FreshnessFooter />
       </div>
     </aside>
