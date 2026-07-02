@@ -17,7 +17,7 @@ const INSTALL_CMD =
 
 const TOOLS = [
   { name: "search_apps", credits: "1 credit / app", desc: "Search and filter iOS apps by category, revenue, downloads, growth, ratings, and 30+ other filters." },
-  { name: "get_app_detail", credits: "1 credit", desc: "Full app data — metadata, revenue, historical trends, Meta ads, Apple ads, IAPs, creators, and contacts." },
+  { name: "get_app_detail", credits: "1 credit", desc: "Full app intelligence — listing facts, observed signals, and modelled estimates (downloads, revenue, growth), each returned with supporting evidence, a confidence score, and honest caveats." },
   { name: "get_keyword_difficulty", credits: "10 credits", desc: "Deep keyword analysis — popularity, difficulty, traffic score, and the top-ranking apps for any keyword." },
   { name: "batch_keyword_difficulty", credits: "10 credits / keyword", desc: "Analyze up to 10 keywords at once, auto-sorted by opportunity. Best keywords surface first." },
   { name: "get_app_reviews", credits: "1 credit / review", desc: "Fetch user reviews for any app — ratings, text, dates, and reviewer info. Paginated for bulk analysis." },
@@ -74,7 +74,7 @@ const PROMPTS = [
 
 const PRICING = [
   { tool: "search_apps", what: "Search & filter apps", cost: "1 credit / app" },
-  { tool: "get_app_detail", what: "Full app details", cost: "1 credit" },
+  { tool: "get_app_detail", what: "Full app intelligence (evidence-backed)", cost: "1 credit" },
   { tool: "get_keyword_difficulty", what: "Single keyword analysis", cost: "10 credits" },
   { tool: "batch_keyword_difficulty", what: "Batch keyword analysis", cost: "10 credits / kw" },
   { tool: "get_app_reviews", what: "Fetch app reviews", cost: "1 credit / review" },

@@ -22,7 +22,7 @@ Revenue and download figures are **modelled estimates, labelled as such — not 
 
 ## MCP
 
-- An [`@kittie/mcp`](https://github.com/) Model Context Protocol server exposes the same capabilities as agent tools (`search_apps`, `get_app_detail`, `get_keyword_difficulty`, `batch_keyword_difficulty`, `get_app_reviews`, `get_supported_countries`, `clone_ios_app`). Transport is currently **stdio**; a remote (HTTP) MCP endpoint is planned.
+- An [`@kittie/mcp`](https://github.com/) Model Context Protocol server exposes the same capabilities as agent tools (`search_apps`, `find_trending_apps`, `get_app_detail`, `get_keyword_difficulty`, `batch_keyword_difficulty`, `get_app_reviews`, `get_supported_countries`, `clone_ios_app`). `get_app_detail` and `find_trending_apps` return evidence/confidence/caveats-aware intelligence responses. Transport is currently **stdio**; a remote (HTTP) MCP endpoint is planned.
 
 ## Notes
 
