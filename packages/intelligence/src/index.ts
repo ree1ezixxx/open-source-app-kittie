@@ -38,6 +38,11 @@ export {
   type CategoryPulseAppInput,
 } from "./trends.js";
 export {
+  buildCompareAppsResponse,
+  CompareAppsError,
+  type BuildCompareAppsInput,
+} from "./compare-apps.js";
+export {
   computeDemandSignal,
   type DemandSignal,
   type DemandSignalInput,

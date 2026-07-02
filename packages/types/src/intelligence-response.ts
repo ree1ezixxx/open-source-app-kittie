@@ -11,6 +11,7 @@ export const INTELLIGENCE_CONTRACT_VERSION = "2026-07-01";
 
 export type IntelligenceResponseType =
   | "app_detail"
+  | "compare_apps"
   | "trends"
   | "idea_validation"
   | "report";
