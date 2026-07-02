@@ -1,8 +1,11 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { createClient } from "@libsql/client";
-import { drizzle } from "drizzle-orm/libsql";
+import { createClient, type Client } from "@libsql/client";
+import { drizzle, type LibSQLDatabase } from "drizzle-orm/libsql";
+import { drizzle as drizzlePg } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 import * as schema from "./schema.js";
+import * as schemaPg from "./schema.pg.js";
 
 const repoRoot = path.resolve(fileURLToPath(import.meta.url), "../../../..");
 const defaultDbPath = path.join(repoRoot, "data", "kittie.db");
@@ -20,13 +23,26 @@ function absolutize(url: string): string {
   return `file:${path.isAbsolute(p) ? p : path.resolve(repoRoot, p)}`;
 }
 
-export function createDb(databaseUrl?: string) {
-  const url = absolutize(
-    databaseUrl ??
-      process.env.TURSO_DATABASE_URL ??
-      process.env.DATABASE_URL ??
-      `file:${defaultDbPath}`,
-  );
+/** A `postgres://` / `postgresql://` URL selects the Postgres (Supabase/Neon)
+ *  driver; anything else stays on libsql/SQLite as before. */
+export function isPostgresUrl(url: string | undefined): boolean {
+  return !!url && /^postgres(ql)?:\/\//i.test(url);
+}
+
+export function createDb(databaseUrl?: string): Db {
+  const rawUrl =
+    databaseUrl ?? process.env.TURSO_DATABASE_URL ?? process.env.DATABASE_URL ?? `file:${defaultDbPath}`;
+
+  // Postgres path (prod). Same query interface; the pg drizzle instance is
+  // structurally compatible with the canonical `Db`, so consumers are unchanged.
+  // NOTE: SQLite FTS5 (queries/fts.ts) has no Postgres equivalent yet — Postgres
+  // full-text search (tsvector/pg_trgm) is a follow-up; see docs/schema-requests.md.
+  if (isPostgresUrl(rawUrl)) {
+    const sqlClient = postgres(rawUrl, { max: 10 });
+    return drizzlePg(sqlClient, { schema: schemaPg }) as unknown as Db;
+  }
+
+  const url = absolutize(rawUrl);
 
   const client = createClient({
     url,
@@ -47,4 +63,9 @@ export function createDb(databaseUrl?: string) {
   return drizzle(client, { schema });
 }
 
-export type Db = ReturnType<typeof createDb>;
+/**
+ * Canonical DB handle type = the libsql/SQLite drizzle instance. The Postgres
+ * driver is cast to this at the boundary (dual-dialect port, #242) so the ~20
+ * query modules and every consumer stay unchanged across dialects.
+ */
+export type Db = LibSQLDatabase<typeof schema> & { $client: Client };
