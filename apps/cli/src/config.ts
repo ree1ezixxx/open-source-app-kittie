@@ -8,7 +8,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
-export const DEFAULT_API_BASE_URL = "http://localhost:3009";
+export const DEFAULT_API_BASE_URL = "http://127.0.0.1:3008";
 export const ENV_API_URL = "KITTIE_API_URL";
 export const ENV_API_TOKEN = "KITTIE_API_TOKEN";
 export const ENV_CONFIG_HOME = "KITTIE_CONFIG_HOME";
@@ -25,8 +25,10 @@ export interface StoredConfig {
 
 type Env = Record<string, string | undefined>;
 
-function clean(value: string | null | undefined): string | undefined {
-  if (value === null || value === undefined) return undefined;
+function clean(value: unknown): string | undefined {
+  // Only strings are valid — a hand-edited/externally-written config with a
+  // non-string value (e.g. `{"apiBaseUrl": 3008}`) must not crash resolution.
+  if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
 }
@@ -40,7 +42,9 @@ export function loadStoredConfig(path: string): StoredConfig {
   if (!existsSync(path)) return {};
   try {
     const parsed = JSON.parse(readFileSync(path, "utf8")) as unknown;
-    if (!parsed || typeof parsed !== "object") return {};
+    // Reject non-objects and arrays (typeof [] === "object"); `clean()` guards
+    // individual field types, so a wrong-typed value degrades to the default.
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
     return parsed as StoredConfig;
   } catch {
     // A corrupt config file must never crash the CLI — treat as empty.
@@ -49,8 +53,9 @@ export function loadStoredConfig(path: string): StoredConfig {
 }
 
 export function saveStoredConfig(path: string, config: StoredConfig): void {
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+  // The file can hold an auth token — keep it owner-only (dir 0700, file 0600).
+  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
+  writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
 }
 
 export interface ResolveInput {

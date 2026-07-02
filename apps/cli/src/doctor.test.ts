@@ -10,10 +10,10 @@ const clock = () => {
 describe("runDoctor", () => {
   it("reports OK when the API health check succeeds", async () => {
     const fetchImpl: FetchLike = async (url) => {
-      expect(url).toBe("http://localhost:3009/health");
+      expect(url).toBe("http://localhost:3008/health");
       return { ok: true, status: 200 };
     };
-    const report = await runDoctor({ apiBaseUrl: "http://localhost:3009", fetchImpl, now: clock() });
+    const report = await runDoctor({ apiBaseUrl: "http://localhost:3008", fetchImpl, now: clock() });
     expect(report.ok).toBe(true);
     expect(report.status).toBe(200);
     expect(report.latencyMs).toBeGreaterThanOrEqual(0);
@@ -26,8 +26,8 @@ describe("runDoctor", () => {
       seen = url;
       return { ok: true, status: 200 };
     };
-    await runDoctor({ apiBaseUrl: "http://localhost:3009/", fetchImpl, now: clock() });
-    expect(seen).toBe("http://localhost:3009/health");
+    await runDoctor({ apiBaseUrl: "http://localhost:3008/", fetchImpl, now: clock() });
+    expect(seen).toBe("http://localhost:3008/health");
   });
 
   it("sends a bearer token when configured", async () => {
@@ -56,6 +56,18 @@ describe("runDoctor", () => {
     expect(report.ok).toBe(false);
     expect(report.status).toBeNull();
     expect(report.error).toContain("ECONNREFUSED");
+  });
+
+  it("times out instead of hanging on an unresponsive API", async () => {
+    // Mock that only ever settles when the abort signal fires.
+    const fetchImpl: FetchLike = (_url, init) =>
+      new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+      });
+    const report = await runDoctor({ apiBaseUrl: "http://x", fetchImpl, timeoutMs: 10 });
+    expect(report.ok).toBe(false);
+    expect(report.status).toBeNull();
+    expect(report.error).toContain("timed out");
   });
 });
 

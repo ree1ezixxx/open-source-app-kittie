@@ -43,6 +43,13 @@ describe("resolveConfig precedence", () => {
     const cfg = resolveConfig({ env: { KITTIE_API_URL: "   " }, stored: { apiBaseUrl: "" } });
     expect(cfg.apiBaseUrl).toBe(DEFAULT_API_BASE_URL);
   });
+
+  it("degrades non-string stored values to the default instead of crashing", () => {
+    // e.g. a hand-edited config: { "apiBaseUrl": 3008 }
+    const stored = { apiBaseUrl: 3008 } as unknown as { apiBaseUrl?: string };
+    expect(() => resolveConfig({ stored })).not.toThrow();
+    expect(resolveConfig({ stored }).apiBaseUrl).toBe(DEFAULT_API_BASE_URL);
+  });
 });
 
 describe("configPath", () => {
@@ -74,6 +81,12 @@ describe("stored config round-trip", () => {
   it("tolerates a corrupt file", () => {
     const path = join(dir, "config.json");
     writeFileSync(path, "{not json");
+    expect(loadStoredConfig(path)).toEqual({});
+  });
+
+  it("rejects a JSON array as config", () => {
+    const path = join(dir, "config.json");
+    writeFileSync(path, "[1,2,3]");
     expect(loadStoredConfig(path)).toEqual({});
   });
 });

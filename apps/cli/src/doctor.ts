@@ -14,26 +14,33 @@ export interface DoctorReport {
 
 export type FetchLike = (
   url: string,
-  init?: { headers?: Record<string, string> },
+  init?: { headers?: Record<string, string>; signal?: AbortSignal },
 ) => Promise<{ ok: boolean; status: number }>;
+
+export const DEFAULT_DOCTOR_TIMEOUT_MS = 5000;
 
 export interface RunDoctorOptions {
   apiBaseUrl: string;
   authToken?: string | null;
   fetchImpl?: FetchLike;
   now?: () => number;
+  /** Abort the probe after this many ms so a hung API can't hang `doctor`. */
+  timeoutMs?: number;
 }
 
 export async function runDoctor(options: RunDoctorOptions): Promise<DoctorReport> {
   const fetchImpl = options.fetchImpl ?? (globalThis.fetch as unknown as FetchLike);
   const now = options.now ?? (() => Date.now());
+  const timeoutMs = options.timeoutMs ?? DEFAULT_DOCTOR_TIMEOUT_MS;
   const url = `${options.apiBaseUrl.replace(/\/+$/, "")}/health`;
   const headers: Record<string, string> = {};
   if (options.authToken) headers.Authorization = `Bearer ${options.authToken}`;
 
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   const start = now();
   try {
-    const res = await fetchImpl(url, { headers });
+    const res = await fetchImpl(url, { headers, signal: controller.signal });
     return {
       apiBaseUrl: options.apiBaseUrl,
       ok: res.ok,
@@ -42,13 +49,14 @@ export async function runDoctor(options: RunDoctorOptions): Promise<DoctorReport
       error: res.ok ? null : `HTTP ${res.status}`,
     };
   } catch (err) {
-    return {
-      apiBaseUrl: options.apiBaseUrl,
-      ok: false,
-      status: null,
-      latencyMs: now() - start,
-      error: err instanceof Error ? err.message : String(err),
-    };
+    const error = controller.signal.aborted
+      ? `timed out after ${timeoutMs}ms`
+      : err instanceof Error
+        ? err.message
+        : String(err);
+    return { apiBaseUrl: options.apiBaseUrl, ok: false, status: null, latencyMs: now() - start, error };
+  } finally {
+    clearTimeout(timer);
   }
 }
 

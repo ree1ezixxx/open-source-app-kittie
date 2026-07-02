@@ -102,6 +102,10 @@ function cmdConfig(args: string[], mode: OutputMode) {
       console.error("Usage: pluto config set <api-url|token> <value>");
       process.exit(1);
     }
+    if (value.trim().length === 0) {
+      console.error(`Empty value for ${key}. To clear it, remove the entry from ${path}.`);
+      process.exit(1);
+    }
     const stored = loadStoredConfig(path);
     if (key === "api-url") stored.apiBaseUrl = value;
     else if (key === "token") stored.authToken = value;
@@ -114,8 +118,10 @@ function cmdConfig(args: string[], mode: OutputMode) {
     return;
   }
   const cfg = loadConfig();
+  // Never echo the token value (even in --json) — report only whether it is set.
+  const shown = { apiBaseUrl: cfg.apiBaseUrl, authToken: cfg.authToken ? "set" : null, configPath: path };
   console.log(
-    formatOutput(mode, { ...cfg, configPath: path }, () =>
+    formatOutput(mode, shown, () =>
       [
         `Config file: ${path}`,
         `API base URL: ${cfg.apiBaseUrl}`,
