@@ -18,9 +18,7 @@ Repo: `ree1ezixxx/open-source-app-kittie` · Coordinator worktree: `open-source-
 
 ## Active Work
 
-Two PRs in flight this turn:
-- `compare_apps` input-validation hardening — follow-up to #225 (#191 MCP tools).
-- This STATE reconcile (#9).
+_No open PRs._ Worker 6 on the final queue (#221, #229).
 
 ## Completed (merged to main)
 
@@ -42,17 +40,19 @@ Two PRs in flight this turn:
 | 2026-07-02 | #184 | #218 | Validate-idea path — canonical `/validate-idea`, legacy `/validate` RETIRED, CLI repointed. **All four #179 intelligence paths complete.** |
 | 2026-07-02 | #189 | #223 | Build-brief report from idea validation |
 | 2026-07-02 | #191 | #225 | MCP `compare_apps` / `validate_app_idea` / `generate_report` tools |
+| 2026-07-02 | #193 | #227 | Reports web surface — post-merge live QA done w/ evidence (see PR comment) |
+| 2026-07-02 | (fix) | #228 | compare_apps ambiguous-ref rejection (#191 AC gap) |
+| 2026-07-02 | #220 | #230 | CLI↔API integration smoke over real route mounts |
 | 2026-07-02 | (ci/infra) | #200/#202/#204/#206/#209 | sweeps ref+build fixes, STATE reconciles, sweep disabled |
 
 ## In progress
 
-- _None_ — #189/#191 merged (#223/#225); worker 6 free for the Ready queue.
+- _Worker 6 claiming next from Ready._
 
 ## Ready (`agent:ready`, unblocked — worker 6 queue, lowest-first)
 
-- #220 CLI↔API integration smoke test (risk:low)
 - #221 Web repoint to `/validate-idea` envelope (risk:low)
-- #193 Reports web surface (risk:low) — unblocked (blocker #189 closed via #223); still carries `status:in-progress`, clear on claim
+- #229 generate_report JSON schema honesty fix (risk:low)
 
 ## Blocked (`blocked:dependency`)
 
@@ -71,6 +71,11 @@ Two PRs in flight this turn:
 - Coordinator: set-and-forget + strict (auto-merge `needs:merge`; nudge/restart/take-over idle workers).
 
 ## Last Run
+
+**2026-07-02 · reconcile #10 — #227/#228/#230 merged; #227 live-QA'd post-merge with evidence** (audit
+gap closed: reports surface verified working in-browser incl. live generate; two env fixes en route —
+stale pnpm install + dead API server restarted). 2 issues to drain (#221, #229), then coordinator
+backlog-refill from #179. Local API on :3008 restarted (background task b0b2gxkfl).
 
 **2026-07-02 · reconcile #9 — #223/#225 merged, #193 unblocked.** #189 build-brief report (#223,
 merged 11:58Z) and #191 MCP `compare_apps`/`validate_app_idea`/`generate_report` (#225, merged 12:31Z)
