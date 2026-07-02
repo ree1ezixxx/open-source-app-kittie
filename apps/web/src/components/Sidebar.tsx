@@ -2,28 +2,18 @@ import { useState } from "react";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { FreshnessFooter } from "./FreshnessFooter";
 import {
-  IconDatabase,
-  IconSpark,
-  IconTrending,
-  IconRising,
   IconStar,
   IconGrid,
-  IconSearch,
-  IconImage,
-  IconVideo,
-  IconGlobe,
   IconMessage,
-  IconBulb,
   IconSparkles,
   IconKey,
   IconTerminal,
   IconBook,
-  IconCoin,
   IconSettings,
   IconChevron,
 } from "../icons";
 
-type Item = { to: string; label: string; icon: typeof IconDatabase; badge?: "total" };
+type Item = { to: string; label: string; icon: typeof IconGrid; badge?: "total" };
 type Group = { label: string; items: Item[]; collapsible?: boolean };
 
 // Engine-first IA (#194, #179): the primary nav is the intelligence product —
@@ -51,38 +41,17 @@ export const DEVELOPERS: Group = {
   ],
 };
 
-// Legacy appkittie dashboards — kept reachable (collapsed by default), not
-// removed. The group auto-expands when one of its routes is active.
-export const LEGACY: Group = {
-  label: "Dashboards (legacy)",
-  collapsible: true,
-  items: [
-    { to: "/dashboard/pulse", label: "Pulse", icon: IconTrending },
-    { to: "/dashboard/explore", label: "Apps", icon: IconDatabase, badge: "total" },
-    { to: "/dashboard/ads", label: "Ads", icon: IconImage },
-    { to: "/dashboard/organic", label: "Organic", icon: IconVideo },
-    { to: "/dashboard/highlights", label: "Highlights", icon: IconSpark },
-    { to: "/dashboard/trending", label: "Trending", icon: IconTrending },
-    { to: "/dashboard/rising", label: "Rising", icon: IconRising },
-    { to: "/dashboard/favorites", label: "Favorites", icon: IconStar },
-    { to: "/dashboard/aso/apps", label: "App Tracking", icon: IconGrid },
-    { to: "/dashboard/aso/keywords", label: "Keyword Explorer", icon: IconSearch },
-    { to: "/dashboard/aso/screenshots", label: "Screenshots", icon: IconImage },
-    { to: "/dashboard/aso/screenshot-translation", label: "Translations", icon: IconGlobe },
-    { to: "/dashboard/reviews", label: "Reviews", icon: IconMessage },
-    { to: "/dashboard/hot-ideas", label: "Hot ideas", icon: IconBulb },
-    { to: "/tools/pricing-calculator", label: "Pricing Calculator", icon: IconCoin },
-  ],
-};
+// The retired appkittie dashboards (Explore/Ads/Organic/…) were deleted in
+// #239 — no legacy nav group remains. A couple of retained surfaces (Pulse,
+// App Engine, Builder) stay reachable by URL but are intentionally not in-nav.
 
 export const FOOT_ITEM: Item = { to: "/settings", label: "Settings", icon: IconSettings };
 
-/** Every destination the sidebar links to — the primary IA plus Developers,
- *  the legacy dashboards group, and the Settings foot. */
+/** Every destination the sidebar links to — the primary IA plus Developers and
+ *  the Settings foot. */
 export const SIDEBAR_LINKS: string[] = [
   ...PRIMARY.flatMap((g) => g.items),
   ...DEVELOPERS.items,
-  ...LEGACY.items,
   FOOT_ITEM,
 ].map((it) => it.to);
 
@@ -172,7 +141,6 @@ export function Sidebar({ total = 0 }: { total?: number }) {
 
       {PRIMARY.map(renderGroup)}
       {renderGroup(DEVELOPERS)}
-      {renderGroup(LEGACY)}
 
       <div className="sidebar-foot">
         {renderItem(FOOT_ITEM)}
