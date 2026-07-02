@@ -69,11 +69,21 @@ export function buildValidateIdeaResponse(
   const totalReviews = competitors.reduce((sum, c) => sum + c.app.reviewCount, 0);
   const evidenceThin = competitors.length > 0 && totalReviews < THIN_EVIDENCE_REVIEWS;
   const ambiguous = input.interpreted.keywords.length === 0;
+  const hasReviewThemes = reviewThemes.length > 0;
+  // Coherence gate: a parseable idea whose surfaced apps never cohered into a
+  // market — no category the interpreter could resolve, no head-on (direct)
+  // competitor, and no shared-category cluster — is incidental-token noise
+  // (e.g. "blockchain-powered teleporting sandwiches"), not a validatable market.
+  const coherentMarket =
+    input.interpreted.categories.length > 0 ||
+    directCount > 0 ||
+    dominantCategoryShare(competitors) >= 0.5;
+  const incoherent = !ambiguous && competitors.length > 0 && !coherentMarket;
 
   const scores = scoreIdea({ competitors, directCount, reviewThemes });
-  // Ambiguity caps the VERDICT, not just confidence: an unparseable idea with
-  // namesake competitors must never surface a strong label an agent could act on.
-  const verdict = deriveVerdict(scores, competitors.length, evidenceThin, ambiguous);
+  // Ambiguity/incoherence caps the VERDICT, not just confidence: a noisy idea with
+  // incidental competitors must never surface a strong label an agent could act on.
+  const verdict = deriveVerdict(scores, competitors.length, evidenceThin, ambiguous, incoherent);
 
   const evidence: IntelligenceEvidence[] = [interpretationEvidence(idea, input.interpreted)];
   const competitorRows = competitors
@@ -96,9 +106,23 @@ export function buildValidateIdeaResponse(
 
   const risks = risksFor(scores, competitorRows, directCount, evidenceThin);
   const opportunities = opportunitiesFor(scores, competitorRows, reviewThemes);
-  const caveats = caveatsFor(competitors.length, evidenceThin, ambiguous, input.missing ?? []);
-  const missingSources = missingSourcesFor(evidenceThin, reviewThemes, competitors.length);
-  const confidence = confidenceFor(competitors, totalReviews, evidenceThin, ambiguous);
+  const caveats = caveatsFor({
+    competitorCount: competitors.length,
+    evidenceThin,
+    ambiguous,
+    incoherent,
+    hasReviewThemes,
+    missing: input.missing ?? [],
+  });
+  const missingSources = missingSourcesFor(evidenceThin);
+  const confidence = confidenceFor({
+    competitors,
+    totalReviews,
+    evidenceThin,
+    ambiguous,
+    incoherent,
+    hasReviewThemes,
+  });
 
   return buildIntelligenceResponse({
     responseType: "idea_validation",
@@ -307,12 +331,15 @@ function opportunitiesFor(
   return opportunities;
 }
 
-function caveatsFor(
-  competitorCount: number,
-  evidenceThin: boolean,
-  ambiguous: boolean,
-  missing: string[],
-): IntelligenceCaveat[] {
+function caveatsFor(input: {
+  competitorCount: number;
+  evidenceThin: boolean;
+  ambiguous: boolean;
+  incoherent: boolean;
+  hasReviewThemes: boolean;
+  missing: string[];
+}): IntelligenceCaveat[] {
+  const { competitorCount, evidenceThin, ambiguous, incoherent, hasReviewThemes, missing } = input;
   const caveats: IntelligenceCaveat[] = [
     {
       kind: "estimated_metric",
@@ -325,6 +352,14 @@ function caveatsFor(
       kind: "weak_evidence",
       sourceType: "user_input",
       message: "The idea is ambiguous: no usable keywords could be parsed, so competitor matching is unreliable.",
+    });
+  }
+  if (incoherent) {
+    caveats.push({
+      kind: "weak_evidence",
+      sourceType: "user_input",
+      message:
+        "The idea did not cohere into a market: the surfaced apps are scattered incidental matches with no shared category or head-on competitor, so the verdict is held to not_enough_data.",
     });
   }
   if (evidenceThin) {
@@ -341,6 +376,17 @@ function caveatsFor(
       message: "No competitors surfaced from the catalog — demand is unproven, not validated.",
     });
   }
+  // Catalog-wide review-theme mining is unavailable. Surface it as a PARTIAL source
+  // (competitor data is present; only the theme layer is missing) — an honest caveat
+  // that does NOT hard-floor confidence the way a `missing_source` would (#246).
+  if (competitorCount > 0 && !hasReviewThemes) {
+    caveats.push({
+      kind: "partial_source",
+      sourceType: "review",
+      message:
+        "No competitor review themes were available, so the differentiation dimension is unmined; confidence is held out of the high band rather than floored.",
+    });
+  }
   if (competitorCount > MAX_COMPETITOR_EVIDENCE) {
     caveats.push({
       kind: "partial_source",
@@ -354,33 +400,45 @@ function caveatsFor(
   return caveats;
 }
 
-function missingSourcesFor(
-  evidenceThin: boolean,
-  reviewThemes: string[],
-  competitorCount: number,
-): MissingIntelligenceSource[] | undefined {
-  const missing: MissingIntelligenceSource[] = [];
-  if (competitorCount > 0 && reviewThemes.length === 0) {
-    missing.push({
-      sourceType: "review",
-      message: "No competitor review themes were available; differentiation gaps could not be mined.",
-    });
-  }
-  if (evidenceThin) {
-    missing.push({
+/**
+ * Only genuinely-thin evidence is a `missing_source` (it correctly yields `status:
+ * partial`, and its cap is a no-op because `confidenceFor` already holds a thin
+ * idea to <=0.4). The catalog-wide review-theme gap is deliberately NOT a
+ * missing_source — routing it here is exactly what pinned every idea to 0.59
+ * (#246); it now rides as a non-capping `partial_source` caveat instead.
+ */
+function missingSourcesFor(evidenceThin: boolean): MissingIntelligenceSource[] | undefined {
+  if (!evidenceThin) return undefined;
+  return [
+    {
       sourceType: "review",
       message: "Competitor review volume is too low to ground a demand judgement.",
-    });
-  }
-  return missing.length ? missing : undefined;
+    },
+  ];
 }
 
-function confidenceFor(
-  competitors: SimilarApp[],
-  totalReviews: number,
-  evidenceThin: boolean,
-  ambiguous: boolean,
-): IntelligenceConfidence {
+/** Fraction of the competitor set sharing its single most common category (0..1). */
+function dominantCategoryShare(competitors: SimilarApp[]): number {
+  if (competitors.length === 0) return 0;
+  const freq = new Map<string, number>();
+  for (const c of competitors) {
+    if (c.app.category) freq.set(c.app.category, (freq.get(c.app.category) ?? 0) + 1);
+  }
+  if (freq.size === 0) return 0;
+  // Divide by the full set (not just categorised apps) so uncategorised, scattered
+  // incidental matches honestly dilute the concentration signal.
+  return Math.max(...freq.values()) / competitors.length;
+}
+
+function confidenceFor(input: {
+  competitors: SimilarApp[];
+  totalReviews: number;
+  evidenceThin: boolean;
+  ambiguous: boolean;
+  incoherent: boolean;
+  hasReviewThemes: boolean;
+}): IntelligenceConfidence {
+  const { competitors, totalReviews, evidenceThin, ambiguous, incoherent, hasReviewThemes } = input;
   if (competitors.length === 0) {
     return {
       score: 0,
@@ -390,8 +448,13 @@ function confidenceFor(
   }
   const depth = Math.min(1, Math.log10(totalReviews + 1) / 5);
   let score = 0.3 + Math.min(competitors.length, 10) * 0.03 + depth * 0.3;
+  // Scope the review-theme gap to the DIFFERENTIATION dimension it actually blinds:
+  // hold confidence out of the "high" band (never >=0.75) but let competitor/demand
+  // depth keep moving the score — replacing the blunt floor that pinned every idea
+  // to 0.59 (#246). A strong idea now lands ~0.7 (medium), a thin/nonsense one ~0.3.
+  if (!hasReviewThemes) score = Math.min(score, 0.74);
   if (evidenceThin) score = Math.min(score, 0.4);
-  if (ambiguous) score = Math.min(score, 0.3);
+  if (ambiguous || incoherent) score = Math.min(score, 0.3);
   const rounded = Math.max(0, Math.min(1, Math.round(score * 100) / 100));
   return {
     score: rounded,
@@ -399,8 +462,12 @@ function confidenceFor(
     reasons: [
       `${competitors.length} competitor(s) grounded the verdict`,
       `${totalReviews.toLocaleString("en-US")} total competitor reviews back the demand signal`,
+      ...(!hasReviewThemes
+        ? ["no competitor review themes were mined, so confidence is held out of the high band"]
+        : []),
       ...(evidenceThin ? ["evidence is thin, so confidence is capped"] : []),
       ...(ambiguous ? ["the idea parsed to no usable keywords, so matching is unreliable"] : []),
+      ...(incoherent ? ["the surfaced apps did not cohere into a market, so the result is low-information"] : []),
     ],
   };
 }

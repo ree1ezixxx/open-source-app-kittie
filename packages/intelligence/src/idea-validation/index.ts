@@ -86,18 +86,21 @@ export function scoreIdea(input: IdeaScoringInput): IdeaScoreBreakdown {
  * Map the deterministic scores onto the controlled §5.6 verdict vocabulary.
  * `unvalidated` = no competitors (demand unproven); `not_enough_data` = the
  * catalog has namesakes but no real signal to judge on. `ambiguous` = the idea
- * parsed to no usable keywords, so any competitor match is noise — an agent
- * branching on the verdict must never see a strong label from an unparseable
- * idea, only the honest low-information sink.
+ * parsed to no usable keywords; `incoherent` = keywords parsed but the surfaced
+ * apps are scattered incidental-token matches that never cohered into a market
+ * (no resolved category, no head-on competitor, no shared-category cluster). In
+ * both low-information cases an agent branching on the verdict must never see a
+ * strong label from noise — only the honest low-information sink.
  */
 export function deriveVerdict(
   scores: IdeaScoreBreakdown,
   competitorCount: number,
   evidenceThin: boolean,
   ambiguous = false,
+  incoherent = false,
 ): IdeaVerdict {
   if (competitorCount === 0) return "unvalidated";
-  if (ambiguous || evidenceThin) return "not_enough_data";
+  if (ambiguous || incoherent || evidenceThin) return "not_enough_data";
   const sat = scores.marketSaturation.score;
   const diff = scores.differentiation.score;
   const dem = scores.demandSignal.score;
