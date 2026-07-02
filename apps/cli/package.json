@@ -6,6 +6,13 @@
   "bin": {
     "pluto": "./dist/index.js"
   },
+  "exports": {
+    "./intelligence-client": {
+      "types": "./src/intelligence-client.ts",
+      "import": "./src/intelligence-client.ts",
+      "default": "./dist/intelligence-client.js"
+    }
+  },
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
