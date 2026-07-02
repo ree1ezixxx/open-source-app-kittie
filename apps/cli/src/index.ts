@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import type { AppListItem } from "@kittie/types";
+import type { AppListItem, CompareAppRef, ValidateAppIdeaInput } from "@kittie/types";
 import { cloneIos, getAppDetail, searchApps } from "./client.js";
 import {
   configPath,
@@ -12,6 +12,20 @@ import {
 import { detectMode, formatOutput, type OutputMode } from "./output.js";
 import { formatDoctorHuman, runDoctor } from "./doctor.js";
 import { buildUsage } from "./help.js";
+import { parseFlags } from "./args.js";
+import {
+  compareApps,
+  getAppIntelligence,
+  getTrending,
+  validateIdea,
+  type TrendingParams,
+} from "./intelligence-client.js";
+import {
+  formatAppIntelligence,
+  formatCompare,
+  formatTrending,
+  formatValidate,
+} from "./format-intelligence.js";
 
 function formatMoney(n: number | null): string {
   if (n == null) return "—";
@@ -131,6 +145,62 @@ function cmdConfig(args: string[], mode: OutputMode) {
   );
 }
 
+// ── Intelligence commands (#186): app / trending / compare / validate ──
+
+async function cmdApp(args: string[], mode: OutputMode) {
+  const id = args[0];
+  if (!id) {
+    console.error("Usage: pluto app <appId>   (e.g. apple:6446901002)");
+    process.exit(1);
+  }
+  const res = await getAppIntelligence(id);
+  console.log(formatOutput(mode, res, () => formatAppIntelligence(res)));
+}
+
+async function cmdTrending(args: string[], mode: OutputMode) {
+  const { flags } = parseFlags(args);
+  const params: TrendingParams = {};
+  if (flags.category) params.category = flags.category;
+  if (flags.country) params.country = flags.country;
+  if (flags.period) params.period = flags.period;
+  if (flags.limit !== undefined) {
+    const n = Number(flags.limit);
+    if (!Number.isFinite(n) || n < 1) {
+      console.error("--limit must be a positive number");
+      process.exit(1);
+    }
+    params.limit = Math.trunc(n);
+  }
+  const res = await getTrending(params);
+  console.log(formatOutput(mode, res, () => formatTrending(res)));
+}
+
+async function cmdCompare(args: string[], mode: OutputMode) {
+  const { positionals } = parseFlags(args);
+  if (positionals.length < 2) {
+    console.error("Usage: pluto compare <appIdOrQuery> <appIdOrQuery> [more…]   (2+ apps)");
+    process.exit(1);
+  }
+  const apps: CompareAppRef[] = positionals.map((tok) =>
+    tok.includes(":") ? { appId: tok } : { query: tok },
+  );
+  const res = await compareApps(apps);
+  console.log(formatOutput(mode, res, () => formatCompare(res)));
+}
+
+async function cmdValidate(args: string[], mode: OutputMode) {
+  const { positionals, flags } = parseFlags(args);
+  const idea = positionals.join(" ").trim();
+  if (!idea) {
+    console.error("Usage: pluto validate <idea…> [--store apple|google]");
+    process.exit(1);
+  }
+  const input: ValidateAppIdeaInput = { idea };
+  if (flags.store === "apple" || flags.store === "google") input.store = flags.store;
+  const res = await validateIdea(input);
+  console.log(formatOutput(mode, res, () => formatValidate(res)));
+}
+
 function printHeader() {
   console.log(
     ["Title".padEnd(22), "Store".padEnd(6), "Reviews".padStart(6), "Growth".padStart(6), "Revenue".padStart(8)].join(
@@ -158,6 +228,18 @@ async function main() {
         break;
       case "config":
         cmdConfig(args, mode);
+        break;
+      case "app":
+        await cmdApp(args, mode);
+        break;
+      case "trending":
+        await cmdTrending(args, mode);
+        break;
+      case "compare":
+        await cmdCompare(args, mode);
+        break;
+      case "validate":
+        await cmdValidate(args, mode);
         break;
       case "search":
         await cmdSearch(args);
