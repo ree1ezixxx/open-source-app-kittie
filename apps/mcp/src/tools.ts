@@ -122,12 +122,12 @@ export const BASE_TOOLS = [
     description:
       "Full intelligence profile for one app as an evidence- and confidence-aware response: listing facts, " +
       "observed signals, modelled estimates (downloads/revenue/growth — labelled), plus the supporting " +
-      "evidence, a confidence score and any caveats (missing/stale sources). Pass an id from " +
+      "evidence, a confidence score and any caveats (missing/stale sources). Pass an appId from " +
       "search_apps/find_trending_apps (e.g. `apple:123456789`).",
     inputSchema: {
       type: "object",
-      properties: { id: { type: "string" } },
-      required: ["id"],
+      properties: { appId: { type: "string" } },
+      required: ["appId"],
     },
   },
   {
@@ -236,11 +236,11 @@ export const BASE_TOOLS = [
     name: "get_app_history",
     description:
       "Daily historical series for one app (review count, rating, chart rank) — the raw trend behind the " +
-      "growth/rank-movement signals. Pass an app id.",
+      "growth/rank-movement signals. Pass an appId.",
     inputSchema: {
       type: "object",
-      properties: { id: { type: "string" } },
-      required: ["id"],
+      properties: { appId: { type: "string" } },
+      required: ["appId"],
     },
   },
   {

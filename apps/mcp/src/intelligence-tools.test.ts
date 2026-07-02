@@ -30,6 +30,33 @@ describe("inversion tool registry", () => {
     }
   });
 
+  it("uses the canonical `appId` arg (not `id`) on get_app_detail (#249)", () => {
+    const tool = listTools().find((t) => t.name === "get_app_detail");
+    const schema = tool?.inputSchema as unknown as {
+      properties?: Record<string, unknown>;
+      required?: readonly string[];
+    };
+    expect(Object.keys(schema.properties ?? {})).toEqual(["appId"]);
+    expect(schema.required).toEqual(["appId"]);
+  });
+
+  it("uses the canonical `appId` arg (not `id`) on get_app_history (#249)", () => {
+    const tool = listTools().find((t) => t.name === "get_app_history");
+    const schema = tool?.inputSchema as unknown as {
+      properties?: Record<string, unknown>;
+      required?: readonly string[];
+    };
+    expect(Object.keys(schema.properties ?? {})).toEqual(["appId"]);
+    expect(schema.required).toEqual(["appId"]);
+  });
+
+  it("keeps no MCP tool requiring a bare `id` for a store app id (#249)", () => {
+    for (const tool of listTools()) {
+      const required = (tool.inputSchema as unknown as { required?: readonly string[] }).required ?? [];
+      expect(required, `${tool.name} should not require bare 'id'`).not.toContain("id");
+    }
+  });
+
   it("exposes category/country/period/limit on find_trending_apps", () => {
     const tool = listTools().find((t) => t.name === "find_trending_apps");
     const props = (tool?.inputSchema as { properties?: Record<string, unknown> }).properties ?? {};
