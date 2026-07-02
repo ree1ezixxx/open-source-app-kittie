@@ -18,9 +18,7 @@ Repo: `ree1ezixxx/open-source-app-kittie` · Coordinator worktree: `open-source-
 
 ## Active Work
 
-| PR/Issue | Title | Status | Next |
-|---|---|---|---|
-| #218 (#184) | Validate-idea intelligence path | `needs:rework` (coordinator ruling: consolidate — canonical route = `/validate-idea`, retire legacy `/validate`, repoint CLI, fix 2 bugs) | coordinator's sub-agent reworking now |
+_No open PRs._ Worker 6 claiming from the refilled queue.
 
 ## Completed (merged to main)
 
@@ -38,21 +36,23 @@ Repo: `ree1ezixxx/open-source-app-kittie` · Coordinator worktree: `open-source-
 | 2026-07-02 | (audit) | #216 | STATE reconcile #6 + advisory-review policy |
 | 2026-07-02 | #185 | #214 | Local-first CLI foundation (2 rework rounds) |
 | 2026-07-02 | #186 | #217 | CLI app/trending/compare/validate commands — ⚠ merged with blocker #184 open; validate repoints to `/validate-idea` via #218 |
+| 2026-07-02 | (audit) | #219 | STATE reconcile #7 + reviewer dependency-check rule |
+| 2026-07-02 | #184 | #218 | Validate-idea path — canonical `/validate-idea`, legacy `/validate` RETIRED, CLI repointed. **All four #179 intelligence paths complete.** |
 | 2026-07-02 | (ci/infra) | #200/#202/#204/#206/#209 | sweeps ref+build fixes, STATE reconciles, sweep disabled |
 
 ## In progress
 
-- **#184** validate-idea path — coordinator take-over (risk:medium); PR #218 in rework per ruling.
+- _None yet_ — worker 6 dispatched to claim #189.
 
-## Ready (`agent:ready`, unblocked)
+## Ready (`agent:ready`, unblocked — worker 6 queue, lowest-first)
 
-- _None._ Everything remaining funnels through #184/#218.
+- #189 Build-brief report (risk:low)
+- #191 MCP compare/validate/report tools (risk:low — wire validate tool to `/validate-idea`, NOT retired `/validate`)
+- #220 CLI↔API integration smoke test (risk:low)
+- #221 Web repoint to `/validate-idea` envelope (risk:low)
 
 ## Blocked (`blocked:dependency`)
 
-- #189 Build-brief report — on #184
-- #191 MCP compare/validate/report tools — on **#184** (its other blockers #183/#187/#190 are all merged;
-  auditors: still-blocked is CORRECT, multi-blocker issue)
 - #193 Reports web surface — on #189
 
 ## Human-gated (`needs:human`)
@@ -68,6 +68,11 @@ Repo: `ree1ezixxx/open-source-app-kittie` · Coordinator worktree: `open-source-
 - Coordinator: set-and-forget + strict (auto-merge `needs:merge`; nudge/restart/take-over idle workers).
 
 ## Last Run
+
+**2026-07-02 · reconcile #8 — MILESTONE: all four #179 intelligence paths merged** (app-detail #196,
+trends #197, compare #199, validate-idea #218) + renderer/templates (#203/#208), MCP tools (#210/#212),
+full CLI (#214/#217). Coordinator unblocked #189/#191/#220/#221 (verified each blocker closed);
+worker 6 dispatched. Remaining before drain: 4 ready + #193 + human-gated #192/#194.
 
 **2026-07-02 · reconcile #7** — #214 (#185) + #217 (#186) merged; #218 in rework under coordinator
 ruling (canonical validate route consolidation + CLI repoint — fixes the #217/#218 contract mismatch the
