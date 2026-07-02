@@ -18,7 +18,8 @@ Repo: `ree1ezixxx/open-source-app-kittie` · Coordinator worktree: `open-source-
 
 ## Active Work
 
-_No open PRs._ Worker 6 on the final queue (#221, #229).
+- **#192 Ask page** — worker 6 building (coordinator ruling on the issue: deterministic planner, no LLM,
+  #180 envelope renderers, thin/no persistence; risk:medium dispensation granted).
 
 ## Completed (merged to main)
 
@@ -43,16 +44,20 @@ _No open PRs._ Worker 6 on the final queue (#221, #229).
 | 2026-07-02 | #193 | #227 | Reports web surface — post-merge live QA done w/ evidence (see PR comment) |
 | 2026-07-02 | (fix) | #228 | compare_apps ambiguous-ref rejection (#191 AC gap) |
 | 2026-07-02 | #220 | #230 | CLI↔API integration smoke over real route mounts |
+| 2026-07-02 | #221 | #232 | Web repointed to `/validate-idea` — post-merge live QA w/ network evidence (PR comment) |
+| 2026-07-02 | #229 | #233 | generate_report per-template required fields (schema honesty) |
 | 2026-07-02 | (ci/infra) | #200/#202/#204/#206/#209 | sweeps ref+build fixes, STATE reconciles, sweep disabled |
 
 ## In progress
 
-- _Worker 6 claiming next from Ready._
+- #192 Ask page (worker 6, ruled + authorized).
 
-## Ready (`agent:ready`, unblocked — worker 6 queue, lowest-first)
+## Ready (`agent:ready`, unblocked)
 
-- #221 Web repoint to `/validate-idea` envelope (risk:low)
-- #229 generate_report JSON schema honesty fix (risk:low)
+- _None._ **DRAIN + REFILL happened 2026-07-02 ~14:00**: original #179 queue fully shipped; coordinator
+  ruled #192 BUILD (was needs:human) and pre-approved #194 (unlocks when #192 closes). After #194, the
+  #179 PRD is complete — next refill = new scope (2nd GitHub identity, data infra/Neon, or Rhodri's next
+  idea via the `idea` label).
 
 ## Blocked (`blocked:dependency`)
 
@@ -71,6 +76,11 @@ _No open PRs._ Worker 6 on the final queue (#221, #229).
 - Coordinator: set-and-forget + strict (auto-merge `needs:merge`; nudge/restart/take-over idle workers).
 
 ## Last Run
+
+**2026-07-02 · reconcile #11 — FULL DRAIN of the #179 queue (28 merges today) + refill by ruling.**
+#232 (#221) + #233 (#229) merged; #232 live-QA'd post-merge with network evidence (canonical
+/validate-idea confirmed in-browser). Coordinator ruled #192 BUILD + pre-approved #194. Audit checkout
+re-detached at main; workspace on main.
 
 **2026-07-02 · reconcile #10 — #227/#228/#230 merged; #227 live-QA'd post-merge with evidence** (audit
 gap closed: reports surface verified working in-browser incl. live generate; two env fixes en route —
