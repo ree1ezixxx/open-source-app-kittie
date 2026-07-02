@@ -33,11 +33,17 @@ CI without a verdict comment; that is by design, not a gap.
   squash merge (matches this repo's existing merged-PR history), never force-push/rewrite `main`.
 
 Rules:
+- **Reviewer dependency check (added 2026-07-02 after #217):** before a clean verdict, the reviewer MUST
+  verify the linked issue's "Blocked by" list — every blocker closed, or the PR explicitly handles the open
+  dependency (stub against a pinned contract + a note in the verdict). #217 got "all ACs met" while its
+  blocker #184 was open, wiring the CLI to a route #218 was about to supersede. A clean verdict on a PR
+  whose issue has open blockers is a review defect.
 - Never leave a PR with zero or multiple lifecycle labels — normalize to `needs:rework` and comment.
 - `needs:rework (C)` dominates over `needs:rework` when a PR needs both a code fix and a sim/visual check — one lane owns the whole PR.
 - `ci-triage` PRs (branch `fix/ci-<slug>`) follow the same rule: draft PR → `needs:review` → review loop →
   `needs:merge` → coordinator merges.
-- Judgment calls (ambiguous scope, conflicting reviewer findings, anything that reads as a product/architecture
-  decision rather than a mechanical check) are escalated by the coordinator to Rhodri, not auto-merged.
+- Judgment calls (ambiguous scope, conflicting reviewer findings, product/architecture decisions) are resolved
+  by the coordinator itself (full intervention authority, 2026-07-02) per PRD #179 + ADRs, documented in a PR
+  comment — only genuine external blockers (credentials, paid accounts) reach Rhodri.
 
 See `.claude/skills/claude-review-loop/SKILL.md` and `.claude/skills/ci-triage/SKILL.md` for the full per-loop mechanics.

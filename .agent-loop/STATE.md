@@ -20,7 +20,7 @@ Repo: `ree1ezixxx/open-source-app-kittie` · Coordinator worktree: `open-source-
 
 | PR/Issue | Title | Status | Next |
 |---|---|---|---|
-| #214 (#185) | Scaffold local-first CLI | `needs:rework` (round 2, CONFLICTING) | worker 6 rebases over #215, adopts `127.0.0.1:3008` (NOT `localhost`), fixes residual findings |
+| #218 (#184) | Validate-idea intelligence path | `needs:rework` (coordinator ruling: consolidate — canonical route = `/validate-idea`, retire legacy `/validate`, repoint CLI, fix 2 bugs) | coordinator's sub-agent reworking now |
 
 ## Completed (merged to main)
 
@@ -35,23 +35,24 @@ Repo: `ree1ezixxx/open-source-app-kittie` · Coordinator worktree: `open-source-
 | 2026-07-02 | #211 | #212 | Sync MCP consumers to intelligence envelope |
 | 2026-07-02 | (audit) | #213 | CI now runs `pnpm -r test` + STATE reconcile #5 |
 | 2026-07-02 | (fix) | #215 | CLI+MCP default API URL → canonical `127.0.0.1:3008` |
+| 2026-07-02 | (audit) | #216 | STATE reconcile #6 + advisory-review policy |
+| 2026-07-02 | #185 | #214 | Local-first CLI foundation (2 rework rounds) |
+| 2026-07-02 | #186 | #217 | CLI app/trending/compare/validate commands — ⚠ merged with blocker #184 open; validate repoints to `/validate-idea` via #218 |
 | 2026-07-02 | (ci/infra) | #200/#202/#204/#206/#209 | sweeps ref+build fixes, STATE reconciles, sweep disabled |
 
 ## In progress
 
-- **#185** Scaffold local-first CLI — claimed by **worker 6** (issue-builder, Claude). (Old Codex PR #198
-  was **closed**; rebuilding Claude-side. This resolves the earlier ownership collision.)
+- **#184** validate-idea path — coordinator take-over (risk:medium); PR #218 in rework per ruling.
 
 ## Ready (`agent:ready`, unblocked)
 
-- **#184** validate-idea intelligence path — **risk:medium**. Worker 6 skips medium by default; if it's
-  the last item and nothing else moves, coordinator TAKES OVER (sub-agent build) rather than idle the fleet.
+- _None._ Everything remaining funnels through #184/#218.
 
 ## Blocked (`blocked:dependency`)
 
-- #186 Wire CLI commands — on #185 (in progress)
 - #189 Build-brief report — on #184
-- #191 MCP compare/validate/report tools — on #190 (**merged** — pending dep-unblock sweep to clear)
+- #191 MCP compare/validate/report tools — on **#184** (its other blockers #183/#187/#190 are all merged;
+  auditors: still-blocked is CORRECT, multi-blocker issue)
 - #193 Reports web surface — on #189
 
 ## Human-gated (`needs:human`)
@@ -67,6 +68,11 @@ Repo: `ree1ezixxx/open-source-app-kittie` · Coordinator worktree: `open-source-
 - Coordinator: set-and-forget + strict (auto-merge `needs:merge`; nudge/restart/take-over idle workers).
 
 ## Last Run
+
+**2026-07-02 · reconcile #7** — #214 (#185) + #217 (#186) merged; #218 in rework under coordinator
+ruling (canonical validate route consolidation + CLI repoint — fixes the #217/#218 contract mismatch the
+Codex audit flagged). Review contract hardened: reviewer must check linked-issue blockers before a clean
+verdict (the #217 miss). needs:human resolution authority moved to coordinator.
 
 **2026-07-02 · reconcile #6** — #215 merged (canonical port); #214 in rework round 2 (conflicting,
 worker 6 rebasing with 127.0.0.1:3008 requirement pinned); PRD's + HIGH FIDELITY sessions archived
