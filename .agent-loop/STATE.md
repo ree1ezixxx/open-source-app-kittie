@@ -18,7 +18,9 @@ Repo: `ree1ezixxx/open-source-app-kittie` · Coordinator worktree: `open-source-
 
 ## Active Work
 
-_No open PRs._ Worker 6 claiming from the refilled queue.
+Two PRs in flight this turn:
+- `compare_apps` input-validation hardening — follow-up to #225 (#191 MCP tools).
+- This STATE reconcile (#9).
 
 ## Completed (merged to main)
 
@@ -38,22 +40,23 @@ _No open PRs._ Worker 6 claiming from the refilled queue.
 | 2026-07-02 | #186 | #217 | CLI app/trending/compare/validate commands — ⚠ merged with blocker #184 open; validate repoints to `/validate-idea` via #218 |
 | 2026-07-02 | (audit) | #219 | STATE reconcile #7 + reviewer dependency-check rule |
 | 2026-07-02 | #184 | #218 | Validate-idea path — canonical `/validate-idea`, legacy `/validate` RETIRED, CLI repointed. **All four #179 intelligence paths complete.** |
+| 2026-07-02 | #189 | #223 | Build-brief report from idea validation |
+| 2026-07-02 | #191 | #225 | MCP `compare_apps` / `validate_app_idea` / `generate_report` tools |
 | 2026-07-02 | (ci/infra) | #200/#202/#204/#206/#209 | sweeps ref+build fixes, STATE reconciles, sweep disabled |
 
 ## In progress
 
-- _None yet_ — worker 6 dispatched to claim #189.
+- _None_ — #189/#191 merged (#223/#225); worker 6 free for the Ready queue.
 
 ## Ready (`agent:ready`, unblocked — worker 6 queue, lowest-first)
 
-- #189 Build-brief report (risk:low)
-- #191 MCP compare/validate/report tools (risk:low — wire validate tool to `/validate-idea`, NOT retired `/validate`)
 - #220 CLI↔API integration smoke test (risk:low)
 - #221 Web repoint to `/validate-idea` envelope (risk:low)
+- #193 Reports web surface (risk:low) — unblocked (blocker #189 closed via #223); still carries `status:in-progress`, clear on claim
 
 ## Blocked (`blocked:dependency`)
 
-- #193 Reports web surface — on #189
+- _None._
 
 ## Human-gated (`needs:human`)
 
@@ -68,6 +71,13 @@ _No open PRs._ Worker 6 claiming from the refilled queue.
 - Coordinator: set-and-forget + strict (auto-merge `needs:merge`; nudge/restart/take-over idle workers).
 
 ## Last Run
+
+**2026-07-02 · reconcile #9 — #223/#225 merged, #193 unblocked.** #189 build-brief report (#223,
+merged 11:58Z) and #191 MCP `compare_apps`/`validate_app_idea`/`generate_report` (#225, merged 12:31Z)
+landed → both moved to Completed, dropped from Ready/In-progress. #193 Reports web surface unblocked
+(blocker #189 closed) → Ready; Blocked section now empty. Two PRs in flight this turn: a `compare_apps`
+input-validation hardening follow-up to #225, and this reconcile. Ready queue: #220, #221, #193.
+Human-gated: #192, #194.
 
 **2026-07-02 · reconcile #8 — MILESTONE: all four #179 intelligence paths merged** (app-detail #196,
 trends #197, compare #199, validate-idea #218) + renderer/templates (#203/#208), MCP tools (#210/#212),
