@@ -50,18 +50,21 @@ const CLUSTER_LABEL: Record<string, string> = {
 };
 
 export function adaptSimilar(raw: any, query: string): SimilarOutput {
-  const candidates: SimilarApp[] = (raw?.similar ?? []).map((s: any) => mapSimilarApp(s, raw?.confidence));
+  // Canonical #180 shape: tryLive hands us the envelope; the ranked payload is
+  // `envelope.data`. Tolerate a bare result too (older shape / direct callers).
+  const d = raw?.data ?? raw;
+  const candidates: SimilarApp[] = (d?.similar ?? []).map((s: any) => mapSimilarApp(s, d?.confidence));
   const clusters: SimilarCluster[] = (["direct", "adjacent", "analogue"] as const)
     .map((cls) => ({ label: CLUSTER_LABEL[cls] ?? cls, cls, apps: candidates.filter((a) => a.similarityClass === cls) }))
     .filter((c) => c.apps.length > 0);
-  const missing: string[] = raw?.missing ?? [];
+  const missing: string[] = d?.missing ?? [];
   return {
     query,
-    interpretedQuery: raw?.interpretedQuery?.summary ?? query,
+    interpretedQuery: d?.interpretedQuery?.summary ?? query,
     clusters,
     candidates,
     coverage: { status: missing.length ? "partial" : "full", missing },
-    agentSummary: raw?.agentSummary ?? "",
+    agentSummary: d?.agentSummary ?? "",
     source: "live",
     generatedAt: nowIso(),
   };
@@ -184,29 +187,32 @@ export function adaptValidate(raw: any, idea: string): ValidateOutput {
 }
 
 export function adaptTeardown(raw: any): TeardownOutput {
-  const id = raw?.identity ?? {};
-  const mon = raw?.monetisation ?? {};
-  const featureMap: TeardownFeature[] = (raw?.featureMap ?? []).map((f: any) =>
+  // Canonical #180 shape: tryLive hands us the envelope; the blueprint payload is
+  // `envelope.data`. Tolerate a bare output too (older shape / direct callers).
+  const d = raw?.data ?? raw;
+  const id = d?.identity ?? {};
+  const mon = d?.monetisation ?? {};
+  const featureMap: TeardownFeature[] = (d?.featureMap ?? []).map((f: any) =>
     typeof f === "string"
       ? { feature: f, role: "", evidence: null }
       : { feature: f?.feature ?? f?.name ?? "", role: f?.role ?? f?.classification ?? "", evidence: f?.evidence ?? null },
   );
-  const reviewGaps = (raw?.reviewInsights?.gaps ?? []).map((x: any) =>
+  const reviewGaps = (d?.reviewInsights?.gaps ?? []).map((x: any) =>
     typeof x === "string"
       ? { gap: x, demandSignal: "", sourceCount: 0 }
       : { gap: x?.gap ?? x?.theme ?? "", demandSignal: x?.demandSignal ?? x?.signal ?? "", sourceCount: x?.sourceCount ?? x?.count ?? 0 },
   );
-  const cloneInsights = (raw?.cloneInsights ?? []).map((c: any) =>
+  const cloneInsights = (d?.cloneInsights ?? []).map((c: any) =>
     typeof c === "string" ? { insight: c, difficulty: "medium" as const } : { insight: c?.insight ?? "", difficulty: c?.difficulty ?? "medium" },
   );
-  const coreLoop: string[] = Array.isArray(raw?.coreLoop)
-    ? raw.coreLoop.map((s: any) => (typeof s === "string" ? s : s?.step ?? s?.label ?? ""))
+  const coreLoop: string[] = Array.isArray(d?.coreLoop)
+    ? d.coreLoop.map((s: any) => (typeof s === "string" ? s : s?.step ?? s?.label ?? ""))
     : [];
 
   return {
     appId: id.id ?? "",
     appName: id.title ?? id.name ?? "Unknown app",
-    thesis: raw?.decisionPacket,
+    thesis: d?.decisionPacket,
     coreLoop,
     featureMap,
     monetisation: {
@@ -216,8 +222,8 @@ export function adaptTeardown(raw: any): TeardownOutput {
     },
     reviewGaps,
     cloneInsights,
-    evidence: raw?.decisionPacket?.evidence ?? [],
-    agentSummary: raw?.agentSummary ?? "",
+    evidence: d?.decisionPacket?.evidence ?? [],
+    agentSummary: d?.agentSummary ?? "",
     source: "live",
     generatedAt: nowIso(),
   };
