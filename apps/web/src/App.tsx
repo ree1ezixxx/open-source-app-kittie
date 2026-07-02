@@ -53,7 +53,9 @@ export function App() {
       <Routes>
         <Route path="/studio" element={<BuilderPage theme={theme} onToggleTheme={toggleTheme} />} />
         <Route path="/studio/:id" element={<BuilderPage theme={theme} onToggleTheme={toggleTheme} />} />
-        <Route path="/" element={<Navigate to="/dashboard/pulse" replace />} />
+        {/* Engine-first landing: Ask is the front door (#192/#194). Legacy
+            dashboards remain reachable via their routes + the sidebar group. */}
+        <Route path="/" element={<Navigate to="/ask" replace />} />
         <Route path="/dashboard/pulse" element={<PulsePage theme={theme} onToggleTheme={toggleTheme} />} />
         <Route
           path="/dashboard/explore"
