@@ -33,5 +33,7 @@ jobs:
           pnpm typecheck
           pnpm build
 
-      - name: Test (CLI)
-        run: pnpm --filter @kittie/cli test
+      - name: Test (all packages)
+        # Full recursive suite. Do NOT narrow this filter — #214 silently scoped it
+        # to @kittie/cli and every PR after went green on 41/403 tests (audit finding).
+        run: pnpm -r test
