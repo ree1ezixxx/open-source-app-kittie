@@ -218,6 +218,18 @@ export const BASE_TOOLS = [
         limit: { type: "number", description: "For category_pulse / build_brief." },
       },
       required: ["template"],
+      // Per-template required fields (JSON Schema if/then). `category_pulse` has
+      // none — omitting `category` reports across all categories by design.
+      allOf: [
+        {
+          if: { properties: { template: { const: "app_teardown" } }, required: ["template"] },
+          then: { required: ["appId"] },
+        },
+        {
+          if: { properties: { template: { const: "build_brief" } }, required: ["template"] },
+          then: { required: ["idea"] },
+        },
+      ],
     },
   },
   {

@@ -153,10 +153,15 @@ export function resolveReportRequest(args: GenerateReportArgs): ResolvedReportRe
 
   switch (template as ReportTemplateName) {
     case "app_teardown": {
-      const appId = typeof args.appId === "string" ? args.appId : "";
+      const appId = typeof args.appId === "string" ? args.appId.trim() : "";
+      if (appId.length === 0) {
+        throw new Error("generate_report app_teardown requires a non-empty appId (e.g. apple:6446901002).");
+      }
       return { template: "app_teardown", format, method: "GET", path: appDetailIntelligencePath(appId), wrapped: true };
     }
     case "category_pulse": {
+      // `category` is intentionally optional — omitting it reports across all
+      // categories (a valid market-wide pulse); `period` defaults to 7d.
       const trendArgs: FindTrendingAppsArgs = {};
       if (typeof args.category === "string") trendArgs.category = args.category;
       if (typeof args.country === "string") trendArgs.country = args.country;
@@ -165,7 +170,11 @@ export function resolveReportRequest(args: GenerateReportArgs): ResolvedReportRe
       return { template: "category_pulse", format, method: "GET", path: findTrendingAppsPath(trendArgs), wrapped: false };
     }
     case "build_brief": {
-      const { path, body } = validateIdeaRequest({ idea: args.idea, store: args.store, limit: args.limit });
+      const idea = typeof args.idea === "string" ? args.idea.trim() : "";
+      if (idea.length === 0) {
+        throw new Error("generate_report build_brief requires a non-empty idea.");
+      }
+      const { path, body } = validateIdeaRequest({ idea, store: args.store, limit: args.limit });
       return { template: "build_brief", format, method: "POST", path, body, wrapped: true };
     }
   }
