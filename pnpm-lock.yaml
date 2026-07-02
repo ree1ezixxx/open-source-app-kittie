@@ -326,6 +326,25 @@ importers:
         specifier: ^4.1.8
         version: 4.1.8(@types/node@22.19.20)(vite@6.4.3(@types/node@22.19.20)(tsx@4.22.4))
 
+  packages/reports:
+    dependencies:
+      '@kittie/core':
+        specifier: workspace:*
+        version: link:../core
+      '@kittie/types':
+        specifier: workspace:*
+        version: link:../types
+    devDependencies:
+      '@types/node':
+        specifier: ^22.15.21
+        version: 22.19.20
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.8
+        version: 4.1.8(@types/node@22.19.20)(vite@6.4.3(@types/node@22.19.20)(tsx@4.22.4))
+
   packages/types:
     devDependencies:
       typescript:
