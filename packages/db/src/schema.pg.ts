@@ -14,12 +14,18 @@
  *                                           consumers serialize JSON themselves,
  *                                           changing it would be a semantic change)
  *   sqlite `integer` / `text` (plain)     → pg `integer` / `text` (unchanged)
+ *   sqlite `integer` holding 64-bit values → pg `bigint({mode:"number"})` — the
+ *                                           estimate/size columns (`file_size_bytes`,
+ *                                           `downloads_estimate`, `revenue_estimate`)
+ *                                           exceed int4 range (#257); mode:"number"
+ *                                           keeps the JS type `number`, matching sqlite.
  */
 import { sql } from "drizzle-orm";
 import {
   pgTable,
   text,
   integer,
+  bigint,
   boolean,
   doublePrecision,
   timestamp,
@@ -53,7 +59,7 @@ export const apps = pgTable(
     lastIngestedAt: ts("last_ingested_at"),
     lastSnapshotDate: text("last_snapshot_date"),
     lastAttemptedAt: ts("last_attempted_at"),
-    fileSizeBytes: integer("file_size_bytes"),
+    fileSizeBytes: bigint("file_size_bytes", { mode: "number" }),
     minOsVersion: text("min_os_version"),
     sellerName: text("seller_name"),
   },
@@ -80,8 +86,8 @@ export const appSnapshots = pgTable(
     chartRank: integer("chart_rank"),
     chartCategory: text("chart_category"),
     chartCountry: text("chart_country").default("US"),
-    downloadsEstimate: integer("downloads_estimate"),
-    revenueEstimate: integer("revenue_estimate"),
+    downloadsEstimate: bigint("downloads_estimate", { mode: "number" }),
+    revenueEstimate: bigint("revenue_estimate", { mode: "number" }),
     growthScore: doublePrecision("growth_score"),
     isFirstMover: boolean("is_first_mover").default(false),
     createdAt: ts("created_at").notNull(),
@@ -336,8 +342,8 @@ export const appIdeas = pgTable(
     blueprint: text("blueprint").notNull(),
     reviewCount: integer("review_count").notNull().default(0),
     rating: doublePrecision("rating"),
-    downloadsEstimate: integer("downloads_estimate"),
-    revenueEstimate: integer("revenue_estimate"),
+    downloadsEstimate: bigint("downloads_estimate", { mode: "number" }),
+    revenueEstimate: bigint("revenue_estimate", { mode: "number" }),
     price: doublePrecision("price"),
     releasedAt: ts("released_at"),
     createdAt: ts("created_at").notNull(),

@@ -88,6 +88,53 @@ describe("Postgres dialect (pglite)", () => {
     expect(snap[0]?.isFirstMover).toBe(true);
   });
 
+  it("stores 64-bit file_size_bytes / downloads_estimate / revenue_estimate as bigint (#257)", async () => {
+    const db = await freshDb();
+    const now = new Date("2026-07-02T00:00:00.000Z");
+
+    // The migration widened all five estimate/size columns to bigint. Assert the DDL
+    // (this also covers app_ideas without building its row) …
+    const { rows } = await db.$client.query<{ data_type: string }>(
+      `select data_type from information_schema.columns
+       where column_name in ('file_size_bytes', 'downloads_estimate', 'revenue_estimate')`,
+    );
+    expect(rows).toHaveLength(5); // apps.file_size_bytes + app_snapshots{2} + app_ideas{2}
+    expect(rows.every((r) => r.data_type === "bigint")).toBe(true);
+
+    // … and round-trip values that overflow int4 (2_147_483_647) — the ~2.6 GB app +
+    // billion-scale estimates the old int4 columns forced the Supabase loader to NULL.
+    const bigSize = 2_600_000_000;
+    const bigDownloads = 5_000_000_000;
+    const bigRevenue = 3_000_000_000;
+    await db.insert(schemaPg.apps).values({
+      id: "apple:big",
+      store: "apple",
+      storeAppId: "9",
+      title: "Chonky App",
+      developer: "Big Bytes",
+      firstSeenAt: now,
+      fileSizeBytes: bigSize,
+    });
+    await db.insert(schemaPg.appSnapshots).values({
+      id: "snap:big",
+      appId: "apple:big",
+      snapshotDate: "2026-07-02",
+      reviewCount: 1,
+      downloadsEstimate: bigDownloads,
+      revenueEstimate: bigRevenue,
+      createdAt: now,
+    });
+
+    const app = await db.select().from(schemaPg.apps).where(eq(schemaPg.apps.id, "apple:big"));
+    const snap = await db.select().from(schemaPg.appSnapshots).where(eq(schemaPg.appSnapshots.appId, "apple:big"));
+    expect(app[0]?.fileSizeBytes).toBe(bigSize);
+    expect(snap[0]?.downloadsEstimate).toBe(bigDownloads);
+    expect(snap[0]?.revenueEstimate).toBe(bigRevenue);
+    // mode:"number" keeps the JS type `number` (matching SQLite), not string/bigint.
+    expect(typeof app[0]?.fileSizeBytes).toBe("number");
+    expect(typeof snap[0]?.downloadsEstimate).toBe("number");
+  });
+
   it("enforces the app FK on snapshots", async () => {
     const db = await freshDb();
     await expect(
