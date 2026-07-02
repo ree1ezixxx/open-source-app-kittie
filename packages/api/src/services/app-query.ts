@@ -47,6 +47,22 @@ export function invalidateAppReadCaches(): void {
 // ~1.1M apps in memory — what this path used to do — OOMs the heap.
 const POOL_CAP = 5000;
 
+// Crossover for the two app-column-filter candidate strategies (see selectCandidateIds):
+//  - SEEK (matchCount ≤ this): materialize the ~matchCount filtered ids and seek their
+//    pinned-day snapshots by (app_id IN …). Cost ∝ matchCount, so this wins for a SPARSE
+//    filter (few matches) — the probe would otherwise scan deep into the day to collect
+//    `cap` of them (e.g. Social Networking, 2% of apps → probe read ~125k rows, ~10s cold).
+//  - PROBE (matchCount > this): the day-walk finds the top-`cap` fast when the filter is
+//    DENSE (e.g. Games, 10% of apps → ~0.75s), and avoids materializing a huge id list.
+// The probe reads ~cap·catalog/matchCount rows; the seek reads ~matchCount. They cross at
+// matchCount ≈ √(cap·catalog) ≈ √(2500·1.1M) ≈ 52k, so 50k splits sparse↔dense cleanly.
+const SEEK_MAX = 50_000;
+
+// Per-query id-list size for the narrowed snapshot seek. drizzle builds the IN list by
+// RECURSIVELY merging one sql chunk per param, so a ~20k+ single list overflows the call
+// stack; 4000 keeps every chunk well within it while minimizing round-trips.
+const NARROW_SEEK_CHUNK = 4_000;
+
 /** Narrow the scored pool when filters already shrink the candidate universe. */
 function effectivePoolCap(params: AppSearchParams): number {
   let cap = POOL_CAP;
@@ -186,9 +202,18 @@ interface AppConditions {
   snapMetricCols: SQL[];
   /** True when a market was explicitly requested → the apps-only fast count is invalid. */
   explicitCountry: boolean;
+  /** True when the requested market is EXACTLY the single default market ("US") with no
+   *  exclusion — the snapshot join then narrows nothing beyond "has a latest-day row"
+   *  (the <1% tolerance the default-market count already accepts), so the fast apps-only
+   *  count applies even though the country was named explicitly. A genuinely different or
+   *  multi-market request stays false and keeps the exact join count. */
+  defaultMarketOnly: boolean;
   /** Single market scoping per-row snapshot reads (default "US"). */
   marketCountry: string;
 }
+
+/** The market every read defaults to when none is requested (ADR 0007). */
+const DEFAULT_MARKET = "US";
 
 function buildConditions(params: AppSearchParams, maxDate: string): AppConditions {
   const appCols: SQL[] = [];
@@ -202,7 +227,13 @@ function buildConditions(params: AppSearchParams, maxDate: string): AppCondition
   const include = parseCsvUpper(params.countries);
   const exclude = parseCsvUpper(params.excludedCountries);
   const explicitCountry = include.length > 0 || exclude.length > 0;
-  const marketCountry = include[0] ?? "US";
+  const marketCountry = include[0] ?? DEFAULT_MARKET;
+  // Requesting exactly the default market (US) and nothing excluded pins the SAME rows
+  // the no-country default would — so the apps-only count (which the default path already
+  // uses) stays valid, letting the Trends/Explore `country=US` load skip the 6-7s
+  // count(distinct) snapshot join. Any OTHER or multi-market request keeps the exact join.
+  const defaultMarketOnly =
+    exclude.length === 0 && (include.length === 0 || (include.length === 1 && include[0] === DEFAULT_MARKET));
 
   const snapPin: SQL[] = [eq(appSnapshots.snapshotDate, maxDate)];
   if (include.length) snapPin.push(inArray(appSnapshots.chartCountry, include));
@@ -281,7 +312,7 @@ function buildConditions(params: AppSearchParams, maxDate: string): AppCondition
   if (params.hasCreators === true) appCols.push(sql`exists (select 1 from ${creators} where ${creators.appId} = ${apps.id})`);
   if (params.hasCreators === false) appCols.push(sql`not exists (select 1 from ${creators} where ${creators.appId} = ${apps.id})`);
 
-  return { appCols, snapPin, snapMetricCols, explicitCountry, marketCountry };
+  return { appCols, snapPin, snapMetricCols, explicitCountry, defaultMarketOnly, marketCountry };
 }
 
 /** Flattened predicate list for the joined candidate query. */
@@ -335,10 +366,13 @@ export function poolIsInFinalOrder(params: AppSearchParams): boolean {
 
 async function countMatches(c: AppConditions): Promise<number> {
   const db = getDb();
-  // No snapshot-metric filter AND no explicit market → the count is decided by the
-  // apps table (the default US market is ≈the whole catalog). Skip the join entirely
-  // (it was the 4s cost on filtered loads).
-  if (c.snapMetricCols.length === 0 && !c.explicitCountry) {
+  // No snapshot-metric filter AND the pin is the default market (US) — whether the
+  // country was named explicitly or left to default, it selects the same rows, so the
+  // count is decided by the apps table (the default US market is ≈the whole catalog).
+  // Skip the join entirely (it was the 6-7s count(distinct) cost on a category-filtered
+  // Trends/Explore load — e.g. category=Games&country=US). A genuinely narrowing market
+  // (defaultMarketOnly=false) keeps the exact join count below.
+  if (c.snapMetricCols.length === 0 && c.defaultMarketOnly) {
     if (c.appCols.length === 0) {
       // Unfiltered → count the latest-day rows for the default market straight off.
       const [row] = await db.select({ c: count() }).from(appSnapshots).where(and(...c.snapPin));
@@ -396,9 +430,14 @@ async function selectCandidateIds(c: AppConditions, params: AppSearchParams): Pr
     return [...new Set(rows.map((r) => r.id))];
   }
 
-  const col = sqlSortColumn(params) ?? appSnapshots.reviewCount;
+  const sqlCol = sqlSortColumn(params);
+  const col = sqlCol ?? appSnapshots.reviewCount;
   const dir = (params.sortOrder ?? "desc") === "asc" ? asc : desc;
   const cap = effectivePoolCap(params);
+  // The snapshot-only seek can order by `col` iff it lives on app_snapshots (it selects
+  // FROM app_snapshots without joining apps). Live-modelled/reviews sorts proxy on
+  // review_count (snapshot); updated/released sort on apps columns → keep the join path.
+  const colIsSnapshot = sqlCol == null || sqlCol === appSnapshots.rating || sqlCol === appSnapshots.reviewCount || sqlCol === appSnapshots.revenueEstimate || sqlCol === appSnapshots.downloadsEstimate;
 
   // Selective app-column filters (releasedAt window, category, …) can match ≪1% of
   // the catalog. Joining snapshot-first scans every row on the latest day (~1.1M);
@@ -407,6 +446,52 @@ async function selectCandidateIds(c: AppConditions, params: AppSearchParams): Pr
     const db = getDb();
     const [countRow] = await db.select({ c: count() }).from(apps).where(and(...c.appCols));
     const matchCount = countRow?.c ?? 0;
+    if (matchCount > 0 && matchCount <= SEEK_MAX && colIsSnapshot) {
+      const narrowed = await db.select({ id: apps.id }).from(apps).where(and(...c.appCols));
+      const narrowIds = narrowed.map((r) => r.id);
+      // Seek app_snapshots by the narrowed app-id set on the pinned day, NOT the day-walk
+      // the join+ORDER-BY planned before: ordering by the sort column let SQLite start from
+      // snapshots_date_reviews_idx and scan the WHOLE day (~1.1M rows) filtering category as
+      // a residual — 6-9s cold for a SPARSE mid-size category (e.g. Social Networking, 21k
+      // apps). An (app_id IN …) seek on snapshots_app_date_country_idx touches only the
+      // ~matchCount narrowed rows (index-only, ~0.8s cold), and we take the top-`cap` by the
+      // sort column in memory (sort is O(matchCount), trivial). Same rows/order as before.
+      // Chunked so a large id set stays under drizzle's IN-list recursion limit.
+      const snapRows: Array<{ id: string; v: number | null }> = [];
+      for (const part of chunk(narrowIds, NARROW_SEEK_CHUNK)) {
+        const partRows = await db
+          .select({ id: appSnapshots.appId, v: sql<number | null>`${col}` })
+          .from(appSnapshots)
+          .where(and(...c.snapPin, inArray(appSnapshots.appId, part)));
+        snapRows.push(...partRows);
+      }
+      const isAsc = (params.sortOrder ?? "desc") === "asc";
+      // Reproduce the exact order the replaced SQL (ORDER BY dir(col), app_id ASC) yielded,
+      // so the pool this feeds is byte-identical: SQLite sorts NULLs FIRST on ASC and LAST
+      // on DESC; ties break on app_id ASC. sortApps re-sorts the pool afterward, but matching
+      // here keeps pool MEMBERSHIP (which ids survive the `cap` cut) identical too.
+      const idCmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+      snapRows.sort((a, b) => {
+        if (a.v == null && b.v == null) return idCmp(a.id, b.id);
+        if (a.v == null) return isAsc ? -1 : 1;
+        if (b.v == null) return isAsc ? 1 : -1;
+        if (a.v !== b.v) return isAsc ? a.v - b.v : b.v - a.v;
+        return idCmp(a.id, b.id);
+      });
+      const out: string[] = [];
+      const seen = new Set<string>();
+      for (const r of snapRows) {
+        if (seen.has(r.id)) continue; // dedupe multi-market
+        seen.add(r.id);
+        out.push(r.id);
+        if (out.length >= cap) break;
+      }
+      return out;
+    }
+    // Small filter but the sort column lives on `apps` (updated/released) — the snapshot-only
+    // seek can't order by it, so keep the original apps-first join with inArray (bounded to
+    // the narrowed id set), unchanged from before this fix. Held to the original cap*3 bound
+    // because a single inArray of that many ids overflows drizzle's IN-list recursion.
     if (matchCount > 0 && matchCount <= cap * 3) {
       const narrowed = await db.select({ id: apps.id }).from(apps).where(and(...c.appCols));
       const narrowIds = narrowed.map((r) => r.id);
@@ -419,9 +504,11 @@ async function selectCandidateIds(c: AppConditions, params: AppSearchParams): Pr
         .limit(cap);
       return [...new Set(rows.map((r) => r.id))];
     }
-    // Large app-only filter (e.g. Rising 6M window) — probe top snapshot rows by the
-    // sort proxy, then apply app predicates, avoiding a full 1M-row join+filter.
-    if (matchCount > cap * 3) {
+    // Dense app-only filter (matches a large fraction of the catalog, e.g. a top category
+    // or a wide Rising release window) — the day-walk finds the top-`cap` by the sort proxy
+    // quickly (dense ⇒ shallow scan) and avoids materializing a huge id list. Applies the
+    // app predicates during the scan, avoiding a full 1M-row join+filter.
+    if (matchCount > SEEK_MAX) {
       const probe = Math.min(2_500, cap * 2);
       const rows = await db
         .select({ id: apps.id })
