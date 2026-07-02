@@ -7,6 +7,7 @@
  * transforms are restructuring (e.g. grouping similar apps into clusters) and a
  * documented deterministic composite for the overall score. No fabrication.
  */
+import type { DecisionPacket } from "@kittie/types";
 import type {
   IdeaRisk,
   MvpFeature,
@@ -73,51 +74,104 @@ const SCORE_LABEL: Record<string, string> = {
   differentiation: "Differentiation room",
 };
 
+/** A flat `ValidateIdeaCompetitor` (canonical envelope) → render `SimilarApp`. */
+function mapValidateCompetitor(c: any, confidence: any): SimilarApp {
+  return {
+    appId: c?.appId ?? "",
+    name: c?.title ?? "Unknown app",
+    iconUrl: c?.iconUrl ?? null,
+    category: c?.category ?? null,
+    similarityScore: typeof c?.similarityScore === "number" ? c.similarityScore : 0,
+    similarityClass: c?.similarityClass ?? "analogue",
+    reasons: Array.isArray(c?.matchedVia) ? c.matchedVia : [],
+    estRevenue: null,
+    estDownloads: null,
+    rating: num(c?.rating),
+    confidence: confidence ?? { score: 0, reasons: [] },
+  };
+}
+
+/** Honest one-line readout derived from the verdict + its deterministic reason. */
+function buildAgentSummary(data: any): string {
+  const verdict = typeof data?.verdict === "string" ? data.verdict.replace(/_/g, " ") : "unvalidated";
+  const reason = typeof data?.verdictReason === "string" ? data.verdictReason : "";
+  return reason ? `${verdict}: ${reason}` : verdict;
+}
+
+/**
+ * Canonical `/validate-idea` (#180) envelope → `ValidateOutput`. The envelope is
+ * `{ data: ValidateIdeaIntelligenceData, evidence, confidence, caveats, metadata }`.
+ * It is the DETERMINISTIC path — no LLM synthesis — so `mvp` and
+ * `recommendedAngle` (LLM-only fields) are honestly empty; the `DecisionPacket`
+ * the UI renders is composed from the envelope's own verdict/evidence/confidence.
+ */
 export function adaptValidate(raw: any, idea: string): ValidateOutput {
-  const scores = raw?.scores ?? {};
+  const data = raw?.data ?? {};
+  const scores = data?.scores ?? {};
   const scoreBreakdown: ScoreFactor[] = Object.entries(scores).map(([k, v]: [string, any]) => ({
     label: SCORE_LABEL[k] ?? k,
     score: Math.round((typeof v?.score === "number" ? v.score : 0) * 100),
     rationale: v?.basis ?? "",
   }));
   // Deterministic composite of the served factor scores (0..1 each). Saturation is
-  // shown as its own factor + the verdict, not added here, so a crowded market
-  // doesn't inflate the headline. Pure transform of real numbers — not invented.
+  // shown as its own factor + the verdict, not added here. Pure transform of real
+  // numbers — not invented.
   const g = (k: string) => (typeof scores?.[k]?.score === "number" ? scores[k].score : 0);
   const overallScore = Math.round(100 * (g("demandSignal") * 0.4 + g("competitorQuality") * 0.3 + g("differentiation") * 0.3));
 
-  const angle = raw?.recommendedAngle;
-  const recommendedAngle =
-    typeof angle === "string" ? angle : angle ? `${angle.title ?? ""}${angle.reason ? ` — ${angle.reason}` : ""}` : "";
+  // Envelope evidence[] → DecisionPacket evidence[] (only restructuring).
+  const evidence = (raw?.evidence ?? []).map((e: any) => ({
+    claim: e?.claim ?? "",
+    valueType: e?.valueKind ?? "inferred",
+    sourceId: e?.source?.id ?? "",
+    sourceUrl: e?.source?.url ?? null,
+    observedAt: e?.observedAt ?? null,
+  }));
+  const missing: string[] = (raw?.caveats ?? [])
+    .filter((c: any) => c?.kind === "missing_source" || c?.kind === "partial_source")
+    .map((c: any) => c?.message ?? c?.sourceType ?? "")
+    .filter(Boolean);
 
-  const top: SimilarApp[] = (raw?.competitors ?? [])
+  // Compose the DecisionPacket the render type expects from real envelope fields.
+  const verdict: DecisionPacket = {
+    decision: typeof data?.verdict === "string" ? data.verdict : "unvalidated",
+    evidence,
+    confidence: { score: num(raw?.confidence?.score) ?? 0, reasons: raw?.confidence?.reasons ?? [] },
+    coverage: { status: missing.length ? "partial" : "full", missing },
+    assumptions: [],
+    unknowns: [],
+    recommendedActions: [],
+    snapshotId: raw?.metadata?.snapshotId ?? "",
+  };
+
+  const top: SimilarApp[] = (data?.competitors ?? [])
     .slice(0, 5)
-    .map((c: any) => mapSimilarApp(c, raw?.packet?.confidence));
+    .map((c: any) => mapValidateCompetitor(c, raw?.confidence));
 
-  const mvp: MvpFeature[] = (raw?.mvp ?? []).map((m: any) =>
-    typeof m === "string" ? { feature: m, why: "" } : { feature: m?.feature ?? m?.title ?? "", why: m?.why ?? m?.reason ?? "" },
-  );
-  const risks: IdeaRisk[] = (raw?.risks ?? []).map((r: any) =>
-    typeof r === "string"
-      ? { risk: r, severity: "medium" as const, mitigation: null }
-      : { risk: r?.risk ?? r?.title ?? "", severity: r?.severity ?? "medium", mitigation: r?.mitigation ?? null },
-  );
+  const risks: IdeaRisk[] = (data?.risks ?? []).map((r: any) => ({
+    risk: typeof r === "string" ? r : (r?.message ?? ""),
+    severity: "medium" as const,
+    mitigation: null,
+  }));
+
+  // #180 is deterministic — it does not synthesise MVP features or an angle.
+  const mvp: MvpFeature[] = [];
 
   return {
-    idea,
-    interpretedIdea: raw?.interpretedIdea?.summary ?? idea,
-    verdict: raw?.packet, // the DecisionPacket
+    idea: data?.idea ?? idea,
+    interpretedIdea: data?.interpreted?.summary ?? idea,
+    verdict,
     overallScore,
     scoreBreakdown,
-    recommendedAngle,
+    recommendedAngle: "",
     competitorSummary: {
-      count: raw?.competitorSummary?.count ?? (raw?.competitors ?? []).length,
-      saturation: scores?.marketSaturation?.basis ?? (typeof raw?.verdict === "string" ? raw.verdict : ""),
+      count: (data?.competitors ?? []).length,
+      saturation: scores?.marketSaturation?.basis ?? data?.verdictReason ?? (typeof data?.verdict === "string" ? data.verdict : ""),
       top,
     },
     mvp,
     risks,
-    agentSummary: raw?.agentSummary ?? "",
+    agentSummary: buildAgentSummary(data),
     source: "live",
     generatedAt: nowIso(),
   };
