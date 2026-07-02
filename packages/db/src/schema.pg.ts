@@ -15,7 +15,7 @@
  *                                           changing it would be a semantic change)
  *   sqlite `integer` / `text` (plain)     → pg `integer` / `text` (unchanged)
  */
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 import {
   pgTable,
   text,
@@ -25,9 +25,18 @@ import {
   timestamp,
   index,
   uniqueIndex,
+  customType,
 } from "drizzle-orm/pg-core";
 
 const ts = (name: string) => timestamp(name, { withTimezone: true });
+
+/** Postgres `tsvector` — no drizzle built-in; used for the native pg full-text
+ *  search column (#244, the pg counterpart of SQLite's `apps_fts` FTS5 table). */
+const tsvector = customType<{ data: string }>({
+  dataType() {
+    return "tsvector";
+  },
+});
 
 export const apps = pgTable(
   "apps",
@@ -56,6 +65,13 @@ export const apps = pgTable(
     fileSizeBytes: integer("file_size_bytes"),
     minOsVersion: text("min_os_version"),
     sellerName: text("seller_name"),
+    // Native pg full-text search (#244): the pg counterpart of SQLite's `apps_fts`
+    // FTS5 virtual table. Generated STORED so it self-syncs (no triggers), over the
+    // SAME fields FTS5 indexes (title + developer — NOT description, deliberately).
+    // 'simple' config: no stemming/stopwords, matching FTS5's unicode61 tokenizer.
+    searchTsv: tsvector("search_tsv").generatedAlwaysAs(
+      (): SQL => sql`to_tsvector('simple', coalesce("title", '') || ' ' || coalesce("developer", ''))`,
+    ),
   },
   (t) => [
     uniqueIndex("apps_store_app_id_idx").on(t.store, t.storeAppId),
@@ -64,6 +80,7 @@ export const apps = pgTable(
     index("apps_last_snapshot_idx").on(t.lastSnapshotDate),
     index("apps_last_attempted_idx").on(t.lastAttemptedAt),
     index("apps_released_at_idx").on(t.releasedAt),
+    index("apps_search_tsv_idx").using("gin", t.searchTsv),
   ],
 );
 

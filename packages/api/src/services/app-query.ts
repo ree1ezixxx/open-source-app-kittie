@@ -2,12 +2,12 @@ import {
   apps,
   appSnapshots,
   appleSearchAds,
+  appsFtsQuery,
   creators,
   dbAll,
   dbGet,
-  isPostgres,
   metaAds,
-  toFtsMatch,
+  type AppsFtsQuery,
 } from "@kittie/db";
 import {
   and,
@@ -543,19 +543,19 @@ async function selectCandidateIds(c: AppConditions, params: AppSearchParams): Pr
 }
 
 /**
- * Search candidate pool: an FTS5 MATCH on title/developer INTERSECTED with the SQL
- * filters (category / source / numeric ranges / latest-day pin), most-relevant first.
+ * Search candidate pool: a full-text match on title/developer (FTS5 MATCH on SQLite,
+ * tsvector `@@` on Postgres — see appsFtsQuery) INTERSECTED with the SQL filters
+ * (category / source / numeric ranges / latest-day pin), most-relevant first.
  * Applying the filters DURING selection — not just in matchesSearch afterward — keeps
  * filtered matches that rank beyond POOL_CAP, which a text-only FTS pool would drop.
  */
-async function ftsCandidateIds(match: string, filter: SQL, cap: number): Promise<string[]> {
+async function ftsCandidateIds(fts: AppsFtsQuery, filter: SQL, cap: number): Promise<string[]> {
   const rows = await dbAll<{ id: string }>(getDb(), sql`
     SELECT apps.id AS id
-    FROM apps_fts
-    JOIN apps ON apps.id = apps_fts.app_id
+    FROM ${fts.from}
     JOIN app_snapshots ON app_snapshots.app_id = apps.id
-    WHERE apps_fts MATCH ${match} AND ${filter}
-    ORDER BY apps_fts.rank, apps.id
+    WHERE ${fts.match} AND ${filter}
+    ORDER BY ${fts.rank}, apps.id
     LIMIT ${cap}
   `);
   // Dedupe: the snapshot join yields one row per market for multi-market requests.
@@ -563,13 +563,12 @@ async function ftsCandidateIds(match: string, filter: SQL, cap: number): Promise
 }
 
 /** Total apps matching the search text AND the SQL filters — the accurate "X of Y" count. */
-async function ftsCount(match: string, filter: SQL): Promise<number> {
+async function ftsCount(fts: AppsFtsQuery, filter: SQL): Promise<number> {
   const row = await dbGet<{ c: number }>(getDb(), sql`
     SELECT count(distinct apps.id) AS c
-    FROM apps_fts
-    JOIN apps ON apps.id = apps_fts.app_id
+    FROM ${fts.from}
     JOIN app_snapshots ON app_snapshots.app_id = apps.id
-    WHERE apps_fts MATCH ${match} AND ${filter}
+    WHERE ${fts.match} AND ${filter}
   `);
   return Number(row?.c ?? 0);
 }
@@ -587,17 +586,17 @@ export async function searchAppCandidates(params: AppSearchParams): Promise<AppC
   if (!maxDate) return null;
 
   const search = params.search?.trim();
-  // FTS5 (apps_fts / MATCH) is SQLite-only. On pg the virtual table doesn't exist, so
-  // force the non-FTS branch — buildConditions already applies a portable LIKE on the
-  // search text, so results stay correct (native pg full-text is #244). (#245)
-  const ftsMatch = search && !isPostgres(getDb()) ? toFtsMatch(search) : null;
+  // Dialect-native full-text (#244): appsFtsQuery yields FTS5 fragments on SQLite and
+  // tsvector fragments on Postgres — both take this branch. Null (no usable token)
+  // keeps the non-FTS path, whose buildConditions LIKE still applies the search text.
+  const fts = search ? appsFtsQuery(getDb(), search) : null;
   const conds = buildConditions(params, maxDate);
   let totalCount: number;
   let ids: string[];
-  if (ftsMatch) {
+  if (fts) {
     const filter = and(...allConditions(conds))!;
     const cap = effectivePoolCap(params);
-    [totalCount, ids] = await Promise.all([ftsCount(ftsMatch, filter), ftsCandidateIds(ftsMatch, filter, cap)]);
+    [totalCount, ids] = await Promise.all([ftsCount(fts, filter), ftsCandidateIds(fts, filter, cap)]);
   } else {
     // Candidates first: the seek branch derives the exact join total as a byproduct
     // (see CandidateSelection), letting the hot Trends/Explore category+market load skip
@@ -726,14 +725,14 @@ export async function searchAppCandidatesKeyset(
   };
 }
 
-/** FTS keyset candidate: the apps_fts MATCH ∩ SQL filters, ordered by the SORT column
+/** FTS keyset candidate: the full-text match ∩ SQL filters, ordered by the SORT column
  *  (not bm25 rank) + a (sortValue, app_id) keyset boundary, LIMIT pageSize. Lets a search
  *  with a keyset-eligible sort score only the page instead of the 5000-row relevance pool.
  *  For terms with ≤ POOL_CAP matches this is byte-identical to the legacy path (both
  *  consider every match); for heavier terms it ranks over ALL matches, not the top-5000-
  *  by-relevance (a sanctioned ranking change, like the revenue precompute). */
 async function ftsCandidateKeyset(
-  match: string,
+  fts: AppsFtsQuery,
   filter: SQL,
   col: AnyColumn,
   isAsc: boolean,
@@ -748,10 +747,9 @@ async function ftsCandidateKeyset(
   const order = isAsc ? sql`asc` : sql`desc`;
   const rows = await dbAll<{ id: string; sortVal: number | null }>(getDb(), sql`
     SELECT apps.id AS id, ${col} AS sortVal
-    FROM apps_fts
-    JOIN apps ON apps.id = apps_fts.app_id
+    FROM ${fts.from}
     JOIN app_snapshots ON app_snapshots.app_id = apps.id
-    WHERE apps_fts MATCH ${match} AND ${filter}${keyset}
+    WHERE ${fts.match} AND ${filter}${keyset}
     ORDER BY ${col} ${order}, app_snapshots.app_id ASC
     LIMIT ${pageSize}
   `);
@@ -777,17 +775,16 @@ export async function searchAppCandidatesKeysetFts(
   const maxDate = await latestSnapshotDate(marketCountry);
   if (!maxDate) return null;
   const search = params.search?.trim();
-  // FTS5 keyset path is SQLite-only; on pg return null so the caller falls back to the
-  // legacy non-FTS pool path (which searches via the portable LIKE conditions). (#245)
-  const ftsMatch = search && !isPostgres(getDb()) ? toFtsMatch(search) : null;
+  // Dialect-native full-text (#244): FTS5 fragments on SQLite, tsvector on Postgres.
+  const fts = search ? appsFtsQuery(getDb(), search) : null;
   const col = keysetColumn(params);
-  if (!ftsMatch || !col) return null;
+  if (!fts || !col) return null;
   const conds = buildConditions(params, maxDate);
   const filter = and(...allConditions(conds))!;
   const isAsc = (params.sortOrder ?? "desc") === "asc";
   const [totalCount, cand] = await Promise.all([
-    ftsCount(ftsMatch, filter),
-    ftsCandidateKeyset(ftsMatch, filter, col, isAsc, cursor, pageSize),
+    ftsCount(fts, filter),
+    ftsCandidateKeyset(fts, filter, col, isAsc, cursor, pageSize),
   ]);
   return {
     totalCount,
