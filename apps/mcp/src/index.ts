@@ -9,6 +9,12 @@ import type { AppSearchParams, Store } from "@kittie/types";
 import { createBuildContextManager, type ProfileUserValues } from "@kittie/build-context";
 import { synthesizeOpportunity, type MarketApp } from "@kittie/intelligence";
 import { listTools } from "./tools.js";
+import {
+  appDetailIntelligencePath,
+  findTrendingAppsPath,
+  toAgentSafeError,
+  type FindTrendingAppsArgs,
+} from "./intelligence-tools.js";
 
 const API_BASE = process.env.KITTIE_API_URL ?? "http://localhost:3009";
 
@@ -114,9 +120,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         break;
       }
       case "get_app_detail": {
-        const id = (args as { id?: string })?.id;
-        if (!id) throw new Error("id is required");
-        result = await apiGet(`/api/v1/apps/${encodeURIComponent(id)}`);
+        const id = (args as { id?: string })?.id ?? "";
+        // #181 app-detail intelligence: structured evidence/confidence/caveats envelope.
+        result = await apiGet(appDetailIntelligencePath(id));
+        break;
+      }
+      case "find_trending_apps": {
+        // #182 trends/category-pulse intelligence.
+        result = await apiGet(findTrendingAppsPath((args ?? {}) as FindTrendingAppsArgs));
         break;
       }
       case "get_app_history": {
@@ -266,10 +277,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
     };
   } catch (err) {
-    return {
-      content: [{ type: "text", text: err instanceof Error ? err.message : String(err) }],
-      isError: true,
-    };
+    return toAgentSafeError(err);
   }
 });
 
