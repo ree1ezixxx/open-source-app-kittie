@@ -45,6 +45,39 @@ describe("planQuery — intents", () => {
     const p = planQuery("compare apple:1");
     expect(p.intent).toBe("unsupported");
   });
+
+  // Regression cases from the #235 review — intent disambiguation.
+  it("routes validate even when the idea mentions 'compare'", () => {
+    expect(planQuery("validate a tool to compare flight prices")).toEqual({
+      intent: "validate",
+      idea: "a tool to compare flight prices",
+    });
+    expect(planQuery("should i build an app to compare my spending")).toEqual({
+      intent: "validate",
+      idea: "an app to compare my spending",
+    });
+  });
+
+  it("does not split surrounding prose into compare targets", () => {
+    // "versus" mid-prose, no leading "compare", no ids → honest unsupported.
+    expect(planQuery("tell me about the app store versus play store").intent).toBe("unsupported");
+  });
+
+  it("extracts a mid-sentence idea", () => {
+    expect(planQuery("I want to validate my app idea for a run tracker")).toEqual({
+      intent: "validate",
+      idea: "a run tracker",
+    });
+  });
+
+  it("reads a country name as a market, not a category", () => {
+    expect(planQuery("what's trending in the Netherlands")).toEqual({
+      intent: "trends",
+      category: null,
+      country: "NL",
+      period: "7d",
+    });
+  });
 });
 
 describe("example prompts all plan to a supported intent", () => {

@@ -19,6 +19,7 @@ import type {
   IntelligenceReportContract,
   ValidateIdeaIntelligenceResponse,
 } from "@kittie/types";
+import { fetchIntel, unwrapData } from "../intelligence/http";
 
 export type ReportTemplateId = "app_teardown" | "category_pulse" | "build_brief";
 export type ReportFormatId = "markdown" | "json" | "html";
@@ -47,34 +48,7 @@ export interface GeneratedReport {
   formats: Record<ReportFormatId, RenderedFormat>;
 }
 
-const BASE = "/api/v1/app-intelligence";
 const registry = createReportRegistry();
-
-async function fetchJson(path: string, init: RequestInit, signal?: AbortSignal): Promise<unknown> {
-  const res = await fetch(`${BASE}${path}`, { ...init, signal });
-  const text = await res.text();
-  let body: unknown = null;
-  if (text) {
-    try {
-      body = JSON.parse(text);
-    } catch {
-      body = null;
-    }
-  }
-  if (!res.ok) {
-    const message =
-      body && typeof body === "object" && body !== null && "error" in body
-        ? String((body as { error: unknown }).error)
-        : `Request failed (HTTP ${res.status}).`;
-    throw new Error(message);
-  }
-  return body;
-}
-
-/** app-detail + validate-idea wrap in `{ data }`; trends is top-level. */
-function unwrap(body: unknown): unknown {
-  return body && typeof body === "object" && "data" in (body as object) ? (body as { data: unknown }).data : body;
-}
 
 async function contractFor(
   template: ReportTemplateId,
@@ -85,8 +59,8 @@ async function contractFor(
     case "app_teardown": {
       const id = (params.appId ?? "").trim();
       if (!id) throw new Error("An app id is required (e.g. apple:6446901002).");
-      const env = unwrap(
-        await fetchJson(`/apps/${encodeURIComponent(id)}`, { method: "GET" }, signal),
+      const env = unwrapData(
+        await fetchIntel(`/apps/${encodeURIComponent(id)}`, { method: "GET" }, signal),
       ) as AppDetailIntelligenceResponse;
       return buildAppTeardownReport(env);
     }
@@ -95,14 +69,14 @@ async function contractFor(
       if (params.category && params.category.trim()) qs.set("category", params.category.trim());
       qs.set("country", params.country?.trim() || "US");
       qs.set("growthPeriod", params.period?.trim() || "7d");
-      const env = (await fetchJson(`/trends?${qs.toString()}`, { method: "GET" }, signal)) as TrendsIntelligenceResponse;
+      const env = (await fetchIntel(`/trends?${qs.toString()}`, { method: "GET" }, signal)) as TrendsIntelligenceResponse;
       return buildCategoryPulseReport(env);
     }
     case "build_brief": {
       const idea = (params.idea ?? "").trim();
       if (!idea) throw new Error("An app idea is required.");
-      const env = unwrap(
-        await fetchJson(
+      const env = unwrapData(
+        await fetchIntel(
           `/validate-idea`,
           { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ idea }) },
           signal,

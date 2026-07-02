@@ -9,7 +9,11 @@ import type {
   IntelligenceConfidence,
   IntelligenceEvidence,
 } from "@kittie/types";
+import { fetchIntel, unwrapData } from "../intelligence/http";
 import type { AskIntent, AskPlan } from "./planner";
+
+/** Only a real `platform:id` is an app id; anything else is a free-text query. */
+const APP_ID_EXACT = /^(?:apple|google):[A-Za-z0-9._-]+$/i;
 
 export interface AskResult {
   intent: AskIntent;
@@ -20,32 +24,6 @@ export interface AskResult {
   caveats: IntelligenceCaveat[];
   /** Deep link to render the full report, when a template backs this intent. */
   reportHref: string | null;
-}
-
-const BASE = "/api/v1/app-intelligence";
-
-async function fetchJson(path: string, init: RequestInit, signal?: AbortSignal): Promise<any> {
-  const res = await fetch(`${BASE}${path}`, { ...init, signal });
-  const text = await res.text();
-  let body: any = null;
-  if (text) {
-    try {
-      body = JSON.parse(text);
-    } catch {
-      body = null;
-    }
-  }
-  if (!res.ok) {
-    const message =
-      body && typeof body === "object" && "error" in body ? String(body.error) : `Request failed (HTTP ${res.status}).`;
-    throw new Error(message);
-  }
-  return body;
-}
-
-/** app-detail / compare / validate-idea wrap in `{ data }`; trends is top-level. */
-function unwrap(body: any): any {
-  return body && typeof body === "object" && "data" in body ? body.data : body;
 }
 
 function envelopeBits(env: any): Pick<AskResult, "confidence" | "evidence" | "caveats"> {
@@ -59,7 +37,7 @@ function envelopeBits(env: any): Pick<AskResult, "confidence" | "evidence" | "ca
 export async function runAsk(plan: AskPlan, signal?: AbortSignal): Promise<AskResult> {
   switch (plan.intent) {
     case "app_detail": {
-      const env = unwrap(await fetchJson(`/apps/${encodeURIComponent(plan.appId)}`, { method: "GET" }, signal));
+      const env = unwrapData(await fetchIntel(`/apps/${encodeURIComponent(plan.appId)}`, { method: "GET" }, signal)) as any;
       const app = env?.data?.app ?? {};
       return {
         intent: "app_detail",
@@ -74,7 +52,7 @@ export async function runAsk(plan: AskPlan, signal?: AbortSignal): Promise<AskRe
       if (plan.category) qs.set("category", plan.category);
       qs.set("country", plan.country);
       qs.set("growthPeriod", plan.period);
-      const env = await fetchJson(`/trends?${qs.toString()}`, { method: "GET" }, signal); // top-level
+      const env = (await fetchIntel(`/trends?${qs.toString()}`, { method: "GET" }, signal)) as any; // top-level
       const count = Array.isArray(env?.data?.apps) ? env.data.apps.length : 0;
       return {
         intent: "trends",
@@ -85,13 +63,17 @@ export async function runAsk(plan: AskPlan, signal?: AbortSignal): Promise<AskRe
       };
     }
     case "compare": {
-      const env = unwrap(
-        await fetchJson(
+      const env = unwrapData(
+        await fetchIntel(
           `/compare-apps`,
-          { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ apps: plan.apps.map((a) => (a.includes(":") ? { appId: a } : { query: a })) }) },
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ apps: plan.apps.map((a) => (APP_ID_EXACT.test(a) ? { appId: a } : { query: a })) }),
+          },
           signal,
         ),
-      );
+      ) as any;
       const rows = Array.isArray(env?.data?.rows) ? env.data.rows : [];
       const leader = (env?.data?.insights ?? []).find((i: any) => i?.kind === "leader");
       return {
@@ -103,13 +85,13 @@ export async function runAsk(plan: AskPlan, signal?: AbortSignal): Promise<AskRe
       };
     }
     case "validate": {
-      const env = unwrap(
-        await fetchJson(
+      const env = unwrapData(
+        await fetchIntel(
           `/validate-idea`,
           { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ idea: plan.idea }) },
           signal,
         ),
-      );
+      ) as any;
       const verdict = env?.data?.verdict ?? "unvalidated";
       return {
         intent: "validate",

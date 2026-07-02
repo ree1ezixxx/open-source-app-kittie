@@ -61,6 +61,14 @@ describe("runAsk", () => {
     expect(r.reportHref).toBe("/reports/build_brief?idea=a%20focus%20timer");
   });
 
+  it("treats a colon-bearing NAME as a query, not an appId", async () => {
+    const seen = mockFetch({ data: { data: { rows: [], insights: [] }, ...bits } });
+    await runAsk({ intent: "compare", apps: ["apple:6446901002", "note:taking app"] });
+    expect(JSON.parse(String(seen.init?.body))).toEqual({
+      apps: [{ appId: "apple:6446901002" }, { query: "note:taking app" }],
+    });
+  });
+
   it("surfaces API errors", async () => {
     mockFetch({ error: "app not found" }, false, 404);
     await expect(runAsk({ intent: "app_detail", appId: "apple:nope" })).rejects.toThrow(/app not found/);
