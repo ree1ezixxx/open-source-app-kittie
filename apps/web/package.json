@@ -11,6 +11,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@kittie/reports": "workspace:*",
     "@kittie/types": "workspace:*",
     "@xyflow/react": "^12.11.1",
     "dagre": "^0.8.5",
