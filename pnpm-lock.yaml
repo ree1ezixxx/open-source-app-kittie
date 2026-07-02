@@ -79,6 +79,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@kittie/reports':
+        specifier: workspace:*
+        version: link:../../packages/reports
       '@kittie/types':
         specifier: workspace:*
         version: link:../../packages/types

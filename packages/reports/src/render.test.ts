@@ -8,8 +8,8 @@ import {
   renderAllFormats,
   renderReportContent,
   reportFileName,
-  writeReport,
 } from "./render.js";
+import { writeReport } from "./fs.js";
 
 const FORMATS = ["json", "markdown", "html"] as const;
 

@@ -1,24 +1,28 @@
 /**
  * Report renderer entry points.
  *
- * `renderReportContent` is pure — it resolves the template, builds the document,
- * and serialises to the requested format, returning content + metadata (no I/O).
- * `writeReport` additionally persists to the local filesystem and returns the
- * output path. There is no DB-backed report history in v1.
+ * `renderReportContent` is pure and BROWSER-SAFE — it resolves the template,
+ * builds the document, and serialises to the requested format, returning content
+ * + metadata (no I/O, no Node globals). Filesystem persistence (`writeReport`)
+ * lives in `fs.ts` so this module can be bundled for the web via the package's
+ * `./browser` entry. There is no DB-backed report history in v1.
  */
-import { mkdir, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
 import type { IntelligenceReportContract, ReportFormat } from "@kittie/types";
 import { createDefaultRegistry, ReportTemplateRegistry } from "./registry.js";
 import { renderHtml } from "./renderers/html.js";
 import { renderJson } from "./renderers/json.js";
 import { renderMarkdown } from "./renderers/markdown.js";
 
-const FORMAT_META: Record<ReportFormat, { extension: string; contentType: string }> = {
+export const FORMAT_META: Record<ReportFormat, { extension: string; contentType: string }> = {
   json: { extension: "json", contentType: "application/json" },
   markdown: { extension: "md", contentType: "text/markdown" },
   html: { extension: "html", contentType: "text/html" },
 };
+
+/** UTF-8 byte length without Node's `Buffer` (works in the browser too). */
+function utf8ByteLength(content: string): number {
+  return new TextEncoder().encode(content).length;
+}
 
 const ALL_FORMATS: ReportFormat[] = ["json", "markdown", "html"];
 
@@ -71,7 +75,7 @@ export function renderReportContent(
     format,
     contentType: FORMAT_META[format].contentType,
     content,
-    byteLength: Buffer.byteLength(content, "utf8"),
+    byteLength: utf8ByteLength(content),
     outputPath: null,
     metadata: {
       title: contract.outputMetadata.title,
@@ -92,21 +96,4 @@ export function renderAllFormats(
 
 export function reportFileName(reportId: string, format: ReportFormat): string {
   return `${reportId}.${FORMAT_META[format].extension}`;
-}
-
-/**
- * Render and write a report to `outDir`. Returns the result with `outputPath`
- * populated. The directory (and any parents) is created if missing.
- */
-export async function writeReport(
-  contract: IntelligenceReportContract,
-  format: ReportFormat,
-  outDir: string,
-  registry?: ReportTemplateRegistry,
-): Promise<RenderResult> {
-  const result = renderReportContent(contract, format, registry);
-  const outputPath = join(outDir, reportFileName(contract.reportId, format));
-  await mkdir(dirname(outputPath), { recursive: true });
-  await writeFile(outputPath, result.content, "utf8");
-  return { ...result, outputPath };
 }
