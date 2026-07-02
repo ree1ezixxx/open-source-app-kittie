@@ -38,3 +38,21 @@ export {
   SAMPLE_CONTRACT_VERSION,
   type SampleReportOutput,
 } from "./fixtures.js";
+export {
+  APP_TEARDOWN_TEMPLATE,
+  appTeardownTemplate,
+  buildAppTeardownReport,
+  CATEGORY_PULSE_TEMPLATE,
+  categoryPulseTemplate,
+  buildCategoryPulseReport,
+  createReportRegistry,
+  type AppTeardownMetric,
+  type AppTeardownListingMedia,
+  type AppTeardownOutput,
+  type BuildAppTeardownOptions,
+  type CategoryPulseMovementRow,
+  type CategoryPulseOpportunity,
+  type CategoryPulseOutput,
+  type BuildCategoryPulseOptions,
+  type TrendsIntelligenceResponse,
+} from "./templates/index.js";
