@@ -77,7 +77,12 @@ export function compareAppsRequest(args: { apps?: unknown }): CompareAppsRequest
   const refs: AppRefInput[] = apps.map((raw, i) => {
     if (!raw || typeof raw !== "object") throw new Error(`apps[${i}] must be an object with appId or query`);
     const ref = raw as AppRefInput;
-    if (!ref.appId && !ref.query) throw new Error(`apps[${i}] needs an appId or a query`);
+    const hasAppId = typeof ref.appId === "string" && ref.appId.trim().length > 0;
+    const hasQuery = typeof ref.query === "string" && ref.query.trim().length > 0;
+    if (!hasAppId && !hasQuery) throw new Error(`apps[${i}] needs an appId or a query`);
+    if (hasAppId && hasQuery) throw new Error(`apps[${i}] must have exactly one of appId or query, not both`);
+    if (ref.store !== undefined && ref.store !== "apple" && ref.store !== "google")
+      throw new Error(`apps[${i}] store must be "apple" or "google"`);
     return ref;
   });
   return { path: COMPARE_APPS_PATH, body: { apps: refs } };

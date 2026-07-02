@@ -173,6 +173,7 @@ export const BASE_TOOLS = [
               query: { type: "string" },
               store: { type: "string", enum: ["apple", "google"] },
             },
+            oneOf: [{ required: ["appId"] }, { required: ["query"] }],
           },
         },
       },

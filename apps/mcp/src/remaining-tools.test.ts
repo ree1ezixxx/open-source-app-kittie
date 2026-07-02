@@ -41,6 +41,24 @@ describe("compareAppsRequest", () => {
     expect(() => compareAppsRequest({ apps: "nope" })).toThrow(/must be an array/);
     expect(() => compareAppsRequest({ apps: [{}, {}] })).toThrow(/appId or a query/);
   });
+
+  it("rejects a ref carrying both appId and query (ambiguous)", () => {
+    expect(() =>
+      compareAppsRequest({ apps: [{ appId: "apple:1", query: "focus timer" }, { appId: "apple:2" }] }),
+    ).toThrow(/exactly one of appId or query/);
+  });
+
+  it("treats a whitespace-only value as absent", () => {
+    expect(() => compareAppsRequest({ apps: [{ appId: "   " }, { query: "focus timer" }] })).toThrow(
+      /needs an appId or a query/,
+    );
+  });
+
+  it("rejects an unknown store value", () => {
+    expect(() =>
+      compareAppsRequest({ apps: [{ appId: "apple:1", store: "bada" }, { appId: "apple:2" }] }),
+    ).toThrow(/store must be/);
+  });
 });
 
 describe("validateIdeaRequest", () => {
