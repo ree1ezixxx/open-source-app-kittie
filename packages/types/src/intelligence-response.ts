@@ -14,6 +14,8 @@ export type IntelligenceResponseType =
   | "compare_apps"
   | "trends"
   | "idea_validation"
+  | "teardown"
+  | "similar"
   | "report";
 
 export type IntelligenceStatus = "ok" | "partial" | "insufficient";
