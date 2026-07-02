@@ -18,8 +18,8 @@ Repo: `ree1ezixxx/open-source-app-kittie` · Coordinator worktree: `open-source-
 
 ## Active Work
 
-- **#192 Ask page** — worker 6 building (coordinator ruling on the issue: deterministic planner, no LLM,
-  #180 envelope renderers, thin/no persistence; risk:medium dispensation granted).
+**🏁 PRD #179 CLOSED 2026-07-02 — the inversion MVP is COMPLETE.** 31 PRs merged today. Board fully
+drained; next tranche seeded below.
 
 ## Completed (merged to main)
 
@@ -50,18 +50,11 @@ Repo: `ree1ezixxx/open-source-app-kittie` · Coordinator worktree: `open-source-
 
 ## In progress
 
-- #192 Ask page (worker 6, ruled + authorized).
-
-## Ready (`agent:ready`, unblocked)
-
-- _None._ **DRAIN + REFILL happened 2026-07-02 ~14:00**: original #179 queue fully shipped; coordinator
-  ruled #192 BUILD (was needs:human) and pre-approved #194 (unlocks when #192 closes). After #194, the
-  #179 PRD is complete — next refill = new scope (2nd GitHub identity, data infra/Neon, or Rhodri's next
-  idea via the `idea` label).
-
-## Blocked (`blocked:dependency`)
-
 - _None._
+
+## Ready (`agent:ready`, unblocked — next tranche, seeded at MVP close)
+
+- #239 Delete legacy dashboard pages (risk:low — post-#194 cleanup)
 
 ## Human-gated (`needs:human`)
 
@@ -76,6 +69,11 @@ Repo: `ree1ezixxx/open-source-app-kittie` · Coordinator worktree: `open-source-
 - Coordinator: set-and-forget + strict (auto-merge `needs:merge`; nudge/restart/take-over idle workers).
 
 ## Last Run
+
+**2026-07-02 · reconcile #12 — MVP COMPLETE.** #235 (#192 Ask page) + #236 (#194 sidebar cut) merged,
+both with PRE-MERGE live browser QA evidence on the PRs. PRD #179 closed with full shipping manifest.
+MCP live handshake verified (19 tools). Next tranche seeded: #237 (2nd identity, human), #238 (data
+home, human), #239 (legacy page deletion, agent:ready).
 
 **2026-07-02 · reconcile #11 — FULL DRAIN of the #179 queue (28 merges today) + refill by ruling.**
 #232 (#221) + #233 (#229) merged; #232 live-QA'd post-merge with network evidence (canonical
