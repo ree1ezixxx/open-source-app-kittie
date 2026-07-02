@@ -17,7 +17,7 @@
  * owns chart_rank.
  */
 import { loadEnv } from "@kittie/core";
-import { createDb, type Db } from "@kittie/db";
+import { createDb, dbAll, dbRun, isPostgres, type Db } from "@kittie/db";
 import { sql } from "drizzle-orm";
 
 import { todaySnapshotDate } from "../util/dates.js";
@@ -35,14 +35,23 @@ export async function carryForwardSnapshots(
 ): Promise<CarryForwardResult> {
   const snapshotDate = opts.snapshotDate ?? todaySnapshotDate();
   const countries = (opts.countries ?? ["US"]).map((c) => c.toUpperCase());
-  const nowEpoch = Math.floor(Date.now() / 1000);
+  const pg = isPostgres(db);
+  // created_at: SQLite `integer({mode:"timestamp"})` stores epoch **seconds**; Postgres
+  // `timestamptz` wants an ISO timestamp. Writing a bare epoch int into timestamptz on pg
+  // would be read back as a 1970-era Date, so branch the literal by dialect (#245).
+  const now = new Date();
+  const createdAtExpr = pg ? sql`${now.toISOString()}::timestamptz` : sql`${Math.floor(now.getTime() / 1000)}`;
+  // INSERT OR IGNORE is SQLite-only; pg uses ON CONFLICT DO NOTHING against the unique key.
+  const insertPrefix = pg ? sql`INSERT INTO app_snapshots` : sql`INSERT OR IGNORE INTO app_snapshots`;
+  const conflictClause = pg ? sql` ON CONFLICT DO NOTHING` : sql``;
   const started = Date.now();
   const did: string[] = [];
   let carried = 0;
 
   for (const cc of countries) {
     // Source = the latest day strictly before today for this market (last full day).
-    const rows = await db.all<{ d: string | null }>(
+    const rows = await dbAll<{ d: string | null }>(
+      db,
       sql`SELECT max(snapshot_date) AS d FROM app_snapshots WHERE snapshot_date < ${snapshotDate} AND chart_country = ${cc}`,
     );
     const prevMax = rows[0]?.d;
@@ -55,16 +64,19 @@ export async function carryForwardSnapshots(
         ? sql`app_id || ':' || ${snapshotDate}`
         : sql`app_id || ':' || ${snapshotDate} || ':' || ${cc}`;
 
-    const res = await db.run(sql`
-      INSERT OR IGNORE INTO app_snapshots
+    const res = await dbRun(
+      db,
+      sql`
+      ${insertPrefix}
         (id, app_id, snapshot_date, review_count, rating, chart_country,
          downloads_estimate, revenue_estimate, growth_score, is_first_mover, created_at)
       SELECT ${idExpr}, app_id, ${snapshotDate}, review_count, rating, chart_country,
-             downloads_estimate, revenue_estimate, growth_score, is_first_mover, ${nowEpoch}
+             downloads_estimate, revenue_estimate, growth_score, is_first_mover, ${createdAtExpr}
       FROM app_snapshots
-      WHERE snapshot_date = ${prevMax} AND chart_country = ${cc}
-    `);
-    carried += (res as { rowsAffected?: number }).rowsAffected ?? 0;
+      WHERE snapshot_date = ${prevMax} AND chart_country = ${cc}${conflictClause}
+    `,
+    );
+    carried += res.rowsAffected;
     did.push(cc);
   }
 

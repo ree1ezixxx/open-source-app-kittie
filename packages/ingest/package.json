@@ -36,6 +36,7 @@
     "google-play-scraper": "^10.1.2"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.2.17",
     "@types/node": "^22.15.21",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3",
