@@ -125,7 +125,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         break;
       }
       case "get_app_detail": {
-        const id = (args as { id?: string })?.id ?? "";
+        // #249 canonical arg is `appId`; `id` kept as a backward-compat alias.
+        const a = args as { appId?: string; id?: string };
+        const id = a?.appId ?? a?.id ?? "";
         // #181 app-detail intelligence: structured evidence/confidence/caveats envelope.
         result = await apiGet(appDetailIntelligencePath(id));
         break;
@@ -169,8 +171,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
       case "get_app_history": {
-        const id = (args as { id?: string })?.id;
-        if (!id) throw new Error("id is required");
+        // #249 canonical arg is `appId`; `id` kept as a backward-compat alias.
+        const a = args as { appId?: string; id?: string };
+        const id = a?.appId ?? a?.id;
+        if (!id) throw new Error("appId is required");
         result = await apiGet(`/api/v1/apps/${encodeURIComponent(id)}/historicals`);
         break;
       }
