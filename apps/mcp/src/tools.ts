@@ -120,12 +120,36 @@ export const BASE_TOOLS = [
   {
     name: "get_app_detail",
     description:
-      "Full profile for one app: listing facts, latest modelled estimates, growth, and signals. " +
-      "Pass an id from search_apps/find_rising_apps (e.g. `apple:123456789`).",
+      "Full intelligence profile for one app as an evidence- and confidence-aware response: listing facts, " +
+      "observed signals, modelled estimates (downloads/revenue/growth — labelled), plus the supporting " +
+      "evidence, a confidence score and any caveats (missing/stale sources). Pass an id from " +
+      "search_apps/find_trending_apps (e.g. `apple:123456789`).",
     inputSchema: {
       type: "object",
       properties: { id: { type: "string" } },
       required: ["id"],
+    },
+  },
+  {
+    name: "find_trending_apps",
+    description:
+      "Fastest-rising apps for a category/market over a period, returned as an evidence- and " +
+      "confidence-aware trends response: each app carries chart-rank movement, review growth and a " +
+      "modelled growth score, with confidence and caveats. Downloads/revenue-style figures are MODELLED. " +
+      "Returns empty (never a fabricated ranking) when there is no clean snapshot for the window.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        category: { type: "string", description: "Single store category to scope to (optional)." },
+        country: { type: "string", default: "US", description: "ISO market (default US)." },
+        period: {
+          type: "string",
+          enum: ["7d", "14d", "30d", "60d", "90d"],
+          default: "7d",
+          description: "Growth window.",
+        },
+        limit: { type: "number", default: 10, description: "Max apps (≤50)." },
+      },
     },
   },
   {

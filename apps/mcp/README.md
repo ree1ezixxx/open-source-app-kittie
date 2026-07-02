@@ -15,7 +15,8 @@ a buildable iOS clone of an app.
 | `search_apps` | Filter & rank the iOS+Android catalog by text, category, store, market, modelled metrics, growth, price and presence signals. Cursor-paginated. |
 | `find_rising_apps` | The headline "is this a rising opportunity?" verb — strongest positive growth over a window, with growth %, rank movement and modelled revenue. |
 | `get_trending_charts` | Top store rankings (free/paid/grossing) per market with day-over-day rank movement. Honest empty when no clean source. |
-| `get_app_detail` | Full profile for one app (listing facts, latest estimates, growth, signals). |
+| `find_trending_apps` | Fastest-rising apps for a category/market over a period, as an evidence- & confidence-aware trends response (rank movement, review growth, modelled growth score, caveats). Honest empty when no clean snapshot. |
+| `get_app_detail` | Full intelligence profile for one app: listing facts, observed signals, modelled estimates, plus supporting evidence, a confidence score and caveats. |
 | `get_app_history` | Daily review / rating / chart-rank series for one app. |
 | `get_keyword_difficulty` | ASO difficulty for one keyword in a market. |
 | `batch_keyword_difficulty` | ASO difficulty for many keywords at once. |
