@@ -29,16 +29,6 @@ const DEFAULT_MODEL_VERSION = "validate-idea-v1";
 /** Below this total competitor review count the catalog signal is too thin to judge. */
 const THIN_EVIDENCE_REVIEWS = 50;
 
-/**
- * An `adjacent` competitor at/above this blended similarity is a genuine match, not
- * an incidental single-token FTS hit. `classifySimilarity` assigns `adjacent` at
- * ftsScore>=0.2, so class alone is NOT a strength signal (a lone rare-token hit is
- * `adjacent` too); this floor sits above the ~single-signal blend an incidental hit
- * produces and below the ~0.44 a real cross-domain match scores, so it separates a
- * genuine cluster from nonsense without re-opening the P0 (#246 re-review, finding 1).
- */
-const STRONG_SIMILARITY = 0.4;
-
 /** How many competitors are surfaced with full per-app evidence. */
 const MAX_COMPETITOR_EVIDENCE = 10;
 
@@ -80,29 +70,17 @@ export function buildValidateIdeaResponse(
   const evidenceThin = competitors.length > 0 && totalReviews < THIN_EVIDENCE_REVIEWS;
   const ambiguous = input.interpreted.keywords.length === 0;
   const hasReviewThemes = reviewThemes.length > 0;
-  // Coherence gate: a parseable idea whose surfaced apps never cohered into a
-  // market is incidental-token noise (e.g. "blockchain-powered teleporting
-  // sandwiches"), not a validatable market. Escapes must be GENUINELY independent
-  // — `directCount > 0` implies a resolved category (a `direct` match requires
-  // `sameCategory`), so it is NOT a separate signal. Instead the third escape is
-  // category-INDEPENDENT: a cluster of strong lexical/similarity matches, which a
-  // real cross-domain niche ("budgeting tool for freelance musicians") clears even
-  // when its competitors split across Finance/Music/Business (#246 review).
-  const categorised = competitors.filter((c) => c.app.category != null);
-  // A STRONG match keys on blended similarity, NOT merely being non-`analogue`:
-  // `classifySimilarity` assigns `adjacent` at ftsScore>=0.2, exactly what incidental
-  // single-token FTS hits produce, so counting any non-analogue would re-admit nonsense
-  // (#246 re-review, finding 1). Require a `direct` peer, or an `adjacent` that clears
-  // the genuine-match score floor — a lone rare-token hit stays below it.
-  const strongMatchCount = competitors.filter(
-    (c) =>
-      c.similarityClass === "direct" ||
-      (c.similarityClass === "adjacent" && c.similarityScore >= STRONG_SIMILARITY),
-  ).length;
-  const coherentMarket =
-    input.interpreted.categories.length > 0 || // interpreter resolved a store facet
-    (categorised.length >= 2 && dominantCategoryShare(categorised) >= 0.5) || // apps cluster in one category
-    strongMatchCount >= 2; // a genuine strong-match cluster (category-independent)
+  // Coherence gate (option 2, coordinator ruling on #246): a parseable idea is a
+  // validatable market iff it has >=1 head-on (`direct`) competitor OR the interpreter
+  // resolved a store category. The raw-similarity signal was dropped because it is
+  // INVERTED in this pipeline — `category_peer`(0.30) can't fire for a cross-domain
+  // niche, so genuine niches score BELOW a rare-token nonsense FTS hit, making any
+  // score floor false-reject the niche and admit the nonsense. A category-anchored
+  // gate can never re-open the P0 (false green on nonsense); a cross-domain niche with
+  // no resolved category degrading to honest `not_enough_data` is the accepted cost.
+  // (`direct` requires `sameCategory`, so it implies a resolved category in the current
+  // classifier; the clause is kept explicit per the ruling and as a guard.)
+  const coherentMarket = directCount > 0 || input.interpreted.categories.length > 0;
   const incoherent = !ambiguous && competitors.length > 0 && !coherentMarket;
 
   const scores = scoreIdea({ competitors, directCount, reviewThemes });
@@ -440,22 +418,6 @@ function missingSourcesFor(evidenceThin: boolean): MissingIntelligenceSource[] |
       message: "Competitor review volume is too low to ground a demand judgement.",
     },
   ];
-}
-
-/**
- * Fraction of the given (already category-filtered) apps sharing their single most
- * common category (0..1). The caller passes only categorised competitors so that
- * null-category apps — common for freshly-ingested rows — do NOT dilute the share
- * and falsely mark a coherent single-market idea incoherent (#246 review).
- */
-function dominantCategoryShare(categorised: SimilarApp[]): number {
-  if (categorised.length === 0) return 0;
-  const freq = new Map<string, number>();
-  for (const c of categorised) {
-    if (c.app.category) freq.set(c.app.category, (freq.get(c.app.category) ?? 0) + 1);
-  }
-  if (freq.size === 0) return 0;
-  return Math.max(...freq.values()) / categorised.length;
 }
 
 function confidenceFor(input: {

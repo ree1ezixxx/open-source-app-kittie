@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { AppListItem, InterpretedIdea, SimilarApp } from "@kittie/types";
 import { buildValidateIdeaResponse, ValidateIdeaInputError } from "./validate-idea.js";
+import { scoreSimilar } from "./similarity/index.js";
 
 const generatedAt = "2026-07-02T12:00:00.000Z";
 
@@ -51,6 +52,28 @@ function interpreted(overrides: Partial<InterpretedIdea> = {}): InterpretedIdea 
   };
 }
 
+/**
+ * Build a competitor via the REAL similarity scorer — no hand-set score/class.
+ * `scoreSimilar` derives `similarityClass`/`similarityScore` from the retrieval
+ * signals exactly as production does, so coherence-gate tests can't false-green on
+ * scores the pipeline cannot emit (#246 ruling).
+ */
+function scored(
+  interp: InterpretedIdea,
+  signals: { ftsScore?: number; categoryPeer?: boolean; reviewTopicScore?: number },
+  app: Partial<AppListItem> = {},
+): SimilarApp {
+  return scoreSimilar(
+    {
+      app: appItem(app),
+      ftsScore: signals.ftsScore ?? 0,
+      categoryPeer: signals.categoryPeer ?? false,
+      reviewTopicScore: signals.reviewTopicScore ?? 0,
+    },
+    interp,
+  );
+}
+
 describe("validate-idea intelligence", () => {
   it("returns a grounded verdict with risks, opportunities, and competitor evidence on strong evidence", () => {
     const competitors: SimilarApp[] = Array.from({ length: 8 }, (_, i) =>
@@ -98,7 +121,9 @@ describe("validate-idea intelligence", () => {
   it("degrades to a low-confidence, conservative verdict on weak evidence", () => {
     const result = buildValidateIdeaResponse({
       idea: "A niche app for collecting rare bottle caps",
-      interpreted: interpreted({ summary: "a bottle cap collecting app", keywords: ["bottle", "caps"], categories: [] }),
+      // Resolved category → coherent, so this isolates the THIN-evidence path (not the
+      // coherence gate): a categorised but under-reviewed niche degrades on thin data.
+      interpreted: interpreted({ summary: "a bottle cap collecting app", keywords: ["bottle", "caps"], categories: ["Lifestyle"] }),
       competitors: [
         competitor({ similarityClass: "adjacent" }, { id: "app_1", title: "Cap Tracker", reviewCount: 12, rating: null, growthScore: null, category: "Lifestyle" }),
         competitor({ similarityClass: "adjacent" }, { id: "app_2", storeAppId: "222", title: "Collector Log", reviewCount: 9, rating: 3.1, growthScore: null, category: "Lifestyle" }),
@@ -224,34 +249,37 @@ describe("validate-idea intelligence", () => {
     expect(strong.status).toBe("ok");
   });
 
-  it("#246: multi-word incoherent input degrades to not_enough_data, never has_room", () => {
-    // Keywords parse fine, but the surfaced apps are scattered incidental-token hits
-    // across unrelated categories — no resolved category, no head-on competitor, no
-    // shared-category cluster. This must NOT read as a green-light market.
-    // Modelled as real retrieval emits them: an FTS token-hit is `adjacent`
-    // (ftsScore>=0.2), NOT `analogue` — but its blended similarityScore stays low
-    // (single signal). The gate must sink these on SCORE, not class (#246 re-review).
-    const scattered: SimilarApp[] = [
-      competitor({ similarityClass: "adjacent", similarityScore: 0.26 }, { id: "n_1", title: "Sandwich Recipes", reviewCount: 8000, category: "Food & Drink", rating: 4.2, growthScore: 20 }),
-      competitor({ similarityClass: "adjacent", similarityScore: 0.20 }, { id: "n_2", storeAppId: "902", title: "Moon Phase", reviewCount: 6000, category: "Weather", rating: 4.0, growthScore: 15 }),
-      competitor({ similarityClass: "adjacent", similarityScore: 0.16 }, { id: "n_3", storeAppId: "903", title: "Blockchain Wallet", reviewCount: 12000, category: "Finance", rating: 3.8, growthScore: 30 }),
+  it("#246: incoherent nonsense (no category, no direct — via real scoreSimilar) → not_enough_data", () => {
+    // Driven through the REAL scoreSimilar so classes are what the pipeline actually
+    // emits (hand-set scores were the source of the earlier false-greens, #246 ruling).
+    // Nonsense: the interpreter resolved no category, and each app matches one
+    // incidental token in an UNRELATED category → sameCategory=false → the scorer emits
+    // NO `direct`. Option-2 gate (>=1 direct OR resolved category) therefore sinks it.
+    const interp = interpreted({
+      summary: "a nonsensical multi-domain idea",
+      keywords: ["blockchain", "teleporting", "sandwiches", "moon"],
+      categories: [], // no resolved category
+    });
+    const scattered = [
+      scored(interp, { ftsScore: 0.9 }, { id: "n_1", title: "Blockchain Wallet", reviewCount: 12000, category: "Finance", rating: 3.8, growthScore: 30 }),
+      scored(interp, { ftsScore: 0.4 }, { id: "n_2", storeAppId: "902", title: "Sandwich Recipes", reviewCount: 8000, category: "Food & Drink", rating: 4.2, growthScore: 20 }),
+      scored(interp, { ftsScore: 0.3 }, { id: "n_3", storeAppId: "903", title: "Moon Phase", reviewCount: 6000, category: "Weather", rating: 4.0, growthScore: 15 }),
     ];
+    // The whole point: even a full-strength (fts 0.9) rare-token hit is NOT `direct`
+    // without a shared category — so the gate can never green-light this on score.
+    expect(scattered.every((c) => c.similarityClass !== "direct")).toBe(true);
+
     const result = buildValidateIdeaResponse({
       idea: "blockchain-powered app for teleporting sentient sandwiches to the moon",
-      interpreted: interpreted({
-        summary: "a nonsensical multi-domain idea",
-        keywords: ["blockchain", "teleporting", "sandwiches", "moon"],
-        categories: [], // interpreter resolved no real category
-      }),
+      interpreted: interp,
       competitors: scattered,
       reviewThemes: [],
       generatedAt,
       sourceQuery: { idea: "teleporting sandwiches" },
     });
 
-    expect(["not_enough_data", "unvalidated"]).toContain(result.data.verdict);
+    expect(result.data.verdict).toBe("not_enough_data");
     expect(result.data.verdict).not.toBe("has_room");
-    expect(result.data.verdict).not.toBe("strong_opportunity");
     expect(result.confidence.score).toBeLessThanOrEqual(0.3);
     expect(result.confidence.label).toBe("low");
     // Honest labelling intact: the incoherence is stated, estimates still flagged.
@@ -259,36 +287,31 @@ describe("validate-idea intelligence", () => {
     expect(result.caveats.some((c) => c.kind === "estimated_metric")).toBe(true);
   });
 
-  it("#246: does NOT sink a real cross-domain niche whose competitors span categories", () => {
-    // Regression guard for the coherence gate over-correcting (#246 review): a
-    // plausible idea with no App-Store facet word (categories=[]) whose genuine
-    // competitors naturally split across Finance/Music/Business must NOT be forced
-    // to not_enough_data. The category-independent strong-match escape saves it.
-    // Genuine matches: each clears STRONG_SIMILARITY (0.4) — a real multi-signal
-    // match scores well above the single-token incidental blend, even split across
-    // Finance/Music/Business with no shared store category.
-    const crossDomain: SimilarApp[] = [
-      competitor({ similarityClass: "adjacent", similarityScore: 0.46 }, { id: "m_1", title: "Freelance Budget", reviewCount: 6000, category: "Finance", rating: 4.3, growthScore: 40 }),
-      competitor({ similarityClass: "adjacent", similarityScore: 0.44 }, { id: "m_2", storeAppId: "802", title: "Gig Money Manager", reviewCount: 5200, category: "Business", rating: 4.1, growthScore: 38 }),
-      competitor({ similarityClass: "adjacent", similarityScore: 0.42 }, { id: "m_3", storeAppId: "803", title: "Musician Income Tracker", reviewCount: 4800, category: "Music", rating: 4.0, growthScore: 35 }),
+  it("#246: a resolved interpreted category makes an idea coherent (via real scoreSimilar) → real verdict", () => {
+    // Option-2 gate's escape: a resolved category. Competitors are `adjacent` (real
+    // scorer: same-category but not strong enough for `direct`), so directCount=0 — yet
+    // the resolved "Health & Fitness" category alone makes the market coherent. This is
+    // the other side of the gate: a categorised idea is graded, not sunk.
+    const interp = interpreted({ categories: ["Health & Fitness"], keywords: ["sobriety", "coach"] });
+    const comps = [
+      scored(interp, { ftsScore: 0.3, categoryPeer: true }, { id: "c_1", title: "Quit Coach", reviewCount: 9000, category: "Health & Fitness", rating: 4.3, growthScore: 40 }),
+      scored(interp, { ftsScore: 0.25, categoryPeer: true }, { id: "c_2", storeAppId: "812", title: "Sober Days", reviewCount: 7000, category: "Health & Fitness", rating: 4.1, growthScore: 35 }),
     ];
+    // Real scorer emits `adjacent` (same category, but sub-`strong` fts) — no `direct`.
+    expect(comps.every((c) => c.similarityClass === "adjacent")).toBe(true);
+
     const result = buildValidateIdeaResponse({
-      idea: "a budgeting tool for freelance musicians",
-      interpreted: interpreted({
-        summary: "a budgeting tool for freelance musicians",
-        keywords: ["budgeting", "freelance", "musicians"],
-        categories: [], // no single store category the interpreter could resolve
-      }),
-      competitors: crossDomain,
+      idea: "an app to help people stay sober",
+      interpreted: interp,
+      competitors: comps,
       reviewThemes: [],
       generatedAt,
-      sourceQuery: { idea: "budgeting freelance musicians" },
+      sourceQuery: { idea: "sober coach" },
     });
 
-    // A real market: not the low-information sink.
+    // Coherent via the resolved category → a real verdict, not the low-information sink.
     expect(result.data.verdict).not.toBe("not_enough_data");
     expect(result.data.verdict).not.toBe("unvalidated");
-    // Confidence is graded from real signal, not floored to the incoherent sink (0.3).
     expect(result.confidence.score).toBeGreaterThan(0.3);
   });
 
