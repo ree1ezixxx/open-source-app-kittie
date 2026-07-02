@@ -202,9 +202,9 @@ export function AppDetailPage({ theme, onToggleTheme }: { theme: Theme; onToggle
           <div className="detail-inner">
             {/* breadcrumb (live parity) */}
             <nav className="breadcrumb">
-              <Link to="/dashboard/explore">Home</Link>
+              <Link to="/ask">Home</Link>
               <span>/</span>
-              <Link to="/dashboard/explore">Apps</Link>
+              <Link to="/intelligence">Apps</Link>
               <span>/</span>
               <span className="current">{app.title}</span>
             </nav>

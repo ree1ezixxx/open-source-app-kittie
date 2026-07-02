@@ -35,8 +35,8 @@ export function PulsePage({ theme, onToggleTheme }: { theme: Theme; onToggleThem
       theme={theme}
       onToggleTheme={onToggleTheme}
       toolbar={
-        <Link className="btn" to="/dashboard/explore" style={{ height: 28, padding: "0 10px", fontSize: 12 }}>
-          Open database
+        <Link className="btn" to="/intelligence" style={{ height: 28, padding: "0 10px", fontSize: 12 }}>
+          App Intelligence
         </Link>
       }
     >
@@ -44,7 +44,7 @@ export function PulsePage({ theme, onToggleTheme }: { theme: Theme; onToggleThem
         <Widget
           title="New Big Hits"
           count={bigHits.loading ? null : bigHits.total}
-          action={viewAll("/dashboard/explore?sort=reviews&order=desc&rel=7")}
+          action={viewAll("/intelligence")}
         >
           <RankList
             apps={bigHits.apps}
@@ -55,7 +55,7 @@ export function PulsePage({ theme, onToggleTheme }: { theme: Theme; onToggleThem
           />
         </Widget>
 
-        <Widget title="Top Gainers" action={viewAll("/dashboard/rising")}>
+        <Widget title="Top Gainers">
           <RankList
             apps={gainers.apps}
             loading={gainers.loading}
@@ -66,7 +66,7 @@ export function PulsePage({ theme, onToggleTheme }: { theme: Theme; onToggleThem
           />
         </Widget>
 
-        <Widget title="Top Losers" action={viewAll("/dashboard/explore?sort=rankDelta&order=asc")}>
+        <Widget title="Top Losers" action={viewAll("/intelligence")}>
           <RankList
             apps={losers.apps}
             loading={losers.loading}
