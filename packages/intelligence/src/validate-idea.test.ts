@@ -217,7 +217,10 @@ describe("validate-idea intelligence", () => {
       strong.caveats.some((c) => c.kind === "partial_source" && c.sourceType === "review"),
     ).toBe(true);
     expect(strong.caveats.some((c) => c.kind === "estimated_metric")).toBe(true);
-    // No missing_source floor was applied, so the review gap does not force partial.
+    // Structural consequence of relabelling the review gap missing_source→partial_source
+    // to un-pin confidence: with no missing_source, deriveStatus returns "ok". This is
+    // the honest-data governance point flagged to the coordinator (#246); if a
+    // dimension-aware cap is authorized to restore "partial", update this expectation.
     expect(strong.status).toBe("ok");
   });
 
@@ -225,10 +228,13 @@ describe("validate-idea intelligence", () => {
     // Keywords parse fine, but the surfaced apps are scattered incidental-token hits
     // across unrelated categories — no resolved category, no head-on competitor, no
     // shared-category cluster. This must NOT read as a green-light market.
+    // Modelled as real retrieval emits them: an FTS token-hit is `adjacent`
+    // (ftsScore>=0.2), NOT `analogue` — but its blended similarityScore stays low
+    // (single signal). The gate must sink these on SCORE, not class (#246 re-review).
     const scattered: SimilarApp[] = [
-      competitor({ similarityClass: "analogue", similarityScore: 0.18 }, { id: "n_1", title: "Sandwich Recipes", reviewCount: 8000, category: "Food & Drink", rating: 4.2, growthScore: 20 }),
-      competitor({ similarityClass: "analogue", similarityScore: 0.15 }, { id: "n_2", storeAppId: "902", title: "Moon Phase", reviewCount: 6000, category: "Weather", rating: 4.0, growthScore: 15 }),
-      competitor({ similarityClass: "analogue", similarityScore: 0.12 }, { id: "n_3", storeAppId: "903", title: "Blockchain Wallet", reviewCount: 12000, category: "Finance", rating: 3.8, growthScore: 30 }),
+      competitor({ similarityClass: "adjacent", similarityScore: 0.26 }, { id: "n_1", title: "Sandwich Recipes", reviewCount: 8000, category: "Food & Drink", rating: 4.2, growthScore: 20 }),
+      competitor({ similarityClass: "adjacent", similarityScore: 0.20 }, { id: "n_2", storeAppId: "902", title: "Moon Phase", reviewCount: 6000, category: "Weather", rating: 4.0, growthScore: 15 }),
+      competitor({ similarityClass: "adjacent", similarityScore: 0.16 }, { id: "n_3", storeAppId: "903", title: "Blockchain Wallet", reviewCount: 12000, category: "Finance", rating: 3.8, growthScore: 30 }),
     ];
     const result = buildValidateIdeaResponse({
       idea: "blockchain-powered app for teleporting sentient sandwiches to the moon",
@@ -258,10 +264,13 @@ describe("validate-idea intelligence", () => {
     // plausible idea with no App-Store facet word (categories=[]) whose genuine
     // competitors naturally split across Finance/Music/Business must NOT be forced
     // to not_enough_data. The category-independent strong-match escape saves it.
+    // Genuine matches: each clears STRONG_SIMILARITY (0.4) — a real multi-signal
+    // match scores well above the single-token incidental blend, even split across
+    // Finance/Music/Business with no shared store category.
     const crossDomain: SimilarApp[] = [
-      competitor({ similarityClass: "adjacent", similarityScore: 0.44 }, { id: "m_1", title: "Freelance Budget", reviewCount: 6000, category: "Finance", rating: 4.3, growthScore: 40 }),
-      competitor({ similarityClass: "adjacent", similarityScore: 0.41 }, { id: "m_2", storeAppId: "802", title: "Gig Money Manager", reviewCount: 5200, category: "Business", rating: 4.1, growthScore: 38 }),
-      competitor({ similarityClass: "adjacent", similarityScore: 0.38 }, { id: "m_3", storeAppId: "803", title: "Musician Income Tracker", reviewCount: 4800, category: "Music", rating: 4.0, growthScore: 35 }),
+      competitor({ similarityClass: "adjacent", similarityScore: 0.46 }, { id: "m_1", title: "Freelance Budget", reviewCount: 6000, category: "Finance", rating: 4.3, growthScore: 40 }),
+      competitor({ similarityClass: "adjacent", similarityScore: 0.44 }, { id: "m_2", storeAppId: "802", title: "Gig Money Manager", reviewCount: 5200, category: "Business", rating: 4.1, growthScore: 38 }),
+      competitor({ similarityClass: "adjacent", similarityScore: 0.42 }, { id: "m_3", storeAppId: "803", title: "Musician Income Tracker", reviewCount: 4800, category: "Music", rating: 4.0, growthScore: 35 }),
     ];
     const result = buildValidateIdeaResponse({
       idea: "a budgeting tool for freelance musicians",

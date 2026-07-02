@@ -30,11 +30,14 @@ const DEFAULT_MODEL_VERSION = "validate-idea-v1";
 const THIN_EVIDENCE_REVIEWS = 50;
 
 /**
- * A competitor at/above this blended similarity is a genuine match (it cleared
- * more than one incidental-token signal), not cross-domain noise. Used as the
- * category-INDEPENDENT coherence escape so real multi-category ideas aren't sunk.
+ * An `adjacent` competitor at/above this blended similarity is a genuine match, not
+ * an incidental single-token FTS hit. `classifySimilarity` assigns `adjacent` at
+ * ftsScore>=0.2, so class alone is NOT a strength signal (a lone rare-token hit is
+ * `adjacent` too); this floor sits above the ~single-signal blend an incidental hit
+ * produces and below the ~0.44 a real cross-domain match scores, so it separates a
+ * genuine cluster from nonsense without re-opening the P0 (#246 re-review, finding 1).
  */
-const STRONG_SIMILARITY = 0.3;
+const STRONG_SIMILARITY = 0.4;
 
 /** How many competitors are surfaced with full per-app evidence. */
 const MAX_COMPETITOR_EVIDENCE = 10;
@@ -86,13 +89,20 @@ export function buildValidateIdeaResponse(
   // real cross-domain niche ("budgeting tool for freelance musicians") clears even
   // when its competitors split across Finance/Music/Business (#246 review).
   const categorised = competitors.filter((c) => c.app.category != null);
+  // A STRONG match keys on blended similarity, NOT merely being non-`analogue`:
+  // `classifySimilarity` assigns `adjacent` at ftsScore>=0.2, exactly what incidental
+  // single-token FTS hits produce, so counting any non-analogue would re-admit nonsense
+  // (#246 re-review, finding 1). Require a `direct` peer, or an `adjacent` that clears
+  // the genuine-match score floor — a lone rare-token hit stays below it.
   const strongMatchCount = competitors.filter(
-    (c) => c.similarityClass !== "analogue" || c.similarityScore >= STRONG_SIMILARITY,
+    (c) =>
+      c.similarityClass === "direct" ||
+      (c.similarityClass === "adjacent" && c.similarityScore >= STRONG_SIMILARITY),
   ).length;
   const coherentMarket =
     input.interpreted.categories.length > 0 || // interpreter resolved a store facet
     (categorised.length >= 2 && dominantCategoryShare(categorised) >= 0.5) || // apps cluster in one category
-    strongMatchCount >= 2; // a real match cluster (category-independent)
+    strongMatchCount >= 2; // a genuine strong-match cluster (category-independent)
   const incoherent = !ambiguous && competitors.length > 0 && !coherentMarket;
 
   const scores = scoreIdea({ competitors, directCount, reviewThemes });
