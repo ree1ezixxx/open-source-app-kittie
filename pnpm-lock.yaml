@@ -157,7 +157,7 @@ importers:
         version: link:../types
       drizzle-orm:
         specifier: ^0.44.2
-        version: 0.44.7(@libsql/client@0.17.3)(@types/better-sqlite3@7.6.13)(better-sqlite3@11.10.0)
+        version: 0.44.7(@electric-sql/pglite@0.2.17)(@libsql/client@0.17.3)(@types/better-sqlite3@7.6.13)(better-sqlite3@11.10.0)(postgres@3.4.9)
       fflate:
         specifier: ^0.8.3
         version: 0.8.3
@@ -267,8 +267,11 @@ importers:
         version: 0.17.3
       drizzle-orm:
         specifier: ^0.44.2
-        version: 0.44.7(@libsql/client@0.17.3)(@types/better-sqlite3@7.6.13)(better-sqlite3@11.10.0)
+        version: 0.44.7(@electric-sql/pglite@0.2.17)(@libsql/client@0.17.3)(@types/better-sqlite3@7.6.13)(better-sqlite3@11.10.0)(postgres@3.4.9)
     devDependencies:
+      '@electric-sql/pglite':
+        specifier: ^0.2.17
+        version: 0.2.17
       '@types/node':
         specifier: ^22.15.21
         version: 22.19.20
@@ -298,7 +301,7 @@ importers:
         version: link:../types
       drizzle-orm:
         specifier: ^0.44.2
-        version: 0.44.7(@libsql/client@0.17.3)(@types/better-sqlite3@7.6.13)(better-sqlite3@11.10.0)
+        version: 0.44.7(@electric-sql/pglite@0.2.17)(@libsql/client@0.17.3)(@types/better-sqlite3@7.6.13)(better-sqlite3@11.10.0)(postgres@3.4.9)
       google-play-scraper:
         specifier: ^10.1.2
         version: 10.1.3
@@ -472,6 +475,9 @@ packages:
 
   '@drizzle-team/brocli@0.10.2':
     resolution: {integrity: sha512-z33Il7l5dKjUgGULTqBsQBQwckHh5AbIuxhdsIxDDiZAzBOrZO6q9ogcWC65kU382AfynTfgNumVcNIjuIua6w==}
+
+  '@electric-sql/pglite@0.2.17':
+    resolution: {integrity: sha512-qEpKRT2oUaWDH6tjRxLHjdzMqRUGYDnGZlKrnL4dJ77JVMcP2Hpo3NYnOSPKdZdeec57B6QPprCUFg0picx5Pw==}
 
   '@esbuild-kit/core-utils@3.3.2':
     resolution: {integrity: sha512-sPRAnw9CdSsRmEtnsl2WXWdyquogVpB3yZ3dgwJfe8zrOzTsV7cJvmwrKVa+0ma5BoiGJ+BoqkMvawbayKUsqQ==}
@@ -2272,6 +2278,10 @@ packages:
     resolution: {integrity: sha512-FfR8sjd4em2T6fb3I2MwAJU7HWVMr9zba+enmQeeWFfCbm+UOC/0X4DS8XtpUTMwWMGbjKYP7xjfNekzyGmB3A==}
     engines: {node: ^10 || ^12 || >=14}
 
+  postgres@3.4.9:
+    resolution: {integrity: sha512-GD3qdB0x1z9xgFI6cdRD6xu2Sp2WCOEoe3mtnyB5Ee0XrrL5Pe+e4CCnJrRMnL1zYtRDZmQQVbvOttLnKDLnaw==}
+    engines: {node: '>=12'}
+
   prebuild-install@7.1.3:
     resolution: {integrity: sha512-8Mf2cbV7x1cXPUILADGI3wuhfqWvtiLA1iclTDbFRZkgRQS0NqsPZphna9V+HyTEadheuPmjaJMsbzKQFOzLug==}
     engines: {node: '>=10'}
@@ -2900,6 +2910,8 @@ snapshots:
       '@babel/helper-validator-identifier': 7.29.7
 
   '@drizzle-team/brocli@0.10.2': {}
+
+  '@electric-sql/pglite@0.2.17': {}
 
   '@esbuild-kit/core-utils@3.3.2':
     dependencies:
@@ -3859,11 +3871,13 @@ snapshots:
       esbuild: 0.25.12
       tsx: 4.22.4
 
-  drizzle-orm@0.44.7(@libsql/client@0.17.3)(@types/better-sqlite3@7.6.13)(better-sqlite3@11.10.0):
+  drizzle-orm@0.44.7(@electric-sql/pglite@0.2.17)(@libsql/client@0.17.3)(@types/better-sqlite3@7.6.13)(better-sqlite3@11.10.0)(postgres@3.4.9):
     optionalDependencies:
+      '@electric-sql/pglite': 0.2.17
       '@libsql/client': 0.17.3
       '@types/better-sqlite3': 7.6.13
       better-sqlite3: 11.10.0
+      postgres: 3.4.9
 
   dunder-proto@1.0.1:
     dependencies:
@@ -4503,6 +4517,9 @@ snapshots:
       nanoid: 3.3.12
       picocolors: 1.1.1
       source-map-js: 1.2.1
+
+  postgres@3.4.9:
+    optional: true
 
   prebuild-install@7.1.3:
     dependencies:
