@@ -105,10 +105,32 @@ describe("resolveReportRequest", () => {
     expect(req.body).toMatchObject({ idea: "a focus timer" });
   });
 
-  it("rejects unknown templates, bad formats, and missing required inputs", () => {
+  it("rejects unknown templates, bad formats, and missing per-template required inputs (template-specific messages)", () => {
     expect(() => resolveReportRequest({ template: "nope" })).toThrow(/template must be one of/);
     expect(() => resolveReportRequest({ template: "app_teardown", appId: "apple:1", format: "pdf" })).toThrow(/format must be one of/);
-    expect(() => resolveReportRequest({ template: "app_teardown" })).toThrow(/id is required/);
-    expect(() => resolveReportRequest({ template: "build_brief" })).toThrow(/non-empty idea/);
+    expect(() => resolveReportRequest({ template: "app_teardown" })).toThrow(/app_teardown requires a non-empty appId/);
+    expect(() => resolveReportRequest({ template: "app_teardown", appId: "   " })).toThrow(/app_teardown requires a non-empty appId/);
+    expect(() => resolveReportRequest({ template: "build_brief" })).toThrow(/build_brief requires a non-empty idea/);
+  });
+
+  it("category_pulse needs no extra fields — omitting category reports across all categories", () => {
+    const req = resolveReportRequest({ template: "category_pulse" });
+    expect(req.method).toBe("GET");
+    expect(req.path).toContain("/app-intelligence/trends?");
+    expect(req.path).not.toContain("category=");
+  });
+});
+
+describe("generate_report inputSchema expresses per-template required fields", () => {
+  it("declares if/then required blocks for app_teardown (appId) and build_brief (idea)", () => {
+    const tool = listTools().find((t) => t.name === "generate_report");
+    const schema = tool?.inputSchema as unknown as {
+      required?: string[];
+      allOf?: { if: unknown; then: { required: string[] } }[];
+    };
+    expect(schema.required).toEqual(["template"]);
+    const conditionalRequired = (schema.allOf ?? []).map((c) => c.then.required.join(","));
+    expect(conditionalRequired).toContain("appId");
+    expect(conditionalRequired).toContain("idea");
   });
 });
