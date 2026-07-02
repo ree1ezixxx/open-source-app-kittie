@@ -49,21 +49,29 @@ async function seedApp(opts: {
   category: string;
   latestReviews: number;
   priorReviews: number;
+  /** Market the snapshots chart in (default US). */
+  market?: string;
+  /** Seed ONLY the prior-day snapshot — an app that didn't re-snapshot on the pinned
+   *  complete day. The exact join count must EXCLUDE it; an apps-only count includes it. */
+  priorOnly?: boolean;
 }): Promise<void> {
   const storeAppId = opts.id.split(":")[1] ?? opts.id;
   await db.$client.execute({
     sql: `INSERT INTO apps (id, store, store_app_id, title, developer, category, first_seen_at, last_snapshot_date)
           VALUES (?, 'apple', ?, ?, 'Dev', ?, 0, ?)`,
-    args: [opts.id, storeAppId, `App ${opts.id}`, opts.category, LATEST],
+    args: [opts.id, storeAppId, `App ${opts.id}`, opts.category, opts.priorOnly ? PRIOR : LATEST],
   });
-  for (const [date, reviews] of [
-    [PRIOR, opts.priorReviews],
-    [LATEST, opts.latestReviews],
-  ] as const) {
+  const days: Array<readonly [string, number]> = opts.priorOnly
+    ? [[PRIOR, opts.priorReviews]]
+    : [
+        [PRIOR, opts.priorReviews],
+        [LATEST, opts.latestReviews],
+      ];
+  for (const [date, reviews] of days) {
     await db.$client.execute({
       sql: `INSERT INTO app_snapshots (id, app_id, snapshot_date, review_count, rating, chart_country, created_at)
-            VALUES (?, ?, ?, ?, 4.5, 'US', 0)`,
-      args: [`${opts.id}_${date}`, opts.id, date, reviews],
+            VALUES (?, ?, ?, ?, 4.5, ?, 0)`,
+      args: [`${opts.id}_${date}`, opts.id, date, reviews, opts.market ?? "US"],
     });
   }
 }
@@ -76,6 +84,13 @@ beforeAll(async () => {
   await seedApp({ id: "apple:2", category: "Games", latestReviews: 3000, priorReviews: 2900 });
   await seedApp({ id: "apple:3", category: "Games", latestReviews: 1000, priorReviews: 100 });
   await seedApp({ id: "apple:4", category: "Finance", latestReviews: 9000, priorReviews: 8000 });
+  // The count-divergence sentinel: a Games app whose ONLY snapshot is on the prior day.
+  // The exact join count for an explicit market must exclude it (no pinned-day row); the
+  // no-country apps-only tolerance count includes it.
+  await seedApp({ id: "apple:5", category: "Games", latestReviews: 0, priorReviews: 700, priorOnly: true });
+  // A Games app charting ONLY in a non-default market (GB) — pins the explicit-market
+  // count to the requested market's rows.
+  await seedApp({ id: "apple:6", category: "Games", latestReviews: 400, priorReviews: 300, market: "GB" });
 });
 
 afterAll(() => {
@@ -92,11 +107,30 @@ describe("trends candidate selection (perf fix #248)", () => {
       limit: 10,
     });
     expect(pool).not.toBeNull();
-    // The Finance app (apple:4) must NOT leak in despite its far higher review count.
+    // The Finance app (apple:4) must NOT leak in despite its far higher review count;
+    // apple:5 has no pinned-day row and apple:6 charts only in GB — neither may appear.
     expect(pool!.ids).toEqual(["apple:1", "apple:2", "apple:3"]);
-    // The "X of Y" total comes from the apps-only fast count (the join count was the ~6-7s
-    // cost this fix removes). country=US pins the default market, so it stays valid.
+    // Explicit country=US keeps the EXACT join semantics: apple:5 (Games, but no
+    // snapshot on the pinned day) and apple:6 (Games, GB-only) must NOT inflate the
+    // total. 5 Games apps exist; only 3 have a US pinned-day row.
     expect(pool!.totalCount).toBe(3);
+  });
+
+  it("count equivalence: explicit US == exact join; no-country == apps tolerance; non-default market exact", async () => {
+    const base = { categories: "Games", sortBy: "growth", sortOrder: "desc", limit: 10 } as const;
+    // Explicit country=US → exact join count: excludes apple:5 (prior-day-only) and
+    // apple:6 (GB-only). This is the case the pre-rework fast-path inflated to 5.
+    const us = await searchAppCandidates({ ...base, countries: "US" });
+    expect(us!.totalCount).toBe(3);
+    // No country → the pre-existing apps-only tolerance count (documented <1% skew):
+    // all 5 Games apps, including the one lacking a pinned-day snapshot.
+    const noCountry = await searchAppCandidates({ ...base });
+    expect(noCountry!.totalCount).toBe(5);
+    expect(noCountry!.ids).toEqual(["apple:1", "apple:2", "apple:3"]); // rows still US-pinned
+    // Non-default market → exact join count for THAT market's pinned-day rows only.
+    const gb = await searchAppCandidates({ ...base, countries: "GB" });
+    expect(gb!.totalCount).toBe(1);
+    expect(gb!.ids).toEqual(["apple:6"]);
   });
 
   it("serves a category+US trends request with correct growth-ranked data", async () => {

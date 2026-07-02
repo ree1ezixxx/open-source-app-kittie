@@ -202,18 +202,9 @@ interface AppConditions {
   snapMetricCols: SQL[];
   /** True when a market was explicitly requested → the apps-only fast count is invalid. */
   explicitCountry: boolean;
-  /** True when the requested market is EXACTLY the single default market ("US") with no
-   *  exclusion — the snapshot join then narrows nothing beyond "has a latest-day row"
-   *  (the <1% tolerance the default-market count already accepts), so the fast apps-only
-   *  count applies even though the country was named explicitly. A genuinely different or
-   *  multi-market request stays false and keeps the exact join count. */
-  defaultMarketOnly: boolean;
   /** Single market scoping per-row snapshot reads (default "US"). */
   marketCountry: string;
 }
-
-/** The market every read defaults to when none is requested (ADR 0007). */
-const DEFAULT_MARKET = "US";
 
 function buildConditions(params: AppSearchParams, maxDate: string): AppConditions {
   const appCols: SQL[] = [];
@@ -227,13 +218,7 @@ function buildConditions(params: AppSearchParams, maxDate: string): AppCondition
   const include = parseCsvUpper(params.countries);
   const exclude = parseCsvUpper(params.excludedCountries);
   const explicitCountry = include.length > 0 || exclude.length > 0;
-  const marketCountry = include[0] ?? DEFAULT_MARKET;
-  // Requesting exactly the default market (US) and nothing excluded pins the SAME rows
-  // the no-country default would — so the apps-only count (which the default path already
-  // uses) stays valid, letting the Trends/Explore `country=US` load skip the 6-7s
-  // count(distinct) snapshot join. Any OTHER or multi-market request keeps the exact join.
-  const defaultMarketOnly =
-    exclude.length === 0 && (include.length === 0 || (include.length === 1 && include[0] === DEFAULT_MARKET));
+  const marketCountry = include[0] ?? "US";
 
   const snapPin: SQL[] = [eq(appSnapshots.snapshotDate, maxDate)];
   if (include.length) snapPin.push(inArray(appSnapshots.chartCountry, include));
@@ -312,7 +297,7 @@ function buildConditions(params: AppSearchParams, maxDate: string): AppCondition
   if (params.hasCreators === true) appCols.push(sql`exists (select 1 from ${creators} where ${creators.appId} = ${apps.id})`);
   if (params.hasCreators === false) appCols.push(sql`not exists (select 1 from ${creators} where ${creators.appId} = ${apps.id})`);
 
-  return { appCols, snapPin, snapMetricCols, explicitCountry, defaultMarketOnly, marketCountry };
+  return { appCols, snapPin, snapMetricCols, explicitCountry, marketCountry };
 }
 
 /** Flattened predicate list for the joined candidate query. */
@@ -366,13 +351,12 @@ export function poolIsInFinalOrder(params: AppSearchParams): boolean {
 
 async function countMatches(c: AppConditions): Promise<number> {
   const db = getDb();
-  // No snapshot-metric filter AND the pin is the default market (US) — whether the
-  // country was named explicitly or left to default, it selects the same rows, so the
-  // count is decided by the apps table (the default US market is ≈the whole catalog).
-  // Skip the join entirely (it was the 6-7s count(distinct) cost on a category-filtered
-  // Trends/Explore load — e.g. category=Games&country=US). A genuinely narrowing market
-  // (defaultMarketOnly=false) keeps the exact join count below.
-  if (c.snapMetricCols.length === 0 && c.defaultMarketOnly) {
+  // No snapshot-metric filter AND no explicit market → the count is decided by the
+  // apps table (the default US market is ≈the whole catalog). Skip the join entirely
+  // (it was the 4s cost on filtered loads). An EXPLICIT market — even `country=US` —
+  // keeps the exact join semantics below (apps lacking a pinned-day snapshot row must
+  // not inflate the total), served by the index-probe count in the last branch.
+  if (c.snapMetricCols.length === 0 && !c.explicitCountry) {
     if (c.appCols.length === 0) {
       // Unfiltered → count the latest-day rows for the default market straight off.
       const [row] = await db.select({ c: count() }).from(appSnapshots).where(and(...c.snapPin));
@@ -396,21 +380,42 @@ async function countMatches(c: AppConditions): Promise<number> {
       .where(and(...c.snapPin, ...c.snapMetricCols));
     return row?.c ?? 0;
   }
-  // An apps-column filter (category/source/developer/…) is also present → the join is
-  // unavoidable. countDistinct(apps.id) so an app charting in several requested markets
-  // is counted once.
+  // An apps-column filter (category/source/developer/…) is also present. Same number as
+  // countDistinct(apps.id) over the apps ⋈ app_snapshots join for EVERY input (inner join
+  // on app_id equality ⇒ distinct apps.id == distinct snapshot app_id within the filtered
+  // id set), but expressed as an IN-subquery so SQLite drives from the filtered app-id
+  // list and probes the COVERING snapshots_app_date_country_idx — index-only seeks,
+  // cost ∝ filter matches instead of the ~12s cold apps-probe-per-day-row join it
+  // replaces (the dominant cost of a category+country=US Trends/Explore count).
   const [row] = await db
-    .select({ c: countDistinct(apps.id) })
-    .from(apps)
-    .innerJoin(appSnapshots, eq(appSnapshots.appId, apps.id))
-    .where(and(...allConditions(c)));
+    .select({ c: countDistinct(appSnapshots.appId) })
+    .from(appSnapshots)
+    .where(
+      and(
+        ...c.snapPin,
+        ...c.snapMetricCols,
+        inArray(appSnapshots.appId, db.select({ id: apps.id }).from(apps).where(and(...c.appCols))),
+      ),
+    );
   return row?.c ?? 0;
+}
+
+/** Candidate ids plus, when the branch derives it for free, the EXACT match total. */
+interface CandidateSelection {
+  ids: string[];
+  /** Set ONLY when it equals the exact countDistinct(apps.id) join total AND countMatches
+   *  would have computed that same join total (explicit market, no metric filter): the
+   *  seek branch touches every pinned-day row for the filtered id set anyway, so its
+   *  distinct-id tally IS the join count — reusing it skips a redundant O(matches) count
+   *  round-trip. Never set on the default no-country path: there countMatches keeps its
+   *  pre-existing apps-only tolerance count, which this exact tally would CHANGE. */
+  exactTotal?: number;
 }
 
 /** Top-N candidate app ids, narrowed + ordered in SQL so memory stays bounded. For
  *  live-growth sorts (no SQL column) we proxy by review count — the busiest apps are
  *  where the movers are — then re-sort the pool exactly in memory. */
-async function selectCandidateIds(c: AppConditions, params: AppSearchParams): Promise<string[]> {
+async function selectCandidateIds(c: AppConditions, params: AppSearchParams): Promise<CandidateSelection> {
   const conds = allConditions(c);
 
   // rankDelta has no stored column AND a review-count proxy picks the wrong apps (the
@@ -427,7 +432,7 @@ async function selectCandidateIds(c: AppConditions, params: AppSearchParams): Pr
       .orderBy(asc(appSnapshots.chartRank), apps.id)
       .limit(effectivePoolCap(params));
     // Dedupe: an app charting in several requested markets yields one row per market.
-    return [...new Set(rows.map((r) => r.id))];
+    return { ids: [...new Set(rows.map((r) => r.id))] };
   }
 
   const sqlCol = sqlSortColumn(params);
@@ -483,10 +488,12 @@ async function selectCandidateIds(c: AppConditions, params: AppSearchParams): Pr
       for (const r of snapRows) {
         if (seen.has(r.id)) continue; // dedupe multi-market
         seen.add(r.id);
-        out.push(r.id);
-        if (out.length >= cap) break;
+        if (out.length < cap) out.push(r.id);
       }
-      return out;
+      // seen now holds EVERY distinct pinned-day app id in the filtered set (the loop
+      // ran past the cap) == the exact join count. Only offered when an explicit market
+      // keeps countMatches on join semantics (see CandidateSelection).
+      return { ids: out, exactTotal: c.explicitCountry ? seen.size : undefined };
     }
     // Small filter but the sort column lives on `apps` (updated/released) — the snapshot-only
     // seek can't order by it, so keep the original apps-first join with inArray (bounded to
@@ -502,7 +509,7 @@ async function selectCandidateIds(c: AppConditions, params: AppSearchParams): Pr
         .where(and(...c.snapPin, inArray(apps.id, narrowIds)))
         .orderBy(dir(col), apps.id)
         .limit(cap);
-      return [...new Set(rows.map((r) => r.id))];
+      return { ids: [...new Set(rows.map((r) => r.id))] };
     }
     // Dense app-only filter (matches a large fraction of the catalog, e.g. a top category
     // or a wide Rising release window) — the day-walk finds the top-`cap` by the sort proxy
@@ -517,7 +524,7 @@ async function selectCandidateIds(c: AppConditions, params: AppSearchParams): Pr
         .where(and(...c.snapPin, ...c.appCols))
         .orderBy(dir(col), apps.id)
         .limit(probe);
-      return [...new Set(rows.map((r) => r.id))];
+      return { ids: [...new Set(rows.map((r) => r.id))] };
     }
   }
 
@@ -532,7 +539,7 @@ async function selectCandidateIds(c: AppConditions, params: AppSearchParams): Pr
     .where(and(...conds))
     .orderBy(dir(col), apps.id)
     .limit(cap);
-  return [...new Set(rows.map((r) => r.id))];
+  return { ids: [...new Set(rows.map((r) => r.id))] };
 }
 
 /**
@@ -592,7 +599,14 @@ export async function searchAppCandidates(params: AppSearchParams): Promise<AppC
     const cap = effectivePoolCap(params);
     [totalCount, ids] = await Promise.all([ftsCount(ftsMatch, filter), ftsCandidateIds(ftsMatch, filter, cap)]);
   } else {
-    [totalCount, ids] = await Promise.all([countMatches(conds), selectCandidateIds(conds, params)]);
+    // Candidates first: the seek branch derives the exact join total as a byproduct
+    // (see CandidateSelection), letting the hot Trends/Explore category+market load skip
+    // countMatches entirely. When it can't, count afterwards — running it sequentially
+    // costs no more wall time than the old Promise.all (the two queries contended for
+    // the same cold pages) and keeps the fast path from paying for both.
+    const sel = await selectCandidateIds(conds, params);
+    ids = sel.ids;
+    totalCount = sel.exactTotal ?? (await countMatches(conds));
   }
   return { totalCount, ids, marketCountry };
 }
