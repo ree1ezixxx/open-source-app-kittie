@@ -18,7 +18,9 @@ Repo: `ree1ezixxx/open-source-app-kittie` · Coordinator worktree: `open-source-
 
 ## Active Work
 
-_No open PRs._ (Board drained; worker 6 building the next issue.)
+| PR/Issue | Title | Status | Next |
+|---|---|---|---|
+| #214 (#185) | Scaffold local-first CLI | `needs:rework` (round 2, CONFLICTING) | worker 6 rebases over #215, adopts `127.0.0.1:3008` (NOT `localhost`), fixes residual findings |
 
 ## Completed (merged to main)
 
@@ -31,6 +33,8 @@ _No open PRs._ (Board drained; worker 6 building the next issue.)
 | 2026-07-02 | #188 | #208 | App-teardown + category-pulse report templates |
 | 2026-07-02 | #190 | #210 | MCP `get_app_detail` + `find_trending_apps` |
 | 2026-07-02 | #211 | #212 | Sync MCP consumers to intelligence envelope |
+| 2026-07-02 | (audit) | #213 | CI now runs `pnpm -r test` + STATE reconcile #5 |
+| 2026-07-02 | (fix) | #215 | CLI+MCP default API URL → canonical `127.0.0.1:3008` |
 | 2026-07-02 | (ci/infra) | #200/#202/#204/#206/#209 | sweeps ref+build fixes, STATE reconciles, sweep disabled |
 
 ## In progress
@@ -63,6 +67,10 @@ _No open PRs._ (Board drained; worker 6 building the next issue.)
 - Coordinator: set-and-forget + strict (auto-merge `needs:merge`; nudge/restart/take-over idle workers).
 
 ## Last Run
+
+**2026-07-02 · reconcile #6** — #215 merged (canonical port); #214 in rework round 2 (conflicting,
+worker 6 rebasing with 127.0.0.1:3008 requirement pinned); PRD's + HIGH FIDELITY sessions archived
+(coordinator takes over backlog-refill at drain); Codex audit checkout fixed to track origin/main.
 
 **2026-07-02 · reconcile #5** — post-Codex-audit correction. Fixed: #205 closed (was listed active P0);
 #188/#190 moved to Completed (were listed ready); #189/#193 to Blocked (were listed ready); #185 now
