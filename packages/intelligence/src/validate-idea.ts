@@ -29,6 +29,13 @@ const DEFAULT_MODEL_VERSION = "validate-idea-v1";
 /** Below this total competitor review count the catalog signal is too thin to judge. */
 const THIN_EVIDENCE_REVIEWS = 50;
 
+/**
+ * A competitor at/above this blended similarity is a genuine match (it cleared
+ * more than one incidental-token signal), not cross-domain noise. Used as the
+ * category-INDEPENDENT coherence escape so real multi-category ideas aren't sunk.
+ */
+const STRONG_SIMILARITY = 0.3;
+
 /** How many competitors are surfaced with full per-app evidence. */
 const MAX_COMPETITOR_EVIDENCE = 10;
 
@@ -71,13 +78,21 @@ export function buildValidateIdeaResponse(
   const ambiguous = input.interpreted.keywords.length === 0;
   const hasReviewThemes = reviewThemes.length > 0;
   // Coherence gate: a parseable idea whose surfaced apps never cohered into a
-  // market — no category the interpreter could resolve, no head-on (direct)
-  // competitor, and no shared-category cluster — is incidental-token noise
-  // (e.g. "blockchain-powered teleporting sandwiches"), not a validatable market.
+  // market is incidental-token noise (e.g. "blockchain-powered teleporting
+  // sandwiches"), not a validatable market. Escapes must be GENUINELY independent
+  // — `directCount > 0` implies a resolved category (a `direct` match requires
+  // `sameCategory`), so it is NOT a separate signal. Instead the third escape is
+  // category-INDEPENDENT: a cluster of strong lexical/similarity matches, which a
+  // real cross-domain niche ("budgeting tool for freelance musicians") clears even
+  // when its competitors split across Finance/Music/Business (#246 review).
+  const categorised = competitors.filter((c) => c.app.category != null);
+  const strongMatchCount = competitors.filter(
+    (c) => c.similarityClass !== "analogue" || c.similarityScore >= STRONG_SIMILARITY,
+  ).length;
   const coherentMarket =
-    input.interpreted.categories.length > 0 ||
-    directCount > 0 ||
-    dominantCategoryShare(competitors) >= 0.5;
+    input.interpreted.categories.length > 0 || // interpreter resolved a store facet
+    (categorised.length >= 2 && dominantCategoryShare(categorised) >= 0.5) || // apps cluster in one category
+    strongMatchCount >= 2; // a real match cluster (category-independent)
   const incoherent = !ambiguous && competitors.length > 0 && !coherentMarket;
 
   const scores = scoreIdea({ competitors, directCount, reviewThemes });
@@ -417,17 +432,20 @@ function missingSourcesFor(evidenceThin: boolean): MissingIntelligenceSource[] |
   ];
 }
 
-/** Fraction of the competitor set sharing its single most common category (0..1). */
-function dominantCategoryShare(competitors: SimilarApp[]): number {
-  if (competitors.length === 0) return 0;
+/**
+ * Fraction of the given (already category-filtered) apps sharing their single most
+ * common category (0..1). The caller passes only categorised competitors so that
+ * null-category apps — common for freshly-ingested rows — do NOT dilute the share
+ * and falsely mark a coherent single-market idea incoherent (#246 review).
+ */
+function dominantCategoryShare(categorised: SimilarApp[]): number {
+  if (categorised.length === 0) return 0;
   const freq = new Map<string, number>();
-  for (const c of competitors) {
+  for (const c of categorised) {
     if (c.app.category) freq.set(c.app.category, (freq.get(c.app.category) ?? 0) + 1);
   }
   if (freq.size === 0) return 0;
-  // Divide by the full set (not just categorised apps) so uncategorised, scattered
-  // incidental matches honestly dilute the concentration signal.
-  return Math.max(...freq.values()) / competitors.length;
+  return Math.max(...freq.values()) / categorised.length;
 }
 
 function confidenceFor(input: {

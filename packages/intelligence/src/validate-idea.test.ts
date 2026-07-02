@@ -253,6 +253,36 @@ describe("validate-idea intelligence", () => {
     expect(result.caveats.some((c) => c.kind === "estimated_metric")).toBe(true);
   });
 
+  it("#246: does NOT sink a real cross-domain niche whose competitors span categories", () => {
+    // Regression guard for the coherence gate over-correcting (#246 review): a
+    // plausible idea with no App-Store facet word (categories=[]) whose genuine
+    // competitors naturally split across Finance/Music/Business must NOT be forced
+    // to not_enough_data. The category-independent strong-match escape saves it.
+    const crossDomain: SimilarApp[] = [
+      competitor({ similarityClass: "adjacent", similarityScore: 0.44 }, { id: "m_1", title: "Freelance Budget", reviewCount: 6000, category: "Finance", rating: 4.3, growthScore: 40 }),
+      competitor({ similarityClass: "adjacent", similarityScore: 0.41 }, { id: "m_2", storeAppId: "802", title: "Gig Money Manager", reviewCount: 5200, category: "Business", rating: 4.1, growthScore: 38 }),
+      competitor({ similarityClass: "adjacent", similarityScore: 0.38 }, { id: "m_3", storeAppId: "803", title: "Musician Income Tracker", reviewCount: 4800, category: "Music", rating: 4.0, growthScore: 35 }),
+    ];
+    const result = buildValidateIdeaResponse({
+      idea: "a budgeting tool for freelance musicians",
+      interpreted: interpreted({
+        summary: "a budgeting tool for freelance musicians",
+        keywords: ["budgeting", "freelance", "musicians"],
+        categories: [], // no single store category the interpreter could resolve
+      }),
+      competitors: crossDomain,
+      reviewThemes: [],
+      generatedAt,
+      sourceQuery: { idea: "budgeting freelance musicians" },
+    });
+
+    // A real market: not the low-information sink.
+    expect(result.data.verdict).not.toBe("not_enough_data");
+    expect(result.data.verdict).not.toBe("unvalidated");
+    // Confidence is graded from real signal, not floored to the incoherent sink (0.3).
+    expect(result.confidence.score).toBeGreaterThan(0.3);
+  });
+
   it("rejects an empty idea", () => {
     expect(() =>
       buildValidateIdeaResponse({
