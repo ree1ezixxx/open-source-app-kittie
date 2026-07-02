@@ -30,6 +30,15 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # Build all workspace packages so the tsx sweep script can resolve the
+      # compiled @kittie/* entrypoints (dist/index.js). run-sweeps-once.ts runs
+      # from source but transitively imports @kittie/{types,core,intelligence,
+      # db,ingest,clone-engine}; without their dist it fails ERR_MODULE_NOT_FOUND
+      # (seen on @kittie/types/dist/index.js). `pnpm build` = `pnpm -r build`,
+      # topologically ordered, so every package's dist exists before the sweep.
+      - name: Build workspace packages
+        run: pnpm build
+
       - name: Run due sweeps
         env:
           TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
