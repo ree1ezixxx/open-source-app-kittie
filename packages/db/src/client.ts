@@ -2,10 +2,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createClient, type Client } from "@libsql/client";
 import { drizzle, type LibSQLDatabase } from "drizzle-orm/libsql";
-import { drizzle as drizzlePg } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
 import * as schema from "./schema.js";
-import * as schemaPg from "./schema.pg.js";
 
 const repoRoot = path.resolve(fileURLToPath(import.meta.url), "../../../..");
 const defaultDbPath = path.join(repoRoot, "data", "kittie.db");
@@ -33,13 +30,20 @@ export function createDb(databaseUrl?: string): Db {
   const rawUrl =
     databaseUrl ?? process.env.TURSO_DATABASE_URL ?? process.env.DATABASE_URL ?? `file:${defaultDbPath}`;
 
-  // Postgres path (prod). Same query interface; the pg drizzle instance is
-  // structurally compatible with the canonical `Db`, so consumers are unchanged.
-  // NOTE: SQLite FTS5 (queries/fts.ts) has no Postgres equivalent yet — Postgres
-  // full-text search (tsvector/pg_trgm) is a follow-up; see docs/schema-requests.md.
+  // Postgres path. The DDL mirror (schema.pg.ts) is proven against pglite, but
+  // the RUNTIME query layer is not yet Postgres-safe: ~20 query modules call
+  // SQLite-session-only `.all()/.get()/.run()` (pg exposes only `.execute()`),
+  // `carry-forward.ts` uses `INSERT OR IGNORE` + epoch-int timestamps, FTS5 has
+  // no pg equivalent, and some readers coerce `epoch*1000`. Making those
+  // dialect-aware is the follow-up (#245); FTS specifically is #244. Until then
+  // the pg branch is HARD-GUARDED so nobody enables a silently-broken backend by
+  // setting DATABASE_URL=postgres:// in production.
   if (isPostgresUrl(rawUrl)) {
-    const sqlClient = postgres(rawUrl, { max: 10 });
-    return drizzlePg(sqlClient, { schema: schemaPg }) as unknown as Db;
+    throw new Error(
+      "Postgres backend is not production-ready yet: the schema mirrors to Postgres " +
+        "(proven via pglite) but the query layer is still SQLite-dialect. Track #245 " +
+        "(dialect-aware queries) + #244 (pg FTS) before enabling DATABASE_URL=postgres://.",
+    );
   }
 
   const url = absolutize(rawUrl);

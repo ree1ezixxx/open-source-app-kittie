@@ -11,6 +11,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
+import { createDb, isPostgresUrl } from "./client.js";
 import * as schemaPg from "./schema.pg.js";
 
 const migrationsDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "drizzle", "pg");
@@ -27,6 +28,21 @@ async function freshDb() {
   }
   return drizzle(pg, { schema: schemaPg });
 }
+
+describe("createDb pg guard", () => {
+  it("detects postgres URLs", () => {
+    expect(isPostgresUrl("postgres://x")).toBe(true);
+    expect(isPostgresUrl("postgresql://x")).toBe(true);
+    expect(isPostgresUrl("file:/tmp/x.db")).toBe(false);
+    expect(isPostgresUrl(undefined)).toBe(false);
+  });
+
+  it("HARD-THROWS on postgres:// until the runtime is dialect-aware (#245)", () => {
+    // The query layer is still SQLite-dialect — nobody should silently enable a
+    // broken pg backend by pointing DATABASE_URL at Postgres.
+    expect(() => createDb("postgres://user:pw@localhost:5432/kittie")).toThrow(/not production-ready/);
+  });
+});
 
 describe("Postgres dialect (pglite)", () => {
   it("migrates the pg schema cleanly and all tables exist", async () => {

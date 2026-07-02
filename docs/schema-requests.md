@@ -22,8 +22,11 @@ semantics changed. Type mappings applied:
 | `text(col)` incl. JSON-string columns (`languages`, `screenshot_urls`, `top_results`, `blueprint`, `topics`, …) | `text(col)` | **kept as `text`, NOT `jsonb`** — consumers serialize/parse JSON themselves; switching to `jsonb` would be a semantic change |
 | `text` / `integer` (plain), enums, PK/FK/indexes | identical | incl. partial + expression indexes |
 
-Deferred to follow-ups (flagged on the issue): **Postgres full-text search** —
-`queries/fts.ts` uses SQLite FTS5 (virtual table + triggers + `MATCH`), which has
-no Postgres equivalent; pg FTS (tsvector / `pg_trgm`) is a separate slice, and
-the SQLite path keeps FTS5 unchanged. **No data migration** here (that is #238
-step 3, needs the live secret).
+**Runtime status:** only the DDL mirror + migration are done. The pg query
+RUNTIME is NOT production-ready — the ~20 query modules are SQLite-dialect:
+`.all()/.get()/.run()` (Postgres exposes only `.execute()`), `carry-forward.ts`'s
+`INSERT OR IGNORE` + epoch-int timestamps, FTS5, and `epoch*1000` date coercion
+all break on Postgres. So `createDb()` **hard-throws on `postgres://`** until
+those land — nobody can silently enable a broken backend. Follow-ups: **#245**
+(dialect-aware query layer — the four breaks) and **#244** (pg FTS via tsvector /
+`pg_trgm`). **No data migration** here (that is #238 step 3, needs the live secret).
