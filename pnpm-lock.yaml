@@ -168,6 +168,9 @@ importers:
         specifier: ^3.25.67
         version: 3.25.76
     devDependencies:
+      '@kittie/cli':
+        specifier: workspace:*
+        version: link:../../apps/cli
       '@types/node':
         specifier: ^22.15.21
         version: 22.19.20
