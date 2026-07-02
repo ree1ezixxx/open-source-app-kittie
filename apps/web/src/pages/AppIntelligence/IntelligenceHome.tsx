@@ -17,7 +17,7 @@ const ENTRIES = [
     desc: "Describe a product and get its competitor clusters — direct, adjacent and analogue — ranked by why they match.",
   },
   {
-    to: "/dashboard/explore",
+    to: "/reports/app_teardown",
     icon: <IconGrid />,
     title: "Teardown an app",
     desc: "Open any app and switch to the Teardown tab for its thesis, core loop, monetisation and clone insights.",
