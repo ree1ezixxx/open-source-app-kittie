@@ -1,6 +1,6 @@
 import type { AppDetail, AppListItem, AppSearchParams, PaginatedResponse } from "@kittie/types";
 
-const API_BASE = process.env.KITTIE_API_URL ?? "http://localhost:3009";
+const API_BASE = process.env.KITTIE_API_URL ?? "http://127.0.0.1:3008";
 
 function toQuery(params: AppSearchParams): string {
   const entries = Object.entries(params).filter(([, v]) => v !== undefined && v !== "");
