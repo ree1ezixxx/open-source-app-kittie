@@ -2,10 +2,97 @@
  * Stable intelligence-response fixtures for the product report templates.
  * Deterministic (no clock reads) so golden/snapshot tests stay stable.
  */
-import type { AppDetailIntelligenceResponse } from "@kittie/types";
+import type { AppDetailIntelligenceResponse, ValidateIdeaIntelligenceResponse } from "@kittie/types";
 import type { TrendsIntelligenceResponse } from "./category-pulse.js";
 
 const generatedAt = "2026-07-01T12:00:00.000Z";
+
+function ideaScore(score: number, basis: string) {
+  return { score, basis };
+}
+
+/** A medium-confidence validate-idea response with real opportunities/risks/competitors. */
+export const validateIdeaFixture: ValidateIdeaIntelligenceResponse = {
+  responseType: "idea_validation",
+  status: "ok",
+  data: {
+    idea: "a focus timer for exam-week students",
+    interpreted: {
+      summary: "Focus timer targeted at students during exam week.",
+      categories: ["Productivity"],
+      keywords: ["focus timer", "study timer", "pomodoro"],
+      kind: "inferred",
+    },
+    likelyCategory: "Productivity",
+    verdict: "has_room",
+    verdictReason: "Productivity is crowded but no incumbent owns exam-week planning.",
+    scores: {
+      marketSaturation: ideaScore(0.7, "42 category peers above the threshold"),
+      competitorQuality: ideaScore(0.6, "strong incumbents (4.6 avg rating)"),
+      demandSignal: ideaScore(0.55, "steady keyword volume for study timers"),
+      differentiation: ideaScore(0.65, "exam-week planning unmet in reviews"),
+    },
+    risks: [{ message: "Crowded category with strong incumbents.", evidenceIds: ["ev_saturation"] }],
+    opportunities: [{ message: "Exam-week planning is underserved.", evidenceIds: ["ev_gap"] }],
+    competitors: [
+      {
+        appId: "apple:6446901002",
+        store: "apple",
+        storeAppId: "6446901002",
+        title: "Focus Timer",
+        developer: "Deep Work Labs",
+        category: "Productivity",
+        rating: 4.8,
+        reviewCount: 18420,
+        growthScore: 78,
+        similarityScore: 0.82,
+        similarityClass: "direct",
+        matchedVia: ["fts_keyword", "category_peer"],
+        evidenceIds: ["ev_competitor"],
+      },
+    ],
+  },
+  evidence: [
+    {
+      id: "ev_gap",
+      claim: "Few apps target exam-week planning in the Productivity category.",
+      source: { type: "keyword", id: "keyword:exam week", url: null },
+      valueKind: "derived",
+      sourceStatus: "ok",
+      freshness: "fresh",
+      observedAt: generatedAt,
+      metric: null,
+    },
+  ],
+  confidence: { score: 0.68, label: "medium", reasons: ["competitor evidence found", "review pain is partial"] },
+  caveats: [{ kind: "partial_source", sourceType: "review", message: "Written review coverage is partial." }],
+  metadata: {
+    contractVersion: "2026-07-01",
+    generatedAt,
+    sourceQuery: { idea: "focus timer for students" },
+    snapshotId: "snapshot_us_2026_07_01",
+    chartCountry: "US",
+    growthPeriod: "7d",
+    modelVersion: "report-fixture-v1",
+  },
+};
+
+/** A zero-evidence, insufficient variant — exercises the cautious/weak-evidence path. */
+export const validateIdeaWeakFixture: ValidateIdeaIntelligenceResponse = {
+  ...validateIdeaFixture,
+  status: "insufficient",
+  data: {
+    ...validateIdeaFixture.data,
+    verdict: "not_enough_data",
+    verdictReason: "Too few comparable apps to judge demand.",
+    opportunities: [],
+    risks: [],
+    competitors: [],
+  },
+  evidence: [],
+  caveats: [],
+  confidence: { score: 0.2, label: "insufficient", reasons: ["thin competitor evidence"] },
+};
 
 export const appDetailFixture: AppDetailIntelligenceResponse = {
   responseType: "app_detail",

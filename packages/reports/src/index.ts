@@ -58,6 +58,7 @@ export {
   BUILD_BRIEF_TEMPLATE,
   buildBriefTemplate,
   buildBuildBriefReport,
+  type BuildBriefFinding,
   type BuildBriefCompetitor,
   type BuildBriefOutput,
   type BuildBriefOptions,
