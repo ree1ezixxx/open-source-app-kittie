@@ -1,11 +1,13 @@
 name: data-sweeps
 
-# Always-on data substrate (free tier): GitHub runs the due sweeps every
-# 6 hours against the hosted Turso DB. sweep_state in the DB enforces real
-# cadences (daily sweeps still run once/day even though this fires 4x/day).
+# Data substrate sweep. The scheduled trigger is DISABLED (2026-07-02): the
+# hosted Turso DB endpoint 404s (dead/deleted free-tier DB) so every scheduled
+# run failed — see #205. Data infra is deferred to a scoped decision (likely
+# Neon/Postgres). Re-enable the `schedule` block once a live DB + secrets exist.
+# workflow_dispatch is kept so the sweep can still be run manually for testing.
 on:
-  schedule:
-    - cron: "23 */6 * * *" # off the hour — GitHub drops jobs at :00 spikes
+  # schedule:
+  #   - cron: "23 */6 * * *" # DISABLED — dead Turso DB (#205); re-enable with a live DB
   workflow_dispatch: {}
 
 concurrency:
