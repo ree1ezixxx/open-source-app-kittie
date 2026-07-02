@@ -195,6 +195,37 @@ export function scoreSimilar(
   };
 }
 
+/**
+ * Modal category(ies) among the strongest FTS hits — deterministic category
+ * inference used by the retrieval layer when the query itself resolved no
+ * category. Lives in the pure core (no DB) so the injection step is unit-testable:
+ * the #246 P0 was precisely this injection handing incidental-hit categories to
+ * the coherence gate, so tests must be able to drive the REAL injection.
+ *
+ * NOTE: an injected category is retrieval provenance ("what the hits look like"),
+ * not idea provenance ("what the user asked for") — consumers judging idea
+ * coherence must use the PRE-injection interpretation (see validate-idea).
+ */
+export function inferCategories(
+  ids: string[],
+  ftsScoreOf: (id: string) => number,
+  itemById: Map<string, AppListItem>,
+  topN = 25,
+  take = 2,
+): string[] {
+  const ranked = [...ids].sort((a, b) => ftsScoreOf(b) - ftsScoreOf(a)).slice(0, topN);
+  const freq = new Map<string, number>();
+  for (const id of ranked) {
+    const cat = itemById.get(id)?.category;
+    if (cat) freq.set(cat, (freq.get(cat) ?? 0) + 1);
+  }
+  return [...freq.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, take)
+    .filter(([, n]) => n >= 2) // need a real cluster, not a single stray hit
+    .map(([c]) => c);
+}
+
 function sharedKeywords(keywords: string[], app: AppListItem): string[] {
   const appTokens = new Set([
     ...tokenize(app.title),

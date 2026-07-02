@@ -62,6 +62,9 @@ export async function getValidateIdeaIntelligence(
     return buildValidateIdeaResponse({
       idea,
       interpreted: similar.interpretedQuery,
+      // Pre-injection categories: the coherence gate must judge what the IDEA
+      // resolved, not what `inferCategories` injected from incidental FTS hits (#246).
+      statedCategories: similar.statedCategories ?? similar.interpretedQuery.categories,
       competitors: similar.similar,
       reviewThemes,
       missing: similar.missing,

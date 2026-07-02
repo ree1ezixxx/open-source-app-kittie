@@ -1,9 +1,30 @@
 import { describe, expect, it } from "vitest";
 import type { AppListItem, InterpretedIdea, SimilarApp } from "@kittie/types";
 import { buildValidateIdeaResponse, ValidateIdeaInputError } from "./validate-idea.js";
-import { scoreSimilar } from "./similarity/index.js";
+import {
+  inferCategories,
+  interpretFromQuery,
+  rankSimilar,
+  type SimilarCandidate,
+} from "./similarity/index.js";
 
 const generatedAt = "2026-07-02T12:00:00.000Z";
+
+/** Representative store-category facet list, as `listCategoryFacetsFromDb` returns. */
+const FACETS = [
+  "Business",
+  "Education",
+  "Entertainment",
+  "Finance",
+  "Food & Drink",
+  "Games",
+  "Health & Fitness",
+  "Lifestyle",
+  "Music",
+  "Productivity",
+  "Utilities",
+  "Weather",
+];
 
 function appItem(overrides: Partial<AppListItem> = {}): AppListItem {
   return {
@@ -53,25 +74,41 @@ function interpreted(overrides: Partial<InterpretedIdea> = {}): InterpretedIdea 
 }
 
 /**
- * Build a competitor via the REAL similarity scorer — no hand-set score/class.
- * `scoreSimilar` derives `similarityClass`/`similarityScore` from the retrieval
- * signals exactly as production does, so coherence-gate tests can't false-green on
- * scores the pipeline cannot emit (#246 ruling).
+ * Run an idea + retrieval hits through the REAL pipeline, exactly as
+ * `findSimilarApps` orchestrates it: real `interpretFromQuery` (pre-injection
+ * interpretation), real `inferCategories` (modal-FTS-hit category injection),
+ * real `rankSimilar`/`scoreSimilar` under the post-injection interpretation.
+ * Only the DB retrieval itself is replaced by fixture hits — no hand-built
+ * interpreted objects, no hand-set scores/classes. Hand-built fixtures bypassing
+ * this path were the root cause of three false-green review rounds (#246 ruling).
  */
-function scored(
-  interp: InterpretedIdea,
-  signals: { ftsScore?: number; categoryPeer?: boolean; reviewTopicScore?: number },
-  app: Partial<AppListItem> = {},
-): SimilarApp {
-  return scoreSimilar(
-    {
-      app: appItem(app),
-      ftsScore: signals.ftsScore ?? 0,
-      categoryPeer: signals.categoryPeer ?? false,
-      reviewTopicScore: signals.reviewTopicScore ?? 0,
-    },
-    interp,
-  );
+function runPipeline(
+  idea: string,
+  hits: Array<{ app: AppListItem; ftsScore: number }>,
+): {
+  preInjection: InterpretedIdea;
+  interpreted: InterpretedIdea;
+  competitors: SimilarApp[];
+} {
+  const preInjection = interpretFromQuery(idea, FACETS);
+  const itemById = new Map(hits.map((h) => [h.app.id, h.app]));
+  const fts = new Map(hits.map((h) => [h.app.id, h.ftsScore]));
+  const ftsScoreOf = (id: string): number => fts.get(id) ?? 0;
+
+  let interpreted = preInjection;
+  if (interpreted.categories.length === 0) {
+    const inferred = inferCategories([...itemById.keys()], ftsScoreOf, itemById);
+    if (inferred.length) interpreted = { ...interpreted, categories: inferred };
+  }
+
+  const candidates: SimilarCandidate[] = hits.map((h) => ({
+    app: h.app,
+    ftsScore: h.ftsScore,
+    categoryPeer: false,
+    reviewTopicScore: 0,
+  }));
+  const competitors = rankSimilar(candidates, interpreted, 20);
+  return { preInjection, interpreted, competitors };
 }
 
 describe("validate-idea intelligence", () => {
@@ -249,35 +286,40 @@ describe("validate-idea intelligence", () => {
     expect(strong.status).toBe("ok");
   });
 
-  it("#246: incoherent nonsense (no category, no direct — via real scoreSimilar) → not_enough_data", () => {
-    // Driven through the REAL scoreSimilar so classes are what the pipeline actually
-    // emits (hand-set scores were the source of the earlier false-greens, #246 ruling).
-    // Nonsense: the interpreter resolved no category, and each app matches one
-    // incidental token in an UNRELATED category → sameCategory=false → the scorer emits
-    // NO `direct`. Option-2 gate (>=1 direct OR resolved category) therefore sinks it.
-    const interp = interpreted({
-      summary: "a nonsensical multi-domain idea",
-      keywords: ["blockchain", "teleporting", "sandwiches", "moon"],
-      categories: [], // no resolved category
-    });
-    const scattered = [
-      scored(interp, { ftsScore: 0.9 }, { id: "n_1", title: "Blockchain Wallet", reviewCount: 12000, category: "Finance", rating: 3.8, growthScore: 30 }),
-      scored(interp, { ftsScore: 0.4 }, { id: "n_2", storeAppId: "902", title: "Sandwich Recipes", reviewCount: 8000, category: "Food & Drink", rating: 4.2, growthScore: 20 }),
-      scored(interp, { ftsScore: 0.3 }, { id: "n_3", storeAppId: "903", title: "Moon Phase", reviewCount: 6000, category: "Weather", rating: 4.0, growthScore: 15 }),
+  it("#246 canonical: sandwich nonsense through the REAL pipeline (inferCategories injects Finance) → not_enough_data, never has_room", () => {
+    const idea = "blockchain-powered app for teleporting sentient sandwiches to the moon";
+    // Incidental FTS hits exactly as production retrieval surfaces them: "blockchain"
+    // pulls two unrelated Finance apps (a real >=2 modal cluster), the other tokens pull
+    // scattered singletons. Per-term ftsScores are IDF-share-realistic (a 6-term idea
+    // gives each term ~0.1-0.2 of the normalised weight — a single-token hit cannot
+    // approach 1.0 here).
+    const hits = [
+      { app: appItem({ id: "n_1", title: "Blockchain Wallet", category: "Finance", reviewCount: 12000, rating: 3.8, growthScore: 30 }), ftsScore: 0.2 },
+      { app: appItem({ id: "n_2", storeAppId: "902", title: "Blockchain Ledger Pro", category: "Finance", reviewCount: 9000, rating: 4.1, growthScore: 25 }), ftsScore: 0.18 },
+      { app: appItem({ id: "n_3", storeAppId: "903", title: "Gourmet Sandwiches", category: "Food & Drink", reviewCount: 8000, rating: 4.2, growthScore: 20 }), ftsScore: 0.15 },
+      { app: appItem({ id: "n_4", storeAppId: "904", title: "Moon Phase", category: "Weather", reviewCount: 6000, rating: 4.0, growthScore: 15 }), ftsScore: 0.12 },
     ];
-    // The whole point: even a full-strength (fts 0.9) rare-token hit is NOT `direct`
-    // without a shared category — so the gate can never green-light this on score.
-    expect(scattered.every((c) => c.similarityClass !== "direct")).toBe(true);
+    const { preInjection, interpreted: injected, competitors } = runPipeline(idea, hits);
+
+    // The REAL interpreter resolves no category from the idea itself (parseable, not ambiguous).
+    expect(preInjection.categories).toEqual([]);
+    expect(preInjection.keywords.length).toBeGreaterThan(0);
+    // The REAL injection fires: >=2 incidental Finance hits → ['Finance'] injected. This
+    // is the exact poison that re-opened the P0 three times — the test now goes through it.
+    expect(injected.categories).toEqual(["Finance"]);
+    expect(competitors.length).toBeGreaterThan(0);
 
     const result = buildValidateIdeaResponse({
-      idea: "blockchain-powered app for teleporting sentient sandwiches to the moon",
-      interpreted: interp,
-      competitors: scattered,
+      idea,
+      interpreted: injected,
+      statedCategories: preInjection.categories,
+      competitors,
       reviewThemes: [],
       generatedAt,
-      sourceQuery: { idea: "teleporting sandwiches" },
+      sourceQuery: { idea },
     });
 
+    // The gate reads the PRE-injection interpretation → the nonsense is sunk.
     expect(result.data.verdict).toBe("not_enough_data");
     expect(result.data.verdict).not.toBe("has_room");
     expect(result.confidence.score).toBeLessThanOrEqual(0.3);
@@ -285,31 +327,82 @@ describe("validate-idea intelligence", () => {
     // Honest labelling intact: the incoherence is stated, estimates still flagged.
     expect(result.caveats.some((c) => c.kind === "weak_evidence" && c.message.includes("cohere"))).toBe(true);
     expect(result.caveats.some((c) => c.kind === "estimated_metric")).toBe(true);
-  });
 
-  it("#246: a resolved interpreted category makes an idea coherent (via real scoreSimilar) → real verdict", () => {
-    // Option-2 gate's escape: a resolved category. Competitors are `adjacent` (real
-    // scorer: same-category but not strong enough for `direct`), so directCount=0 — yet
-    // the resolved "Health & Fitness" category alone makes the market coherent. This is
-    // the other side of the gate: a categorised idea is graded, not sunk.
-    const interp = interpreted({ categories: ["Health & Fitness"], keywords: ["sobriety", "coach"] });
-    const comps = [
-      scored(interp, { ftsScore: 0.3, categoryPeer: true }, { id: "c_1", title: "Quit Coach", reviewCount: 9000, category: "Health & Fitness", rating: 4.3, growthScore: 40 }),
-      scored(interp, { ftsScore: 0.25, categoryPeer: true }, { id: "c_2", storeAppId: "812", title: "Sober Days", reviewCount: 7000, category: "Health & Fitness", rating: 4.1, growthScore: 35 }),
-    ];
-    // Real scorer emits `adjacent` (same category, but sub-`strong` fts) — no `direct`.
-    expect(comps.every((c) => c.similarityClass === "adjacent")).toBe(true);
-
-    const result = buildValidateIdeaResponse({
-      idea: "an app to help people stay sober",
-      interpreted: interp,
-      competitors: comps,
+    // Potency check: this fixture genuinely reproduces the P0 when the gate reads the
+    // POST-injection interpretation (the pre-fix behaviour) — so this test cannot
+    // false-green if the pre-injection plumbing is ever dropped.
+    const regressed = buildValidateIdeaResponse({
+      idea,
+      interpreted: injected, // statedCategories omitted → falls back to injected categories
+      competitors,
       reviewThemes: [],
       generatedAt,
-      sourceQuery: { idea: "sober coach" },
+      sourceQuery: { idea },
+    });
+    expect(regressed.data.verdict).toBe("has_room");
+  });
+
+  it("#246: injected category also poisons `direct` classification — the gate ignores post-injection directs too", () => {
+    // A near-single-token idea gives the surviving term ~all of the IDF weight, so a
+    // rare-token hit's ftsScore CAN reach `strong` (>=0.5). Once inferCategories
+    // injects Finance, that same incidental hit becomes sameCategory + strong → the
+    // scorer classifies it `direct`. The second poisoned clause: directCount>0 must
+    // not make an idea coherent when the category behind it was injected.
+    const idea = "a blockchain app";
+    const hits = [
+      { app: appItem({ id: "d_1", title: "Blockchain Wallet", category: "Finance", reviewCount: 12000, rating: 3.8, growthScore: 30 }), ftsScore: 1 },
+      { app: appItem({ id: "d_2", storeAppId: "912", title: "Blockchain Ledger Pro", category: "Finance", reviewCount: 9000, rating: 4.1, growthScore: 25 }), ftsScore: 0.8 },
+    ];
+    const { preInjection, interpreted: injected, competitors } = runPipeline(idea, hits);
+
+    expect(preInjection.categories).toEqual([]);
+    expect(injected.categories).toEqual(["Finance"]);
+    // The poison is live: the REAL scorer emits `direct` under the injected category.
+    expect(competitors.some((c) => c.similarityClass === "direct")).toBe(true);
+
+    const result = buildValidateIdeaResponse({
+      idea,
+      interpreted: injected,
+      statedCategories: preInjection.categories,
+      competitors,
+      reviewThemes: [],
+      generatedAt,
+      sourceQuery: { idea },
     });
 
-    // Coherent via the resolved category → a real verdict, not the low-information sink.
+    // Pre-injection there is no resolved category and no trustable direct → sunk.
+    expect(result.data.verdict).toBe("not_enough_data");
+    expect(result.confidence.score).toBeLessThanOrEqual(0.3);
+  });
+
+  it("#246: a category the idea ITSELF resolves makes it coherent (real pipeline, no injection) → real verdict", () => {
+    // The other side of the gate: the query contains a category facet word, so the REAL
+    // interpreter resolves it pre-injection (inferCategories never runs — categories are
+    // non-empty). Competitors are same-category but sub-`strong` fts → the real scorer
+    // emits `adjacent`, directCount=0 — the stated category alone carries coherence.
+    const idea = "a fitness coaching app to help people stay sober";
+    const hits = [
+      { app: appItem({ id: "c_1", title: "Quit Coaching", category: "Health & Fitness", reviewCount: 9000, rating: 4.3, growthScore: 40 }), ftsScore: 0.3 },
+      { app: appItem({ id: "c_2", storeAppId: "812", title: "Sober Days", category: "Health & Fitness", reviewCount: 7000, rating: 4.1, growthScore: 35 }), ftsScore: 0.25 },
+    ];
+    const { preInjection, interpreted: interp, competitors } = runPipeline(idea, hits);
+
+    // Resolved from the idea itself — pre-injection and post-injection agree.
+    expect(preInjection.categories).toEqual(["Health & Fitness"]);
+    expect(interp.categories).toEqual(["Health & Fitness"]);
+    expect(competitors.every((c) => c.similarityClass === "adjacent")).toBe(true);
+
+    const result = buildValidateIdeaResponse({
+      idea,
+      interpreted: interp,
+      statedCategories: preInjection.categories,
+      competitors,
+      reviewThemes: [],
+      generatedAt,
+      sourceQuery: { idea },
+    });
+
+    // Coherent via the stated category → a real verdict, not the low-information sink.
     expect(result.data.verdict).not.toBe("not_enough_data");
     expect(result.data.verdict).not.toBe("unvalidated");
     expect(result.confidence.score).toBeGreaterThan(0.3);

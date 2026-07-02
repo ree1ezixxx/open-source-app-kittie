@@ -44,6 +44,15 @@ export interface BuildValidateIdeaInput {
   idea: string;
   /** Deterministic interpretation of the idea (from the similarity core). */
   interpreted: InterpretedIdea;
+  /**
+   * Categories the interpreter resolved from the IDEA ITSELF (`interpretFromQuery`
+   * / `interpretFromApp`), BEFORE the retrieval layer's `inferCategories` injected
+   * the modal category of the strongest FTS hits into `interpreted`. The coherence
+   * gate must read these: injected categories are incidental-hit provenance, not
+   * idea provenance, and poison both gate clauses (#246). When omitted, falls back
+   * to `interpreted.categories` (pre-existing callers that never inject).
+   */
+  statedCategories?: string[];
   /** Ranked competitor set (from find_similar_apps), strongest first. */
   competitors: SimilarApp[];
   /** Recurring competitor improvement-area themes mined from reviews. */
@@ -70,17 +79,30 @@ export function buildValidateIdeaResponse(
   const evidenceThin = competitors.length > 0 && totalReviews < THIN_EVIDENCE_REVIEWS;
   const ambiguous = input.interpreted.keywords.length === 0;
   const hasReviewThemes = reviewThemes.length > 0;
-  // Coherence gate (option 2, coordinator ruling on #246): a parseable idea is a
+  // Coherence gate (option 2 + pre-injection ruling on #246): a parseable idea is a
   // validatable market iff it has >=1 head-on (`direct`) competitor OR the interpreter
-  // resolved a store category. The raw-similarity signal was dropped because it is
-  // INVERTED in this pipeline — `category_peer`(0.30) can't fire for a cross-domain
-  // niche, so genuine niches score BELOW a rare-token nonsense FTS hit, making any
-  // score floor false-reject the niche and admit the nonsense. A category-anchored
-  // gate can never re-open the P0 (false green on nonsense); a cross-domain niche with
-  // no resolved category degrading to honest `not_enough_data` is the accepted cost.
-  // (`direct` requires `sameCategory`, so it implies a resolved category in the current
-  // classifier; the clause is kept explicit per the ruling and as a guard.)
-  const coherentMarket = directCount > 0 || input.interpreted.categories.length > 0;
+  // resolved a store category — both judged on the PRE-INJECTION interpretation.
+  // The raw-similarity signal stays dropped: it is INVERTED in this pipeline
+  // (`category_peer`(0.30) can't fire for a cross-domain niche, so genuine niches
+  // score BELOW a rare-token nonsense FTS hit — any score floor false-rejects the
+  // niche and admits the nonsense). A cross-domain niche with no resolved category
+  // degrading to honest `not_enough_data` is the accepted cost.
+  //
+  // Why pre-injection: `inferCategories` injects the modal category of incidental
+  // FTS hits ("blockchain" → >=2 Finance hits → ['Finance']) whenever the query
+  // resolved none — poisoning BOTH clauses: `categories.length > 0` passes, and the
+  // injected category makes those same incidental hits `sameCategory`, so a
+  // strong-fts one classifies `direct`. So when categories were injected (stated
+  // empty, interpreted non-empty), the `direct` classifications are untrusted for
+  // coherence: pre-injection `sameCategory` is false for every app (no stated
+  // category), and `direct` requires `sameCategory`, so the pre-injection direct
+  // count is exactly 0. Injected categories still serve retrieval + likelyCategory
+  // display — they just carry no weight as coherence evidence.
+  const statedCategories = input.statedCategories ?? input.interpreted.categories;
+  const categoriesInjected =
+    statedCategories.length === 0 && input.interpreted.categories.length > 0;
+  const preInjectionDirectCount = categoriesInjected ? 0 : directCount;
+  const coherentMarket = preInjectionDirectCount > 0 || statedCategories.length > 0;
   const incoherent = !ambiguous && competitors.length > 0 && !coherentMarket;
 
   const scores = scoreIdea({ competitors, directCount, reviewThemes });
