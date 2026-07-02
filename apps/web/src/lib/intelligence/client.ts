@@ -6,9 +6,10 @@
  * (`source: "mock"`), so the UI never presents a fixture as a real market fact.
  *
  * Live responses are reconciled to the render types via `adapt.ts`. The served
- * envelope is inconsistent across lanes (Lane A returns the report bare; Lane B
- * wraps in `{ data }`), so `tryLive` accepts both. Endpoints (canonical `:3008`
- * once merged, or `VITE_API_ORIGIN`): `POST /similar`, `POST /validate`,
+ * envelope is inconsistent across lanes (Lane A `similar` returns the report
+ * bare; Lane B `teardown` and canonical `validate-idea` wrap in `{ data }`), so
+ * `tryLive` accepts both. Endpoints (canonical `:3008`, or `VITE_API_ORIGIN`):
+ * `POST /similar`, `POST /validate-idea` (canonical #180 envelope, #218),
  * `GET /apps/:id/teardown`.
  */
 import { adaptSimilar, adaptTeardown, adaptValidate } from "./adapt";
@@ -37,7 +38,7 @@ const jsonPost = (payload: unknown): RequestInit => ({
 });
 
 export async function validateIdea(idea: string, signal?: AbortSignal): Promise<ValidateOutput> {
-  const live = await tryLive("/validate", jsonPost({ idea }), signal);
+  const live = await tryLive("/validate-idea", jsonPost({ idea }), signal);
   return live ? adaptValidate(live, idea) : mockValidate(idea);
 }
 

@@ -121,9 +121,11 @@ export function ValidatePage() {
               <span className="intel-overall-max">/ 100 overall</span>
             </div>
 
-            <div className="intel-angle">
-              <strong>Recommended angle.</strong> {result.recommendedAngle}
-            </div>
+            {result.recommendedAngle && (
+              <div className="intel-angle">
+                <strong>Recommended angle.</strong> {result.recommendedAngle}
+              </div>
+            )}
 
             {/* ---- progressive disclosure ---- */}
             <section className="intel-section">
@@ -152,17 +154,32 @@ export function ValidatePage() {
               </ul>
             </section>
 
-            <section className="intel-section">
-              <h3>Minimum viable product</h3>
-              <ul className="intel-list">
-                {result.mvp.map((m) => (
-                  <li key={m.feature}>
-                    <div className="li-head">{m.feature}</div>
-                    <div className="li-sub">{m.why}</div>
-                  </li>
-                ))}
-              </ul>
-            </section>
+            {result.opportunities.length > 0 && (
+              <section className="intel-section">
+                <h3>Opportunities</h3>
+                <ul className="intel-list">
+                  {result.opportunities.map((o) => (
+                    <li key={o}>
+                      <div className="li-head">{o}</div>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {result.mvp.length > 0 && (
+              <section className="intel-section">
+                <h3>Minimum viable product</h3>
+                <ul className="intel-list">
+                  {result.mvp.map((m) => (
+                    <li key={m.feature}>
+                      <div className="li-head">{m.feature}</div>
+                      <div className="li-sub">{m.why}</div>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
 
             <section className="intel-section">
               <h3>Risks</h3>

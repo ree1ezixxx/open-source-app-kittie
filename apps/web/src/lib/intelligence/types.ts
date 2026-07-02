@@ -86,6 +86,8 @@ export interface ValidateOutput {
   overallScore: number;
   scoreBreakdown: ScoreFactor[];
   recommendedAngle: string;
+  /** Evidence-backed opportunity messages (strongest first). May be empty. */
+  opportunities: string[];
   competitorSummary: {
     count: number;
     /** Honest descriptor, e.g. "Saturated — 20+ direct competitors". */
