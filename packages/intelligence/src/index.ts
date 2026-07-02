@@ -92,8 +92,6 @@ export {
 export {
   scoreIdea,
   deriveVerdict,
-  summarizeCompetitors,
-  buildValidateAgentSummary,
   type IdeaScoringInput,
 } from "./idea-validation/index.js";
 

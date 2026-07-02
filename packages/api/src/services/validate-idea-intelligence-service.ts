@@ -94,7 +94,9 @@ async function mineReviewThemes(competitors: SimilarApp[]): Promise<string[]> {
     for (const area of t.improvementAreas) freq.set(area, (freq.get(area) ?? 0) + 1);
   }
   return [...freq.entries()]
-    .sort((a, b) => b[1] - a[1])
+    // Frequency desc, then theme name — a stable secondary key so equal-frequency
+    // themes are deterministic regardless of DB row order (determinism guarantee).
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
     .slice(0, 6)
     .map(([k]) => k);
 }

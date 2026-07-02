@@ -85,6 +85,49 @@ describe("validate-idea intelligence service", () => {
     });
   });
 
+  it("wires evidenceThin through: weak competitor evidence yields not_enough_data + partial", async () => {
+    const findSimilarApps = vi.fn().mockResolvedValue(
+      similarResult([
+        competitor({ id: "app_1", reviewCount: 12, rating: null, growthScore: null }),
+        competitor({ id: "app_2", storeAppId: "456", title: "Tiny App", reviewCount: 9 }),
+      ]),
+    );
+    const mineReviewThemes = vi.fn().mockResolvedValue([]);
+
+    const result = await getValidateIdeaIntelligence(
+      { idea: "a niche bottle cap collecting app" },
+      { findSimilarApps, mineReviewThemes, now },
+    );
+
+    expect(result.data.verdict).toBe("not_enough_data");
+    expect(result.status).toBe("partial");
+    expect(result.confidence.label).toBe("low");
+    expect(result.caveats.some((c) => c.kind === "weak_evidence")).toBe(true);
+  });
+
+  it("wires the ambiguous flag through: no parsed keywords caps the verdict", async () => {
+    const findSimilarApps = vi.fn().mockResolvedValue({
+      ...similarResult([competitor({ reviewCount: 50000, rating: 4.8, growthScore: 80 })]),
+      interpretedQuery: {
+        summary: "something for everyone",
+        categories: [],
+        keywords: [],
+        kind: "inferred" as const,
+      },
+      missing: ["no usable keywords parsed from the idea"],
+    });
+    const mineReviewThemes = vi.fn().mockResolvedValue(["pricing complaints"]);
+
+    const result = await getValidateIdeaIntelligence(
+      { idea: "something for everyone" },
+      { findSimilarApps, mineReviewThemes, now },
+    );
+
+    expect(result.data.verdict).toBe("not_enough_data");
+    expect(result.confidence.score).toBeLessThanOrEqual(0.3);
+    expect(result.caveats.some((c) => c.message.includes("ambiguous"))).toBe(true);
+  });
+
   it("returns an honest insufficient envelope when the catalog has no competitors", async () => {
     const findSimilarApps = vi.fn().mockResolvedValue(similarResult([], ["no FTS hits"]));
     const mineReviewThemes = vi.fn().mockResolvedValue([]);

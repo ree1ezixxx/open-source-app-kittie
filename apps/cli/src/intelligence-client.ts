@@ -9,8 +9,8 @@ import type {
   CompareAppsIntelligenceResponse,
   IntelligenceResponseEnvelope,
   TrendsResponseData,
-  ValidateAppIdeaInput,
-  ValidateAppIdeaResult,
+  ValidateIdeaIntelligenceRequest,
+  ValidateIdeaIntelligenceResponse,
 } from "@kittie/types";
 import { loadConfig } from "./config.js";
 
@@ -97,11 +97,16 @@ export function compareApps(apps: CompareAppRef[]): Promise<CompareAppsIntellige
   }).then(unwrapData);
 }
 
-export function validateIdea(input: ValidateAppIdeaInput): Promise<ValidateAppIdeaResult> {
-  // validate returns the result top-level (no `{ data }` wrapper).
-  return request(`/api/v1/app-intelligence/validate`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
-  });
+export function validateIdea(
+  input: ValidateIdeaIntelligenceRequest,
+): Promise<ValidateIdeaIntelligenceResponse> {
+  // Canonical idea-validation path (#184): #180 envelope wrapped in `{ data }`.
+  return request<{ data: ValidateIdeaIntelligenceResponse }>(
+    `/api/v1/app-intelligence/validate-idea`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    },
+  ).then(unwrapData);
 }

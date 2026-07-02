@@ -1,6 +1,5 @@
 import { Hono } from "hono";
 import { similarRouter } from "./similar.js";
-import { validateRouter } from "./validate.js";
 import { teardownRouter } from "./teardown.js";
 import { trendsRouter } from "./trends.js";
 import { appDetailRouter } from "./app-detail.js";
@@ -10,15 +9,18 @@ import { validateIdeaRouter } from "./validate-idea.js";
 /**
  * App-Intelligence router — mounts the per-module sub-routers under
  * `/api/v1/app-intelligence`. One file per module avoids cross-lane contention:
- * `similar` + `validate` are Lane A; `teardown` is Lane B (mounted at "/" since
- * its router declares the full `/teardown` + `/apps/:id/teardown` paths).
+ * `similar` + `validate-idea` are Lane A; `teardown` is Lane B (mounted at "/"
+ * since its router declares the full `/teardown` + `/apps/:id/teardown` paths).
+ *
+ * `validate-idea` is the CANONICAL idea-validation path (coordinator ruling on
+ * #184, per PRD #179 + ADR 0012): #180-envelope, deterministic, no LLM. The
+ * legacy DecisionPacket `/validate` route it superseded has been retired.
  */
 export const appIntelligenceRouter = new Hono();
 
 appIntelligenceRouter.route("/similar", similarRouter);
 appIntelligenceRouter.route("/compare-apps", compareAppsRouter);
 appIntelligenceRouter.route("/trends", trendsRouter);
-appIntelligenceRouter.route("/validate", validateRouter);
 appIntelligenceRouter.route("/validate-idea", validateIdeaRouter);
 appIntelligenceRouter.route("/", appDetailRouter);
 appIntelligenceRouter.route("/", teardownRouter);

@@ -71,7 +71,9 @@ export function buildValidateIdeaResponse(
   const ambiguous = input.interpreted.keywords.length === 0;
 
   const scores = scoreIdea({ competitors, directCount, reviewThemes });
-  const verdict = deriveVerdict(scores, competitors.length, evidenceThin);
+  // Ambiguity caps the VERDICT, not just confidence: an unparseable idea with
+  // namesake competitors must never surface a strong label an agent could act on.
+  const verdict = deriveVerdict(scores, competitors.length, evidenceThin, ambiguous);
 
   const evidence: IntelligenceEvidence[] = [interpretationEvidence(idea, input.interpreted)];
   const competitorRows = competitors
@@ -120,7 +122,8 @@ export function buildValidateIdeaResponse(
       sourceQuery: input.sourceQuery,
       snapshotId: input.snapshotId ?? null,
       chartCountry: null,
-      growthPeriod: "7d",
+      // No growth window is computed on this path; labelling one would mislabel provenance.
+      growthPeriod: null,
       modelVersion,
     },
   });
@@ -134,7 +137,11 @@ function interpretationEvidence(idea: string, interpreted: InterpretedIdea): Int
     id: "ev_idea_interpretation",
     claim: `Idea "${idea}" was interpreted as "${interpreted.summary}" (keywords: ${keywords}).`,
     source: { type: "user_input", id: "idea:free_text", url: null },
-    valueKind: interpreted.kind,
+    // The contract requires observed evidence to cite a source URL; free-text
+    // interpretation has none, so an `observed`-seeded interpretation is emitted
+    // as `derived` (computed from an observed app) rather than tripping the
+    // envelope contract guard with `url: null`.
+    valueKind: interpreted.kind === "observed" ? "derived" : interpreted.kind,
     sourceStatus: "ok",
     freshness: "fresh",
     observedAt: null,
@@ -332,6 +339,13 @@ function caveatsFor(
       kind: "weak_evidence",
       sourceType: "snapshot",
       message: "No competitors surfaced from the catalog — demand is unproven, not validated.",
+    });
+  }
+  if (competitorCount > MAX_COMPETITOR_EVIDENCE) {
+    caveats.push({
+      kind: "partial_source",
+      sourceType: "snapshot",
+      message: `Scores and confidence consider all ${competitorCount} competitors; only the top ${MAX_COMPETITOR_EVIDENCE} carry per-app evidence rows in this response.`,
     });
   }
   for (const message of missing) {

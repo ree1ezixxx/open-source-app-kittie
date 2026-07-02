@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import type { AppListItem, CompareAppRef, ValidateAppIdeaInput } from "@kittie/types";
+import type { AppListItem, CompareAppRef, ValidateIdeaIntelligenceRequest } from "@kittie/types";
 import { cloneIos, getAppDetail, searchApps } from "./client.js";
 import {
   configPath,
@@ -195,7 +195,7 @@ async function cmdValidate(args: string[], mode: OutputMode) {
     console.error("Usage: pluto validate <idea…> [--store apple|google]");
     process.exit(1);
   }
-  const input: ValidateAppIdeaInput = { idea };
+  const input: ValidateIdeaIntelligenceRequest = { idea };
   if (flags.store === "apple" || flags.store === "google") input.store = flags.store;
   const res = await validateIdea(input);
   console.log(formatOutput(mode, res, () => formatValidate(res)));

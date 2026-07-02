@@ -118,17 +118,31 @@ describe("validate-idea intelligence", () => {
     expect(result.data.verdict).not.toBe("strong_opportunity");
   });
 
-  it("flags an ambiguous idea and caps confidence instead of guessing", () => {
+  it("flags an ambiguous idea, caps the verdict AND confidence instead of guessing", () => {
+    // Strong-looking namesake competitors: without the ambiguity guard these
+    // would produce a strong verdict from pure noise.
+    const namesakes: SimilarApp[] = Array.from({ length: 3 }, (_, i) =>
+      competitor({ similarityClass: "direct" }, {
+        id: `app_${i + 1}`,
+        storeAppId: `${2000 + i}`,
+        reviewCount: 50000,
+        rating: 4.8,
+        growthScore: 80,
+      }),
+    );
     const result = buildValidateIdeaResponse({
       idea: "something something for everyone",
       interpreted: interpreted({ summary: "something something for everyone", keywords: [], categories: [] }),
-      competitors: [competitor({}, { reviewCount: 800 })],
-      reviewThemes: [],
+      competitors: namesakes,
+      reviewThemes: ["pricing complaints", "sync bugs", "crashes"],
       missing: ["no usable keywords parsed from the idea"],
       generatedAt,
       sourceQuery: { idea: "something something for everyone" },
     });
 
+    // Ambiguity must soften the VERDICT, not just confidence — an agent
+    // branching on `verdict` never sees a strong label from an unparseable idea.
+    expect(result.data.verdict).toBe("not_enough_data");
     expect(result.confidence.score).toBeLessThanOrEqual(0.3);
     expect(result.confidence.label).toBe("low");
     expect(
