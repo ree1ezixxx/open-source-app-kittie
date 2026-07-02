@@ -146,6 +146,10 @@ export function mockValidate(idea: string): ValidateOutput {
     ],
     recommendedAngle:
       "Sleep-anxiety wind-down for shift workers — a time-of-day-aware programme the incumbents don't personalise.",
+    opportunities: [
+      "Sleep-anxiety wind-down for shift workers is unaddressed by the incumbents.",
+      "Time-of-day personalisation is a differentiator none of the top 3 offer.",
+    ],
     competitorSummary: {
       count: 11,
       saturation: "Saturated — 11 direct competitors, top-heavy revenue",

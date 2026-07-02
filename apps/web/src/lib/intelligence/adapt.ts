@@ -154,8 +154,13 @@ export function adaptValidate(raw: any, idea: string): ValidateOutput {
     mitigation: null,
   }));
 
-  // #180 is deterministic — it does not synthesise MVP features or an angle.
+  // #180 is deterministic — it does not synthesise MVP features.
   const mvp: MvpFeature[] = [];
+  // Real evidence-backed opportunities from the envelope (strongest first). The
+  // top one doubles as the recommended angle so that slot shows real signal.
+  const opportunities: string[] = (data?.opportunities ?? [])
+    .map((o: any) => (typeof o === "string" ? o : (o?.message ?? "")))
+    .filter(Boolean);
 
   return {
     idea: data?.idea ?? idea,
@@ -163,7 +168,8 @@ export function adaptValidate(raw: any, idea: string): ValidateOutput {
     verdict,
     overallScore,
     scoreBreakdown,
-    recommendedAngle: "",
+    recommendedAngle: opportunities[0] ?? "",
+    opportunities,
     competitorSummary: {
       count: (data?.competitors ?? []).length,
       saturation: scores?.marketSaturation?.basis ?? data?.verdictReason ?? (typeof data?.verdict === "string" ? data.verdict : ""),

@@ -63,10 +63,18 @@ describe("adaptValidate — #180 envelope", () => {
     expect(out.risks[0]?.risk).toBe("Crowded category.");
   });
 
-  it("leaves LLM-only fields honestly empty (deterministic path) and derives the summary", () => {
-    expect(out.mvp).toEqual([]);
-    expect(out.recommendedAngle).toBe("");
+  it("surfaces opportunities (top one as the angle), leaves MVP empty, derives the summary", () => {
+    expect(out.opportunities).toEqual(["Exam-week planning underserved."]);
+    expect(out.recommendedAngle).toBe("Exam-week planning underserved."); // top opportunity fills the angle slot
+    expect(out.mvp).toEqual([]); // #180 is deterministic — no synthesised MVP
     expect(out.agentSummary).toContain("has room");
     expect(out.agentSummary).toContain("exam-week planning");
+  });
+
+  it("leaves angle empty when there are no opportunities (no dangling UI)", () => {
+    const noOpps = { ...envelope, data: { ...envelope.data, opportunities: [] } };
+    const o = adaptValidate(noOpps, "x");
+    expect(o.opportunities).toEqual([]);
+    expect(o.recommendedAngle).toBe("");
   });
 });
