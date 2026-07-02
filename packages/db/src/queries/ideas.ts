@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, like, lte, or, sql } from "drizzle-orm";
 import type { Db } from "../client.js";
+import { coerceTimestamp, dbAll } from "../dialect.js";
 import { appIdeas, apps, reviews, type App, type AppIdea } from "../schema.js";
 
 /* ============================================================
@@ -137,10 +138,11 @@ export async function listSimilarIdeas(
 
 /** How many distinct Snapshot days exist — drives the gate's growth trust. */
 export async function countSnapshotDays(db: Db): Promise<number> {
-  const rows = await db.all<{ days: number }>(
+  const rows = await dbAll<{ days: number }>(
+    db,
     sql`SELECT COUNT(DISTINCT snapshot_date) AS days FROM app_snapshots`,
   );
-  return rows[0]?.days ?? 0;
+  return Number(rows[0]?.days ?? 0);
 }
 
 export async function countIdeas(db: Db): Promise<number> {
@@ -173,7 +175,7 @@ export interface IdeaCandidate {
  * the API's pure gate function, not in SQL.
  */
 export async function listIdeaCandidates(db: Db, minReviews = 50): Promise<IdeaCandidate[]> {
-  const rows = await db.all<{
+  const rows = await dbAll<{
     appId: string;
     storeAppId: string;
     store: string;
@@ -181,29 +183,31 @@ export async function listIdeaCandidates(db: Db, minReviews = 50): Promise<IdeaC
     category: string | null;
     description: string | null;
     price: number | null;
-    releasedAt: number | null;
+    releasedAt: number | string | null;
     reviewCount: number | null;
     rating: number | null;
     downloadsEstimate: number | null;
     revenueEstimate: number | null;
     growthScore: number | null;
     chartRank: number | null;
-  }>(sql`
+  }>(
+    db,
+    sql`
     SELECT
-      a.id            AS appId,
-      a.store_app_id  AS storeAppId,
-      a.store         AS store,
-      a.title         AS title,
-      a.category      AS category,
-      a.description   AS description,
-      a.price         AS price,
-      a.released_at   AS releasedAt,
-      s.review_count  AS reviewCount,
-      s.rating        AS rating,
-      s.downloads_estimate AS downloadsEstimate,
-      s.revenue_estimate   AS revenueEstimate,
-      s.growth_score  AS growthScore,
-      s.chart_rank    AS chartRank
+      a.id            AS "appId",
+      a.store_app_id  AS "storeAppId",
+      a.store         AS "store",
+      a.title         AS "title",
+      a.category      AS "category",
+      a.description   AS "description",
+      a.price         AS "price",
+      a.released_at   AS "releasedAt",
+      s.review_count  AS "reviewCount",
+      s.rating        AS "rating",
+      s.downloads_estimate AS "downloadsEstimate",
+      s.revenue_estimate   AS "revenueEstimate",
+      s.growth_score  AS "growthScore",
+      s.chart_rank    AS "chartRank"
     FROM apps a
     JOIN app_snapshots s ON s.app_id = a.id
       AND s.snapshot_date = (
@@ -213,12 +217,13 @@ export async function listIdeaCandidates(db: Db, minReviews = 50): Promise<IdeaC
     WHERE i.id IS NULL
       AND s.review_count >= ${minReviews}
       AND a.title IS NOT NULL
-  `);
+  `,
+  );
 
   return rows.map((r) => ({
     ...r,
     reviewCount: r.reviewCount ?? 0,
-    releasedAt: r.releasedAt ? new Date(r.releasedAt * 1000) : null,
+    releasedAt: coerceTimestamp(r.releasedAt),
   }));
 }
 
@@ -263,7 +268,7 @@ export async function listStaleIdeaCandidates(
   db: Db,
   minReviews = 50,
 ): Promise<StaleIdeaCandidate[]> {
-  const rows = await db.all<{
+  const rows = await dbAll<{
     appId: string;
     storeAppId: string;
     store: string;
@@ -271,7 +276,7 @@ export async function listStaleIdeaCandidates(
     category: string | null;
     description: string | null;
     price: number | null;
-    releasedAt: number | null;
+    releasedAt: number | string | null;
     reviewCount: number | null;
     rating: number | null;
     downloadsEstimate: number | null;
@@ -280,26 +285,29 @@ export async function listStaleIdeaCandidates(
     chartRank: number | null;
     ideaId: string;
     blueprint: string;
-  }>(sql`
+  }>(
+    db,
+    sql`
     SELECT
-      a.id AS appId, a.store_app_id AS storeAppId, a.store AS store, a.title AS title,
-      a.category AS category, a.description AS description, a.price AS price,
-      a.released_at AS releasedAt,
-      s.review_count AS reviewCount, s.rating AS rating,
-      s.downloads_estimate AS downloadsEstimate, s.revenue_estimate AS revenueEstimate,
-      s.growth_score AS growthScore, s.chart_rank AS chartRank,
-      i.id AS ideaId, i.blueprint AS blueprint
+      a.id AS "appId", a.store_app_id AS "storeAppId", a.store AS "store", a.title AS "title",
+      a.category AS "category", a.description AS "description", a.price AS "price",
+      a.released_at AS "releasedAt",
+      s.review_count AS "reviewCount", s.rating AS "rating",
+      s.downloads_estimate AS "downloadsEstimate", s.revenue_estimate AS "revenueEstimate",
+      s.growth_score AS "growthScore", s.chart_rank AS "chartRank",
+      i.id AS "ideaId", i.blueprint AS "blueprint"
     FROM app_ideas i
     JOIN apps a ON a.id = i.source_app_id
     JOIN app_snapshots s ON s.app_id = a.id
       AND s.snapshot_date = (SELECT MAX(s2.snapshot_date) FROM app_snapshots s2 WHERE s2.app_id = a.id)
     WHERE s.review_count >= ${minReviews} AND a.title IS NOT NULL
     ORDER BY i.created_at ASC
-  `);
+  `,
+  );
   return rows.map((r) => ({
     ...r,
     reviewCount: r.reviewCount ?? 0,
-    releasedAt: r.releasedAt ? new Date(r.releasedAt * 1000) : null,
+    releasedAt: coerceTimestamp(r.releasedAt),
   }));
 }
 

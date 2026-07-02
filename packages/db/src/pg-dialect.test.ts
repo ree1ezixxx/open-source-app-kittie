@@ -9,9 +9,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
-import { createDb, isPostgresUrl } from "./client.js";
+import { createDb, isPostgresUrl, type Db } from "./client.js";
+import { coerceTimestamp, dbAll, dbGet, dbRun, dialectOf, isPostgres } from "./dialect.js";
+import { countSnapshotDays, listIdeaCandidates } from "./queries/ideas.js";
+import { countAppIdsByText, ensureAppsFts, searchAppIds } from "./queries/fts.js";
 import * as schemaPg from "./schema.pg.js";
 
 const migrationsDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "drizzle", "pg");
@@ -96,5 +99,111 @@ describe("Postgres dialect (pglite)", () => {
         createdAt: new Date("2026-07-02T00:00:00.000Z"),
       }),
     ).rejects.toThrow();
+  });
+});
+
+describe("dialect seam", () => {
+  it("detects pg vs sqlite from the live handle", async () => {
+    const pg = await freshDb();
+    expect(dialectOf(pg)).toBe("postgres");
+    expect(isPostgres(pg)).toBe(true);
+  });
+
+  it("dbAll/dbGet/dbRun route through pg .execute()", async () => {
+    const pg = (await freshDb()) as unknown as Db;
+    await dbRun(pg, sql`INSERT INTO apps (id, store, store_app_id, title, developer, first_seen_at)
+      VALUES ('apple:1', 'apple', '1', 'Focus', 'Dev', now())`);
+    const all = await dbAll<{ id: string }>(pg, sql`SELECT id FROM apps`);
+    expect(all.map((r) => r.id)).toEqual(["apple:1"]);
+    const one = await dbGet<{ id: string }>(pg, sql`SELECT id FROM apps LIMIT 1`);
+    expect(one?.id).toBe("apple:1");
+  });
+
+  it("coerceTimestamp handles epoch-int, timestamptz-string, and Date", () => {
+    // SQLite path: epoch seconds *1000.
+    expect(coerceTimestamp(1_700_000_000)?.getTime()).toBe(1_700_000_000_000);
+    // Postgres path: timestamptz string parses directly.
+    const d = coerceTimestamp("2026-07-02 19:17:57+00");
+    expect(d?.getUTCFullYear()).toBe(2026);
+    // Passthrough + null.
+    const now = new Date();
+    expect(coerceTimestamp(now)).toBe(now);
+    expect(coerceTimestamp(null)).toBeNull();
+    expect(coerceTimestamp(undefined)).toBeNull();
+  });
+});
+
+describe("query modules on Postgres (pglite)", () => {
+  /** Seed one app + its latest snapshot for the idea-candidate / search tests. */
+  async function seedApp(
+    db: Db,
+    opts: { id: string; title: string; developer?: string; reviews: number; released?: Date | null },
+  ): Promise<void> {
+    await dbRun(
+      db,
+      sql`INSERT INTO apps (id, store, store_app_id, title, developer, released_at, first_seen_at)
+          VALUES (${opts.id}, 'apple', ${opts.id}, ${opts.title}, ${opts.developer ?? "Dev"},
+                  ${opts.released ? opts.released.toISOString() : null}, now())`,
+    );
+    await dbRun(
+      db,
+      sql`INSERT INTO app_snapshots (id, app_id, snapshot_date, review_count, chart_country, created_at)
+          VALUES (${`${opts.id}:2026-07-02`}, ${opts.id}, '2026-07-02', ${opts.reviews}, 'US', now())`,
+    );
+  }
+
+  it("ensureAppsFts no-ops on pg (FTS5 is SQLite-only)", async () => {
+    const db = (await freshDb()) as unknown as Db;
+    await expect(ensureAppsFts(db)).resolves.toBeUndefined();
+    // No apps_fts virtual table should have been created.
+    const { rows } = await (db as unknown as { $client: { query: (s: string) => Promise<{ rows: unknown[] }> } }).$client.query(
+      "select 1 from information_schema.tables where table_name = 'apps_fts'",
+    );
+    expect(rows.length).toBe(0);
+  });
+
+  it("searchAppIds / countAppIdsByText fall back to LIKE on pg", async () => {
+    const db = (await freshDb()) as unknown as Db;
+    await seedApp(db, { id: "apple:1", title: "Candy Crush Saga", reviews: 10 });
+    await seedApp(db, { id: "apple:2", title: "Focus Timer", developer: "Deep Work", reviews: 10 });
+
+    expect(await searchAppIds(db, "candy cru", 10)).toEqual(["apple:1"]);
+    expect(await searchAppIds(db, "deep", 10)).toEqual(["apple:2"]); // matches developer
+    expect(await searchAppIds(db, "", 10)).toEqual([]);
+    expect(await countAppIdsByText(db, "focus")).toBe(1);
+    expect(await countAppIdsByText(db, "nonexistent")).toBe(0);
+  });
+
+  it("listIdeaCandidates coerces released_at timestamptz → Date (not epoch*1000)", async () => {
+    const db = (await freshDb()) as unknown as Db;
+    const released = new Date("2020-06-15T00:00:00.000Z");
+    await seedApp(db, { id: "apple:1", title: "Idea Source", reviews: 100, released });
+
+    const cands = await listIdeaCandidates(db, 50);
+    expect(cands.length).toBe(1);
+    expect(cands[0]?.appId).toBe("apple:1");
+    // The break this fixes: epoch*1000 on a timestamptz string → Invalid Date.
+    expect(cands[0]?.releasedAt instanceof Date).toBe(true);
+    expect(cands[0]?.releasedAt?.getUTCFullYear()).toBe(2020);
+    expect(cands[0]?.reviewCount).toBe(100);
+  });
+
+  it("listIdeaCandidates respects the review floor", async () => {
+    const db = (await freshDb()) as unknown as Db;
+    await seedApp(db, { id: "apple:1", title: "Low", reviews: 10 });
+    await seedApp(db, { id: "apple:2", title: "High", reviews: 200 });
+    const cands = await listIdeaCandidates(db, 50);
+    expect(cands.map((c) => c.appId)).toEqual(["apple:2"]);
+  });
+
+  it("countSnapshotDays works on pg", async () => {
+    const db = (await freshDb()) as unknown as Db;
+    await seedApp(db, { id: "apple:1", title: "A", reviews: 100 });
+    await dbRun(
+      db,
+      sql`INSERT INTO app_snapshots (id, app_id, snapshot_date, review_count, chart_country, created_at)
+          VALUES ('apple:1:2026-07-01', 'apple:1', '2026-07-01', 90, 'US', now())`,
+    );
+    expect(await countSnapshotDays(db)).toBe(2);
   });
 });

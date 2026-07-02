@@ -3,6 +3,9 @@ import {
   appSnapshots,
   appleSearchAds,
   creators,
+  dbAll,
+  dbGet,
+  isPostgres,
   metaAds,
   toFtsMatch,
 } from "@kittie/db";
@@ -452,7 +455,7 @@ async function selectCandidateIds(c: AppConditions, params: AppSearchParams): Pr
  * filtered matches that rank beyond POOL_CAP, which a text-only FTS pool would drop.
  */
 async function ftsCandidateIds(match: string, filter: SQL, cap: number): Promise<string[]> {
-  const rows = await getDb().all<{ id: string }>(sql`
+  const rows = await dbAll<{ id: string }>(getDb(), sql`
     SELECT apps.id AS id
     FROM apps_fts
     JOIN apps ON apps.id = apps_fts.app_id
@@ -467,14 +470,14 @@ async function ftsCandidateIds(match: string, filter: SQL, cap: number): Promise
 
 /** Total apps matching the search text AND the SQL filters — the accurate "X of Y" count. */
 async function ftsCount(match: string, filter: SQL): Promise<number> {
-  const row = await getDb().get<{ c: number }>(sql`
+  const row = await dbGet<{ c: number }>(getDb(), sql`
     SELECT count(distinct apps.id) AS c
     FROM apps_fts
     JOIN apps ON apps.id = apps_fts.app_id
     JOIN app_snapshots ON app_snapshots.app_id = apps.id
     WHERE apps_fts MATCH ${match} AND ${filter}
   `);
-  return row?.c ?? 0;
+  return Number(row?.c ?? 0);
 }
 
 export interface AppCandidatePool {
@@ -490,7 +493,10 @@ export async function searchAppCandidates(params: AppSearchParams): Promise<AppC
   if (!maxDate) return null;
 
   const search = params.search?.trim();
-  const ftsMatch = search ? toFtsMatch(search) : null;
+  // FTS5 (apps_fts / MATCH) is SQLite-only. On pg the virtual table doesn't exist, so
+  // force the non-FTS branch — buildConditions already applies a portable LIKE on the
+  // search text, so results stay correct (native pg full-text is #244). (#245)
+  const ftsMatch = search && !isPostgres(getDb()) ? toFtsMatch(search) : null;
   const conds = buildConditions(params, maxDate);
   let totalCount: number;
   let ids: string[];
@@ -639,7 +645,7 @@ async function ftsCandidateKeyset(
     keyset = sql` AND ((${afterCol}) OR (${col} = ${cursor.sortValue} AND app_snapshots.app_id > ${cursor.appId}))`;
   }
   const order = isAsc ? sql`asc` : sql`desc`;
-  const rows = await getDb().all<{ id: string; sortVal: number | null }>(sql`
+  const rows = await dbAll<{ id: string; sortVal: number | null }>(getDb(), sql`
     SELECT apps.id AS id, ${col} AS sortVal
     FROM apps_fts
     JOIN apps ON apps.id = apps_fts.app_id
@@ -670,7 +676,9 @@ export async function searchAppCandidatesKeysetFts(
   const maxDate = await latestSnapshotDate(marketCountry);
   if (!maxDate) return null;
   const search = params.search?.trim();
-  const ftsMatch = search ? toFtsMatch(search) : null;
+  // FTS5 keyset path is SQLite-only; on pg return null so the caller falls back to the
+  // legacy non-FTS pool path (which searches via the portable LIKE conditions). (#245)
+  const ftsMatch = search && !isPostgres(getDb()) ? toFtsMatch(search) : null;
   const col = keysetColumn(params);
   if (!ftsMatch || !col) return null;
   const conds = buildConditions(params, maxDate);
