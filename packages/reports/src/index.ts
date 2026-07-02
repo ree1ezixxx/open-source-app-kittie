@@ -55,4 +55,10 @@ export {
   type CategoryPulseOutput,
   type BuildCategoryPulseOptions,
   type TrendsIntelligenceResponse,
+  BUILD_BRIEF_TEMPLATE,
+  buildBriefTemplate,
+  buildBuildBriefReport,
+  type BuildBriefCompetitor,
+  type BuildBriefOutput,
+  type BuildBriefOptions,
 } from "./templates/index.js";
