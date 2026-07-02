@@ -1,6 +1,10 @@
 import type { AppDetail, AppListItem, AppSearchParams, PaginatedResponse } from "@kittie/types";
+import { loadConfig } from "./config.js";
 
-const API_BASE = process.env.KITTIE_API_URL ?? "http://127.0.0.1:3008";
+// Single source of truth: the data commands resolve the API origin through the
+// same config precedence (CLI > env > ~/.kittie/config.json > default) that
+// `doctor`/`config` use, so they can never disagree about which API to hit.
+const API_BASE = loadConfig().apiBaseUrl;
 
 function toQuery(params: AppSearchParams): string {
   const entries = Object.entries(params).filter(([, v]) => v !== undefined && v !== "");

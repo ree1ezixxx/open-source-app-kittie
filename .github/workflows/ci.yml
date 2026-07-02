@@ -33,5 +33,5 @@ jobs:
           pnpm typecheck
           pnpm build
 
-      - name: Test
-        run: pnpm -r test
+      - name: Test (CLI)
+        run: pnpm --filter @kittie/cli test

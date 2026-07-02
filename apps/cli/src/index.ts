@@ -3,6 +3,15 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import type { AppListItem } from "@kittie/types";
 import { cloneIos, getAppDetail, searchApps } from "./client.js";
+import {
+  configPath,
+  loadConfig,
+  loadStoredConfig,
+  saveStoredConfig,
+} from "./config.js";
+import { detectMode, formatOutput, type OutputMode } from "./output.js";
+import { formatDoctorHuman, runDoctor } from "./doctor.js";
+import { buildUsage } from "./help.js";
 
 function formatMoney(n: number | null): string {
   if (n == null) return "—";
@@ -77,6 +86,51 @@ async function cmdCloneIos(args: string[]) {
   console.log();
 }
 
+async function cmdDoctor(mode: OutputMode) {
+  const cfg = loadConfig();
+  const report = await runDoctor({ apiBaseUrl: cfg.apiBaseUrl, authToken: cfg.authToken });
+  console.log(formatOutput(mode, report, () => formatDoctorHuman(report)));
+  if (!report.ok) process.exitCode = 1;
+}
+
+function cmdConfig(args: string[], mode: OutputMode) {
+  const path = configPath();
+  if (args[0] === "set") {
+    const key = args[1];
+    const value = args[2];
+    if (!key || value === undefined) {
+      console.error("Usage: pluto config set <api-url|token> <value>");
+      process.exit(1);
+    }
+    if (value.trim().length === 0) {
+      console.error(`Empty value for ${key}. To clear it, remove the entry from ${path}.`);
+      process.exit(1);
+    }
+    const stored = loadStoredConfig(path);
+    if (key === "api-url") stored.apiBaseUrl = value;
+    else if (key === "token") stored.authToken = value;
+    else {
+      console.error(`Unknown config key: ${key} (expected "api-url" or "token")`);
+      process.exit(1);
+    }
+    saveStoredConfig(path, stored);
+    console.log(formatOutput(mode, { saved: true, path, key }, () => `Saved ${key} → ${path}`));
+    return;
+  }
+  const cfg = loadConfig();
+  // Never echo the token value (even in --json) — report only whether it is set.
+  const shown = { apiBaseUrl: cfg.apiBaseUrl, authToken: cfg.authToken ? "set" : null, configPath: path };
+  console.log(
+    formatOutput(mode, shown, () =>
+      [
+        `Config file: ${path}`,
+        `API base URL: ${cfg.apiBaseUrl}`,
+        `Auth token: ${cfg.authToken ? "set" : "—"}`,
+      ].join("\n"),
+    ),
+  );
+}
+
 function printHeader() {
   console.log(
     ["Title".padEnd(22), "Store".padEnd(6), "Reviews".padStart(6), "Growth".padStart(6), "Revenue".padStart(8)].join(
@@ -87,18 +141,24 @@ function printHeader() {
 }
 
 function usage() {
-  console.log(`Usage:
-  pluto search [query]          Search apps
-  pluto trends                  Top growth movers
-  pluto detail <id>             App detail
-  pluto clone-ios <id> [--out d]  Generate a buildable SwiftUI clone of a trending app`);
+  console.log(buildUsage());
 }
 
 async function main() {
-  const [cmd, ...args] = process.argv.slice(2);
+  const { mode, rest } = detectMode(process.argv.slice(2));
+  const [cmd, ...args] = rest;
 
   try {
     switch (cmd) {
+      case "help":
+        usage();
+        break;
+      case "doctor":
+        await cmdDoctor(mode);
+        break;
+      case "config":
+        cmdConfig(args, mode);
+        break;
       case "search":
         await cmdSearch(args);
         break;
