@@ -1,27 +1,24 @@
 # STATE.md — open-source-app-kittie
 
-Source of truth shared by the Claude and Codex loops. Claude (coordinator) is sole writer.
+Source of truth shared by the loops. Claude (coordinator) is sole writer.
 GitHub is the actual control plane — this file is a reconciled snapshot.
 
 Repo: `ree1ezixxx/open-source-app-kittie` · Coordinator worktree: `open-source-app-kittie-workspace`
 
-## ⚠ Corrections (cold-review 2026-07-02) — read first
+## Standing caveats — read first
 
-- **data-sweeps is NOT fixed.** PRs #200 + #204 each fixed a layer, but the scheduled sweep still
-  dies at runtime: `LibsqlError HTTP 404` from Turso (`freshness-service.ts:72`). The DB endpoint /
-  secret is dead. The "always-on substrate" has never run. Tracked: **#205 (P0, needs:human)**. The
-  ci-triage loop's "sweeps fixed" verdicts were false — it verified `typecheck && build`, which never
-  exercises the sweep.
-- **Reviews are advisory, not independent.** All overnight merges were authored, review-verdict'd, and
-  merged by the same identity (`ree1ezixxx`); no formal `gh pr review --approve`. Treat the human as the
-  real merge gate until a distinct reviewer identity + formal approvals are in place.
+- **data-sweeps deferred (not broken-unresolved).** The hosted Turso DB 404s; rather than restore it,
+  the scheduled sweep was **disabled** (PR #209) and #205 **closed** — data infra is a deferred, scoped
+  decision (likely Neon) for post-MVP. `workflow_dispatch` retained for manual runs against a future DB.
+- **Reviews are same-identity (advisory).** All merges run under `ree1ezixxx`; GitHub `reviews: []`, no
+  formal approvals (author can't self-approve). The independent check is the **Codex auditor loop** (2nd
+  voice, different family) + the human. Not "independent review" in the GitHub sense until a 2nd identity exists.
+- **CI now runs tests** (this reconcile's PR adds `pnpm -r test`) — closes the prior gap where CI proved
+  only typecheck+build and PR "N tests passed" claims were unverified by the gate.
 
 ## Active Work
 
-| PR/Issue | Title | Status | Next |
-|---|---|---|---|
-| #198 (#185) | Scaffold local-first CLI | `needs:rework` (draft) | **STALL** — Codex reworks; Codex loop appears dead |
-| #205 | data-sweeps Turso 404 | `needs:human`, P0 | Rhodri: restore Turso DB URL/token secret |
+_No open PRs._ (Board drained; worker 6 building the next issue.)
 
 ## Completed (merged to main)
 
@@ -30,42 +27,43 @@ Repo: `ree1ezixxx/open-source-app-kittie` · Coordinator worktree: `open-source-
 | 2026-07-01 | #180/#181/#182 | #195/#196/#197 | Contracts + app-detail + trends intelligence paths |
 | 2026-07-02 | (infra) | #201 | Bootstrap `.agent-loop/` STATE + pr-lifecycle |
 | 2026-07-02 | #183 | #199 | Compare-apps intelligence path |
-| 2026-07-02 | (ci seed) | #200 | data-sweeps ref fix — ⚠ did NOT fully fix (see #205) |
-| 2026-07-02 | (state) | #202 | STATE reconcile #3 |
-| 2026-07-02 | #187 | #203 | Report renderer `@kittie/reports` — first full Claude cycle |
-| 2026-07-02 | (ci) | #204 | data-sweeps build-deps fix — ⚠ did NOT fully fix (see #205) |
-
-## Ready (`agent:ready`, unblocked — worker 6 queue)
-
-- #188 App-teardown/category-pulse reports (risk:low)
-- #189 Build-brief report (risk:low)
-- #190 MCP server scaffold (risk:low)
-- #193 Reports web surface (risk:low)
-- #184 validate-idea intelligence path (risk:medium — only if prompt allows medium)
+| 2026-07-02 | #187 | #203 | Report renderer `@kittie/reports` (first full Claude cycle) |
+| 2026-07-02 | #188 | #208 | App-teardown + category-pulse report templates |
+| 2026-07-02 | #190 | #210 | MCP `get_app_detail` + `find_trending_apps` |
+| 2026-07-02 | #211 | #212 | Sync MCP consumers to intelligence envelope |
+| 2026-07-02 | (ci/infra) | #200/#202/#204/#206/#209 | sweeps ref+build fixes, STATE reconciles, sweep disabled |
 
 ## In progress
 
-- #185 CLI scaffold — PR #198 (Codex, in rework)
+- **#185** Scaffold local-first CLI — claimed by **worker 6** (issue-builder, Claude). (Old Codex PR #198
+  was **closed**; rebuilding Claude-side. This resolves the earlier ownership collision.)
+
+## Ready (`agent:ready`, unblocked)
+
+- **#184** validate-idea intelligence path — **risk:medium**. Worker 6 skips medium by default; if it's
+  the last item and nothing else moves, coordinator TAKES OVER (sub-agent build) rather than idle the fleet.
 
 ## Blocked (`blocked:dependency`)
 
-- #186 Wire CLI commands — on #185 (PR #198)
-- #191 MCP compare/validate/report tools — on #190
+- #186 Wire CLI commands — on #185 (in progress)
+- #189 Build-brief report — on #184
+- #191 MCP compare/validate/report tools — on #190 (**merged** — pending dep-unblock sweep to clear)
+- #193 Reports web surface — on #189
 
 ## Human-gated (`needs:human`)
 
-- #192 Ask page · #194 Sidebar simplification · #205 Turso outage
+- #192 Ask page · #194 Sidebar/dashboard simplification
 
-## Fleet health (2026-07-02 ~06:30)
+## Fleet health (2026-07-02 ~09:00)
 
-- Workers 1–4 (pr-review, ci-triage, rework-c, dep-unblock): **alive**, cycling.
-- Worker 6 (issue-builder): died 00:23, **restarted as durable 15m cron** this pass.
+- Live workers: pr-review (1), ci-triage (2), dep-unblock (4), issue-builder (6) — cycling.
 - Worker 5 (PRD-refill): dormant (correct — queue not drained).
-- Codex (external implementer): appears **dead** — #198 unreworked all night.
-- Merged this cycle: #199, #200, #201, #202, #203, #204.
+- rework-c (3): **removed**; `needs:rework (C)` now escalates/relabels (no lane).
+- Codex: **dropped** for implementation — fleet is Claude-only.
+- Coordinator: set-and-forget + strict (auto-merge `needs:merge`; nudge/restart/take-over idle workers).
 
 ## Last Run
 
-**2026-07-02 · reconcile #4** — post-cold-review correction. Recorded the data-sweeps false-signal
-(#205), the review-identity caveat, and the fleet-death event. Restarted worker 6. Board: 1 stuck PR
-(#198), 5 ready issues, Turso outage the top external blocker.
+**2026-07-02 · reconcile #5** — post-Codex-audit correction. Fixed: #205 closed (was listed active P0);
+#188/#190 moved to Completed (were listed ready); #189/#193 to Blocked (were listed ready); #185 now
+Claude-owned in-progress. Added `pnpm -r test` to CI in the same PR.

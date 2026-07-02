@@ -32,3 +32,6 @@ jobs:
           pnpm --filter @kittie/intelligence build
           pnpm typecheck
           pnpm build
+
+      - name: Test
+        run: pnpm -r test
