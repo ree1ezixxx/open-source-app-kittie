@@ -156,6 +156,9 @@ describe("honesty: no fabrication", () => {
     expect(sc.reviewDateRange).toBeNull();
     expect(sc.recentFraction).toBeNull();
     expect(sc.localesSeen).toEqual([]);
+    // Mutation-probe gap (cold-verify a-v1): the missing-source caveat itself
+    // is part of the honesty contract — pin its presence, not just the score.
+    expect(res.caveats.some((c) => c.kind === "missing_source" && c.sourceType === "review")).toBe(true);
   });
 
   it("feature_gaps demand stays unknown without review evidence — never guessed", async () => {

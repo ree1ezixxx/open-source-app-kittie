@@ -17,7 +17,7 @@
  *   score = min(0.9, 0.35                     — base: primitive ran on real evidence
  *                + 0.30 · volume              — evidenceUnits / evidenceTarget, capped 1
  *                + 0.20 · spread              — appsContributing / appsResolved
- *                + 0.05 · recency             — fraction of evidence ≤180d old (0 when unknown)
+ *                + 0.05 · recency             — (fraction ≤180d) × volume, i.e. recentUnits/target
  *                + 0.05 · diversity           — sourceTypesPresent / sourceTypesConsulted
  *                + 0.05 · llm                 — enrichment seam succeeded)
  *           − 0.10 · localeMismatch           — requested market absent from localesSeen
