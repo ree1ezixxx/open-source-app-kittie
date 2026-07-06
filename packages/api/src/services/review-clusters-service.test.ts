@@ -168,3 +168,13 @@ describe("evidence-recall merge (#268 round 2)", () => {
     expect(d.recallReviewed).toHaveBeenCalledWith("budgeting", 10);
   });
 });
+
+describe("recentFraction service passthrough (#273 live gap)", () => {
+  it("the SERVICE path populates sourceCoverage.recentFraction from dated reviews", async () => {
+    const res = await getReviewClusters({ appIds: ["apple:1"] }, deps());
+    // fixture reviews are dated 5 days ago → all recent
+    expect(res.data.sourceCoverage.recentFraction).toBe(1);
+    // auditability: served confidence includes the recency term now
+    expect(res.confidence.reasons.some((r) => r.includes("recency 100%"))).toBe(true);
+  });
+});
