@@ -32,6 +32,7 @@ import {
   type Sentiment4,
 } from "@kittie/types";
 import { buildIntelligenceResponse, type MissingIntelligenceSource } from "../intelligence-response.js";
+import { calibrateConfidence, CONFIDENCE_MODEL } from "../confidence/index.js";
 
 /* ---- tunables (documented so agents/tests can reason about the numbers) --- */
 
@@ -87,6 +88,8 @@ export interface ClusterReviewsComputed {
   reviewDateRange: { oldest: string; newest: string } | null;
   /** Distinct storefront locales observed on analyzed reviews. */
   localesSeen: string[];
+  /** Fraction of analyzed reviews dated within the calibration recency window; null when undated. */
+  recentFraction: number | null;
 }
 
 /* ---- deterministic label → theme-type taxonomy --------------------------- */
@@ -279,16 +282,22 @@ export function clusterReviewsDeterministic(input: ClusterReviewsComputeInput): 
   // analyzed set — computed from actual rows, never inferred.
   let oldest: string | null = null;
   let newest: string | null = null;
+  let dated = 0;
+  let recent = 0;
+  const recentCutoff = nowMs - CONFIDENCE_MODEL.recentWindowDays * 86_400_000;
   const locales = new Set<string>();
   for (const r of scoped) {
     if (r.country) locales.add(r.country.toUpperCase());
     if (r.reviewedAt && !Number.isNaN(Date.parse(r.reviewedAt))) {
+      dated += 1;
+      if (Date.parse(r.reviewedAt) >= recentCutoff) recent += 1;
       if (oldest === null || r.reviewedAt < oldest) oldest = r.reviewedAt;
       if (newest === null || r.reviewedAt > newest) newest = r.reviewedAt;
     }
   }
   const reviewDateRange = oldest && newest ? { oldest, newest } : null;
   const localesSeen = [...locales].sort();
+  const recentFraction = dated > 0 ? recent / dated : null;
 
   // Group reviews by canonical label (topics ∪ improvementAreas). A review with
   // no tags joins no group — its weight lives only in the analyzed total.
@@ -357,7 +366,7 @@ export function clusterReviewsDeterministic(input: ClusterReviewsComputeInput): 
     (a, b) => b.mentionCount - a.mentionCount || b.confidence - a.confidence || a.theme.localeCompare(b.theme),
   );
 
-  return { themes, coverage, totalReviewsAnalyzed, reviewDateRange, localesSeen };
+  return { themes, coverage, totalReviewsAnalyzed, reviewDateRange, localesSeen, recentFraction };
 }
 
 /* ---- envelope builder ---------------------------------------------------- */
@@ -369,6 +378,7 @@ export interface BuildReviewClustersInput {
   /** From ClusterReviewsComputed; null/[] when unavailable (#271). */
   reviewDateRange?: { oldest: string; newest: string } | null;
   localesSeen?: string[];
+  recentFraction?: number | null;
   apps: ClusterInputApp[];
   params: ClusterReviewsRequest;
   enrichment: ReviewClusterEnrichment;
@@ -391,23 +401,24 @@ function themeEvidence(themes: ReviewTheme[]): IntelligenceEvidence[] {
   }));
 }
 
+/** Calibrated per docs/contracts/confidence-calibration.md (#273). */
 function overallConfidence(input: BuildReviewClustersInput): IntelligenceConfidence {
   const appsWithReviews = input.coverage.filter((c) => c.reviewsAnalyzed > 0).length;
-  const totalApps = Math.max(input.apps.length, 1);
-  if (input.totalReviewsAnalyzed === 0) {
-    return { score: 0, label: "insufficient", reasons: ["No local reviews for the competitor set."] };
-  }
-  const volume = Math.min(input.totalReviewsAnalyzed / 100, 1);
-  const spread = appsWithReviews / totalApps;
-  const score = clamp01(Math.min(0.9, 0.4 + volume * 0.35 + spread * 0.25));
-  const reasons = [
-    `${input.totalReviewsAnalyzed} reviews across ${appsWithReviews}/${totalApps} apps analysed`,
-    `${input.themes.length} theme${input.themes.length === 1 ? "" : "s"} above the frequency floor`,
-    input.enrichment === "llm"
-      ? "themes named by LLM enrichment"
-      : "coarse taxonomy themes (LLM naming unavailable)",
-  ];
-  return { score: round(score, 3), label: score >= 0.75 ? "high" : score >= 0.6 ? "medium" : "low", reasons };
+  return calibrateConfidence({
+    evidenceUnits: input.totalReviewsAnalyzed,
+    evidenceTarget: 100,
+    appsContributing: appsWithReviews,
+    appsResolved: input.apps.length,
+    recentFraction: input.recentFraction ?? null,
+    sourceTypesPresent: input.totalReviewsAnalyzed > 0 ? 1 : 0,
+    sourceTypesConsulted: 1,
+    llmEnriched: input.enrichment === "llm",
+    requestedLocale: input.params.country?.trim() || "US",
+    localesSeen: input.localesSeen ?? [],
+    extraReasons: [
+      `${input.totalReviewsAnalyzed} reviews across ${appsWithReviews}/${input.apps.length} apps; ${input.themes.length} theme${input.themes.length === 1 ? "" : "s"} above the frequency floor`,
+    ],
+  });
 }
 
 /**
@@ -457,6 +468,7 @@ export function buildReviewClustersResponse(
       appsWithDescriptions: null, // listings are not an input to this primitive
       reviewsAnalyzed: input.totalReviewsAnalyzed,
       reviewDateRange: input.reviewDateRange ?? null,
+      recentFraction: input.recentFraction ?? null,
       localesSeen: input.localesSeen ?? [],
       notes: [
         {
@@ -501,13 +513,14 @@ export function buildReviewClustersResponse(
 
 /** Convenience: deterministic clustering + envelope in one call (the no-LLM path). */
 export function clusterReviews(input: ClusterReviewsComputeInput, generatedAt: string): ReviewClustersIntelligenceResponse {
-  const { themes, coverage, totalReviewsAnalyzed, reviewDateRange, localesSeen } = clusterReviewsDeterministic(input);
+  const { themes, coverage, totalReviewsAnalyzed, reviewDateRange, localesSeen, recentFraction } = clusterReviewsDeterministic(input);
   return buildReviewClustersResponse({
     themes,
     coverage,
     totalReviewsAnalyzed,
     reviewDateRange,
     localesSeen,
+    recentFraction,
     apps: input.apps,
     params: input.params,
     enrichment: "deterministic",

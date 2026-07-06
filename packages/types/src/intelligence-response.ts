@@ -187,6 +187,9 @@ export interface SourceCoverage {
   reviewsAnalyzed: number;
   /** Real review-date span of the analyzed set; null when no dated reviews. */
   reviewDateRange: { oldest: string; newest: string } | null;
+  /** Share of dated evidence within the calibration recency window (#273);
+      null when evidence is undated or recency is not applicable. */
+  recentFraction: number | null;
   /** Distinct storefront locales observed on analyzed reviews (e.g. ["US","GB"]). */
   localesSeen: string[];
   /** Per-source status notes for the sources this primitive consulted. */

@@ -56,6 +56,7 @@ export interface FeatureGapsDeps {
     reviewsAnalyzed: number;
     /** Propagated cluster sourceCoverage bits (#271); absent on degrade. */
     reviewDateRange?: { oldest: string; newest: string } | null;
+    recentFraction?: number | null;
     localesSeen?: string[];
     appsWithReviews?: number;
   }>;
@@ -84,6 +85,7 @@ const defaultDeps: FeatureGapsDeps = {
         themes: res.data.themes,
         reviewsAnalyzed: res.data.totalReviewsAnalyzed,
         reviewDateRange: sc.reviewDateRange,
+        recentFraction: sc.recentFraction,
         localesSeen: sc.localesSeen,
         appsWithReviews: sc.appsWithReviews,
       };
@@ -185,6 +187,7 @@ export async function getFeatureGaps(
     coverage: base.coverage,
     reviewsAnalyzed,
     reviewDateRange: reviewMeta.reviewDateRange ?? null,
+    recentFraction: reviewMeta.recentFraction ?? null,
     localesSeen: reviewMeta.localesSeen ?? [],
     appsWithReviews: reviewMeta.appsWithReviews ?? 0,
     apps,

@@ -191,3 +191,10 @@ export {
   type WhitespaceDeepInput,
   type BuildWhitespaceInput,
 } from "./whitespace/index.js";
+export {
+  calibrateConfidence,
+  isLocaleMismatch,
+  labelForConfidence,
+  CONFIDENCE_MODEL,
+  type CalibrationInput,
+} from "./confidence/index.js";
