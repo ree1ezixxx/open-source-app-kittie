@@ -120,7 +120,7 @@ export const GOLDEN_PROMPTS: GoldenPrompt[] = [
     decision: {
       id: "market-viability",
       label: "Is this market worth building in?",
-      accepts: acceptsFromTools("find_rising_apps", "search_apps"),
+      accepts: acceptsFromTools("rank_whitespace_ideas", "find_rising_apps", "search_apps"),
     },
     run: async (h, s, ctx) => {
       const recs: ToolCallRecord[] = [];
@@ -128,6 +128,8 @@ export const GOLDEN_PROMPTS: GoldenPrompt[] = [
       await fire(h, recs, D, "get_supported_countries", {}, `Is ${s.country} covered?`);
       await fire(h, recs, D, "get_keyword_difficulty", { keyword: s.seedKeyword, country: s.country, store: s.store }, `How contested is "${s.seedKeyword}"?`);
       const rising = await fire(h, recs, D, "find_rising_apps", { category: s.category, source: s.store, country: s.country, growthPeriod: "30d", limit: 25 }, `Is there momentum in ${s.category}?`);
+      // Ranked sub-niche bets — the sharpest "is this market worth building in" evidence.
+      await fire(h, recs, D, "rank_whitespace_ideas", { category: s.category, country: s.country, store: s.store, limit: 3 }, `Best sub-niches in ${s.category}`);
       let top = extractTopApp(rising);
       if (!top) {
         const incumbents = await fire(h, recs, D, "search_apps", { search: s.seedKeyword, countries: s.country, source: s.store, sortBy: "revenue", sortOrder: "desc", limit: 10 }, `Who monetises "${s.seedKeyword}" today?`);

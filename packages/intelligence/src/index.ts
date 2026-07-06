@@ -183,3 +183,11 @@ export function priorEstimates(signals: AppSignals): {
     revenueEstimatePrior,
   };
 }
+export {
+  prefilterScore,
+  scoreWhitespaceIdea,
+  buildWhitespaceIdeasResponse,
+  WHITESPACE_DEFAULTS,
+  type WhitespaceDeepInput,
+  type BuildWhitespaceInput,
+} from "./whitespace/index.js";

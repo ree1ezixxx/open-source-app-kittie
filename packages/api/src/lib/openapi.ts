@@ -350,6 +350,7 @@ export const discoveryIndex = {
     { name: "getAppReviews", method: "POST", path: "/api/v1/reviews", description: "Reviews with sentiment/topics for one app." },
     { name: "clusterReviews", method: "POST", path: "/api/v1/app-intelligence/cluster-reviews", description: "Cluster reviews across a competitor set into ranked complaint/praise/request themes with evidence." },
     { name: "findFeatureGaps", method: "POST", path: "/api/v1/app-intelligence/feature-gaps", description: "Feature × competitor matrix — table-stakes vs whitespace gaps, coverage from listings + demand from reviews." },
+    { name: "rankWhitespaceIdeas", method: "POST", path: "/api/v1/app-intelligence/whitespace-ideas", description: "Generate + rank opportunity sub-niches for a category — funnel over review pain and feature gaps, score breakdown + evidence." },
   ],
   mcp: {
     transport: "stdio",

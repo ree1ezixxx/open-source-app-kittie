@@ -7,6 +7,7 @@ import type {
   CompareAppRef,
   FeatureLevel,
   FindFeatureGapsRequest,
+  RankWhitespaceIdeasRequest,
   ReviewThemeType,
   ValidateIdeaIntelligenceRequest,
 } from "@kittie/types";
@@ -27,6 +28,7 @@ import {
   findFeatureGaps,
   getAppIntelligence,
   getTrending,
+  rankWhitespaceIdeas,
   validateIdea,
   type TrendingParams,
 } from "./intelligence-client.js";
@@ -37,6 +39,7 @@ import {
   formatReviewClusters,
   formatTrending,
   formatValidate,
+  formatWhitespaceIdeas,
 } from "./format-intelligence.js";
 
 const REVIEW_THEME_TYPES: readonly ReviewThemeType[] = ["complaint", "praise", "request", "bug", "pricing", "ux"];
@@ -276,6 +279,32 @@ async function cmdFeatureGaps(args: string[], mode: OutputMode) {
   console.log(formatOutput(mode, res, () => formatFeatureGaps(res)));
 }
 
+async function cmdWhitespace(args: string[], mode: OutputMode) {
+  const { positionals, flags } = parseFlags(args);
+  const category = positionals.join(" ").trim();
+  if (!category) {
+    console.error('Usage: pluto whitespace <category…> [--country US] [--limit 5] [--seed "niche a,niche b"] [--min-confidence 0.4] [--store apple|google]');
+    process.exit(1);
+  }
+  const input: RankWhitespaceIdeasRequest = { category };
+  if (flags.country) input.country = flags.country;
+  if (flags.limit) {
+    const n = Number(flags.limit);
+    if (Number.isFinite(n) && n > 0) input.limit = Math.trunc(n);
+  }
+  if (flags.seed) {
+    const seeds = flags.seed.split(",").map((s) => s.trim()).filter(Boolean);
+    if (seeds.length > 0) input.seedIdeas = seeds;
+  }
+  if (flags["min-confidence"]) {
+    const n = Number(flags["min-confidence"]);
+    if (Number.isFinite(n)) input.minConfidence = n;
+  }
+  if (flags.store === "apple" || flags.store === "google") input.store = flags.store;
+  const res = await rankWhitespaceIdeas(input);
+  console.log(formatOutput(mode, res, () => formatWhitespaceIdeas(res)));
+}
+
 function printHeader() {
   console.log(
     ["Title".padEnd(22), "Store".padEnd(6), "Reviews".padStart(6), "Growth".padStart(6), "Revenue".padStart(8)].join(
@@ -321,6 +350,9 @@ async function main() {
         break;
       case "feature-gaps":
         await cmdFeatureGaps(args, mode);
+        break;
+      case "whitespace":
+        await cmdWhitespace(args, mode);
         break;
       case "search":
         await cmdSearch(args);

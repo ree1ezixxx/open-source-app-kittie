@@ -14,6 +14,7 @@ import {
   clusterReviewsRequest,
   compareAppsRequest,
   featureGapsRequest,
+  whitespaceIdeasRequest,
   findTrendingAppsPath,
   resolveReportRequest,
   toAgentSafeError,
@@ -160,6 +161,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "find_feature_gaps": {
         // #260 feature × competitor matrix (composes cluster_reviews for demand).
         const { path, body } = featureGapsRequest((args ?? {}) as Record<string, unknown>);
+        result = await apiPost(path, body);
+        break;
+      }
+      case "rank_whitespace_ideas": {
+        // #261 opportunity ranking (bounded funnel over #259 + #260).
+        const { path, body } = whitespaceIdeasRequest((args ?? {}) as Record<string, unknown>);
         result = await apiPost(path, body);
         break;
       }

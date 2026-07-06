@@ -229,6 +229,54 @@ export function featureGapsRequest(args: {
   return { path: FEATURE_GAPS_PATH, body };
 }
 
+export const WHITESPACE_IDEAS_PATH = `${APP_INTELLIGENCE_BASE}/whitespace-ideas`;
+
+export interface WhitespaceIdeasRequestBody {
+  category: string;
+  country?: string;
+  limit?: number;
+  seedIdeas?: string[];
+  minConfidence?: number;
+  store?: string;
+}
+
+export interface WhitespaceIdeasRequest {
+  path: string;
+  body: WhitespaceIdeasRequestBody;
+}
+
+/**
+ * #261 rank_whitespace_ideas. Requires a non-empty `category`. Bounds the
+ * optional knobs (limit ≤10 = the deep-analysis budget, minConfidence 0..1).
+ */
+export function whitespaceIdeasRequest(args: {
+  category?: unknown;
+  country?: unknown;
+  limit?: unknown;
+  seedIdeas?: unknown;
+  minConfidence?: unknown;
+  store?: unknown;
+}): WhitespaceIdeasRequest {
+  const category = typeof args.category === "string" ? args.category.trim() : "";
+  if (category.length === 0) {
+    throw new Error("rank_whitespace_ideas requires a non-empty category (e.g. 'health-behaviour')");
+  }
+  const body: WhitespaceIdeasRequestBody = { category };
+  if (typeof args.country === "string" && args.country.trim().length > 0) body.country = args.country.trim();
+  if (typeof args.limit === "number" && Number.isFinite(args.limit)) {
+    body.limit = Math.min(Math.max(Math.trunc(args.limit), 1), 10);
+  }
+  if (Array.isArray(args.seedIdeas)) {
+    const seeds = args.seedIdeas.filter((v): v is string => typeof v === "string" && v.trim().length > 0).map((v) => v.trim());
+    if (seeds.length > 0) body.seedIdeas = seeds;
+  }
+  if (typeof args.minConfidence === "number" && Number.isFinite(args.minConfidence)) {
+    body.minConfidence = Math.min(Math.max(args.minConfidence, 0), 1);
+  }
+  if (args.store === "apple" || args.store === "google") body.store = args.store;
+  return { path: WHITESPACE_IDEAS_PATH, body };
+}
+
 export type ReportTemplateName = "app_teardown" | "category_pulse" | "build_brief";
 export type ReportRenderFormat = "json" | "markdown" | "html";
 
