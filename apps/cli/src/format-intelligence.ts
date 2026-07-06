@@ -172,7 +172,7 @@ export function formatWhitespaceIdeas(res: WhitespaceIdeasIntelligenceResponse):
   const f = data.funnel;
   const lines = [
     `Whitespace ideas — ${data.category} (${data.country})`,
-    `Funnel: ${f.candidates} candidates → ${f.prefiltered} pre-filtered → ${f.deepAnalyzed} deep-analysed · Enrichment: ${data.enrichment}`,
+    `Funnel: ${f.candidates} candidates → ${f.prefiltered} pre-filtered → ${f.deepAnalyzed} deep-analysed (${f.refused} refused) · Enrichment: ${data.enrichment}`,
     `Confidence: ${res.confidence.score.toFixed(2)} (${res.confidence.label})`,
     "",
   ];
@@ -181,12 +181,18 @@ export function formatWhitespaceIdeas(res: WhitespaceIdeasIntelligenceResponse):
   } else {
     data.ideas.forEach((idea, i) => {
       const b = idea.scoreBreakdown;
+      const head =
+        idea.score != null
+          ? `${i + 1}. ${idea.niche} — score ${idea.score}/100 (conf ${idea.confidence.toFixed(2)})${idea.gateRung === "low_confidence" ? "  [LOW CONFIDENCE]" : ""}`
+          : `—. ${idea.niche} — UNSCORED: needs more sources (conf ${idea.confidence.toFixed(2)})`;
       lines.push(
-        `${i + 1}. ${idea.niche} — score ${idea.score}/100 (conf ${idea.confidence.toFixed(2)})`,
+        head,
         `   demand ${idea.demand} · incumbents ${idea.incumbentStrength} · sentiment gap ${idea.sentimentGap} · feature gap ${idea.featureGap} · monetization ${idea.monetizationPotential} · difficulty ${idea.buildDifficulty}`,
-        `   breakdown: demand ${b.demandVelocity} · weakness ${b.incumbentWeakness} · sentiment ${b.sentimentGap} · features ${b.featureGap} · money ${b.monetization}`,
-        `   angle: ${idea.suggestedBuildAngle}`,
       );
+      if (b) {
+        lines.push(`   breakdown: demand ${b.demandVelocity} · weakness ${b.incumbentWeakness} · sentiment ${b.sentimentGap} · features ${b.featureGap} · money ${b.monetization}`);
+      }
+      lines.push(`   gate: ${idea.gateReason}`, `   angle: ${idea.suggestedBuildAngle}`);
       for (const a of idea.avoidBecause ?? []) lines.push(`   ⚠ ${a}`);
       lines.push("");
     });

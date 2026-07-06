@@ -145,15 +145,71 @@ export async function getWhitespaceIdeas(
   const keywords = await deps.relatedKeywords(category, country, store, WHITESPACE_DEFAULTS.maxCandidates);
   const seen = new Set<string>();
   const candidates: string[] = [];
+  const seedSet = new Set(seeds.map((x) => normaliseCandidate(x)));
+  let refused = 0;
+  // Coherence gate (#274): a NON-SEED candidate must share content tokens with
+  // the requested category, else autocomplete noise walks straight into the
+  // funnel (the "zzqx flurbin widgets → ok ideas" smoke failure). Seeds encode
+  // caller intent and are never coherence-refused (evidence rungs still apply).
+  const categoryTokens = new Set(normaliseCandidate(category).split(" ").filter((t) => t.length > 2));
+  const isCoherent = (c: string): boolean => {
+    if (seedSet.has(c)) return true;
+    const overlap = c.split(" ").filter((t) => t.length > 2 && categoryTokens.has(t)).length;
+    return overlap >= WHITESPACE_DEFAULTS.gates.coherenceMinOverlap;
+  };
   for (const raw of [...seeds, ...keywords]) {
     const c = normaliseCandidate(raw);
     if (!c || c === normaliseCandidate(category) || seen.has(c)) continue;
     seen.add(c);
+    if (!isCoherent(c)) {
+      refused += 1;
+      continue;
+    }
     candidates.push(c);
     if (candidates.length >= WHITESPACE_DEFAULTS.maxCandidates) break;
   }
   // The category itself is always a candidate of last resort.
   if (candidates.length === 0) candidates.push(normaliseCandidate(category));
+
+  // ── category grounding (#274 cold-verify BLOCKER) ────────────────────────
+  // The per-candidate coherence check is CIRCULAR against a nonsense category:
+  // autocomplete mines the corpus BY the category's real tokens, so a single
+  // real word ("widgets") in "zzqx flurbin widgets" made every candidate
+  // self-coherent and the response ranked garbage. Ground the CATEGORY itself:
+  // the majority of its content tokens must be echoed by market evidence
+  // (autocomplete keywords). Ungrounded → refuse the whole funnel before any
+  // deep spend; the response is insufficient with the dead tokens named.
+  const keywordHay = keywords.map((k) => normaliseCandidate(k)).join(" ");
+  const keywordTokens = [...new Set(keywordHay.split(" ").filter((t) => t.length > 2))];
+  const catTokens = [...categoryTokens];
+  // Echo = literal token OR shared >=4-char prefix (cold-verify: live autocomplete
+  // says "learn spanish"/"lessons" for the category token "learning" — morphology,
+  // not absence). Deterministic, no stemmer dependency.
+  const echoed = (cat: string): boolean =>
+    keywordTokens.some((k) => {
+      if (k === cat) return true;
+      const n = Math.min(4, cat.length, k.length);
+      return cat.length >= 4 && k.length >= 4 && cat.slice(0, n) === k.slice(0, n);
+    });
+  const ungroundedTokens = catTokens.filter((t) => !echoed(t));
+  const categoryGrounded =
+    seeds.length > 0 || // caller-supplied seeds encode intent — never funnel-refused
+    keywords.length === 0 || // no autocomplete signal → the zero-competitor path judges it
+    catTokens.length === 0 ||
+    // Refuse only when a strict MAJORITY of category tokens have no echo —
+    // exactly half (e.g. 1 of 2) is benefit-of-the-doubt (cold-verify boundary).
+    ungroundedTokens.length / catTokens.length <= 0.5;
+  if (!categoryGrounded) {
+    return buildWhitespaceIdeasResponse({
+      ideas: [],
+      funnel: { candidates: candidates.length, prefiltered: 0, deepAnalyzed: 0, refused: refused + candidates.length },
+      params: { category, country, limit },
+      enrichment: "deterministic",
+      generatedAt: deps.now().toISOString(),
+      modelVersion: null,
+      ungroundedCategoryTokens: ungroundedTokens,
+    });
+  }
 
   // ── 2. pre-filter (DB-only retrieval + cheap prior) ─────────────────────
   const prefiltered: Array<{ niche: string; competitors: SimilarApp[]; prior: number }> = [];
@@ -203,19 +259,30 @@ export async function getWhitespaceIdeas(
     ideas.push(scoreWhitespaceIdea({ niche: s.niche, competitors: s.competitors, themes, features, reviewsAnalyzed }));
   }
   const minConfidence = typeof input.minConfidence === "number" ? Math.min(Math.max(input.minConfidence, 0), 1) : 0;
+  const beforeConfidenceFilter = ideas.length;
   ideas = ideas
     .filter((i) => i.confidence >= minConfidence)
-    .sort((a, b) => b.score - a.score || b.confidence - a.confidence || a.niche.localeCompare(b.niche));
+    // Scored rungs first (by score), then needs_more_sources (unranked) at the end.
+    .sort(
+      (a, b) =>
+        (b.score ?? -1) - (a.score ?? -1) || b.confidence - a.confidence || a.niche.localeCompare(b.niche),
+    );
 
   // ── 4. optional LLM phrasing (labels/angles only; numbers untouched) ─────
   let enrichment: "llm" | "deterministic" = "deterministic";
   let modelVersion: string | null = null;
-  if (ideas.length > 0) {
-    const phrased = await deps.phrase(category, ideas);
+  const phrasable = ideas.filter((i) => i.gateRung !== "needs_more_sources");
+  if (phrasable.length > 0) {
+    const phrased = await deps.phrase(category, phrasable);
     if (phrased && phrased.map.size > 0) {
-      ideas = ideas.map((idea, i) => {
+      const phrasedByNiche = new Map<string, { niche?: string; angle?: string }>();
+      phrasable.forEach((idea, i) => {
         const p = phrased.map.get(i);
-        if (!p) return idea;
+        if (p) phrasedByNiche.set(idea.niche, p);
+      });
+      ideas = ideas.map((idea) => {
+        const p = phrasedByNiche.get(idea.niche);
+        if (!p || idea.gateRung === "needs_more_sources") return idea;
         return { ...idea, niche: p.niche?.trim() || idea.niche, suggestedBuildAngle: p.angle?.trim() || idea.suggestedBuildAngle };
       });
       enrichment = "llm";
@@ -225,7 +292,13 @@ export async function getWhitespaceIdeas(
 
   return buildWhitespaceIdeasResponse({
     ideas,
-    funnel: { candidates: candidates.length, prefiltered: prefiltered.length, deepAnalyzed: survivors.length },
+    funnel: {
+      candidates: candidates.length,
+      prefiltered: prefiltered.length,
+      deepAnalyzed: survivors.length,
+      // minConfidence drops are refusals too — nothing vanishes silently.
+      refused: refused + (beforeConfidenceFilter - ideas.length),
+    },
     sourceCoverage: {
       appsResolved: deepAppIds.size,
       appsWithReviews: [...reviewsByApp.values()].filter((n) => n > 0).length,
@@ -257,7 +330,7 @@ async function geminiPhraseIdeas(
   const facts = ideas.map((idea, id) => ({
     id,
     niche: idea.niche,
-    score: idea.score,
+    score: idea.score ?? null,
     demand: idea.demand,
     incumbents: idea.incumbentStrength,
     evidence: idea.evidence.map((e) => e.text).slice(0, 3),

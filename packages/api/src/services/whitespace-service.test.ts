@@ -100,11 +100,11 @@ describe("getWhitespaceIdeas", () => {
     expect(res.responseType).toBe("whitespace_ideas");
     expect(res.status).toBe("ok");
     // 3 keyword candidates → all prefiltered → capped at limit for deep analysis
-    expect(res.data.funnel).toEqual({ candidates: 3, prefiltered: 3, deepAnalyzed: 2 });
+    expect(res.data.funnel).toEqual({ candidates: 3, prefiltered: 3, deepAnalyzed: 2, refused: 0 });
     expect(res.data.ideas).toHaveLength(2);
     // ranked best-first with full breakdowns
-    expect(res.data.ideas[0]!.score).toBeGreaterThanOrEqual(res.data.ideas[1]!.score);
-    expect(Object.keys(res.data.ideas[0]!.scoreBreakdown).sort()).toEqual([
+    expect(res.data.ideas[0]!.score!).toBeGreaterThanOrEqual(res.data.ideas[1]!.score!);
+    expect(Object.keys(res.data.ideas[0]!.scoreBreakdown!).sort()).toEqual([
       "demandVelocity",
       "featureGap",
       "incumbentWeakness",
@@ -165,7 +165,7 @@ describe("getWhitespaceIdeas", () => {
   });
 
   it("clamps limit to the max deep-analysis budget", async () => {
-    const many = Array.from({ length: 24 }, (_, i) => `niche ${i}`);
+    const many = Array.from({ length: 24 }, (_, i) => `sleep niche ${i}`);
     const d = deps({ relatedKeywords: vi.fn(async () => many) });
     const res = await getWhitespaceIdeas({ category: "sleep", limit: 999 }, d);
     expect(res.data.funnel.deepAnalyzed).toBe(10); // maxLimit
@@ -176,9 +176,9 @@ describe("sourceCoverage aggregation (#271 cold-verify)", () => {
   it("dedups overlapping niche competitor sets — appsWithReviews never exceeds appsResolved, partial not masked", async () => {
     // Two candidates whose sets overlap on apple:A. A has reviews everywhere; B never does.
     const d = deps({
-      relatedKeywords: vi.fn(async () => ["niche one", "niche two"]),
+      relatedKeywords: vi.fn(async () => ["sleep niche one", "sleep niche two"]),
       findSimilarApps: vi.fn(async (input) =>
-        input.query === "niche one"
+        input.query === "sleep niche one"
           ? similarResult([app({ id: "apple:A" })])
           : similarResult([app({ id: "apple:A" }), app({ id: "apple:B", title: "NoReviews" })]),
       ),
@@ -197,5 +197,91 @@ describe("sourceCoverage aggregation (#271 cold-verify)", () => {
     expect(sc.appsWithReviews).toBeLessThanOrEqual(sc.appsResolved);
     expect(sc.reviewsAnalyzed).toBe(100); // A's capped rows counted once, not twice
     expect(sc.notes[0]).toEqual({ sourceType: "review", status: "partial" }); // B's silence not masked
+  });
+});
+
+describe("candidate coherence gate (#274)", () => {
+  it("refuses incoherent autocomplete noise and counts it in the funnel", async () => {
+    const d = deps({ relatedKeywords: vi.fn(async () => ["zzqx flurbin widgets", "sleep tracking for kids", "grumbulon vortex"]) });
+    const res = await getWhitespaceIdeas({ category: "sleep tracking" }, d);
+    expect(res.data.funnel.refused).toBe(2);
+    const queried = (d.findSimilarApps as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0].query);
+    expect(queried).toContain("sleep tracking for kids");
+    expect(queried).not.toContain("zzqx flurbin widgets");
+  });
+
+  it("seeds are never coherence-refused (caller intent)", async () => {
+    const d = deps({ relatedKeywords: vi.fn(async () => []) });
+    const res = await getWhitespaceIdeas({ category: "sleep", seedIdeas: ["grumbulon vortex"] }, d);
+    expect(res.data.funnel.refused).toBe(0);
+    const queried = (d.findSimilarApps as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0].query);
+    expect(queried).toContain("grumbulon vortex");
+  });
+});
+
+describe("category grounding gate (#274 cold-verify BLOCKER)", () => {
+  it("nonsense category with ONE real token → insufficient, everything refused, dead tokens named", async () => {
+    // Faithful to the live failure: autocomplete echoes only the real token,
+    // never the junk — so per-candidate coherence alone would pass everything.
+    const d = deps({
+      relatedKeywords: vi.fn(async () => ["screen widgets photo", "home screen widgets", "widgets icon"]),
+    });
+    const res = await getWhitespaceIdeas({ category: "zzqx flurbin widgets" }, d);
+    expect(res.status).toBe("insufficient");
+    expect(res.data.ideas).toHaveLength(0);
+    expect(res.data.funnel.deepAnalyzed).toBe(0);
+    expect(res.data.funnel.refused).toBeGreaterThan(0);
+    expect(res.caveats.some((c) => c.message.includes('"zzqx"') && c.message.includes('"flurbin"'))).toBe(true);
+    // no deep spend on garbage
+    expect(d.fetchThemes).not.toHaveBeenCalled();
+  });
+
+  it("real multi-token category passes grounding (majority echoed)", async () => {
+    const d = deps({
+      relatedKeywords: vi.fn(async () => ["language learning for kids", "learning games", "language tutor"]),
+    });
+    const res = await getWhitespaceIdeas({ category: "language learning" }, d);
+    expect(res.status).not.toBe("insufficient");
+    expect(res.data.ideas.length).toBeGreaterThan(0);
+  });
+
+  it("seeds bypass the grounding gate (caller intent)", async () => {
+    const d = deps({
+      relatedKeywords: vi.fn(async () => ["screen widgets photo"]),
+    });
+    const res = await getWhitespaceIdeas({ category: "zzqx flurbin widgets", seedIdeas: ["habit tracker"] }, d);
+    // seeded intent proceeds to evidence rungs instead of a blanket refusal
+    expect(res.data.funnel.deepAnalyzed).toBeGreaterThan(0);
+  });
+
+  it("minConfidence drops are counted in funnel.refused, never silent", async () => {
+    const d = deps();
+    const res = await getWhitespaceIdeas({ category: "sleep", minConfidence: 0.99 }, d);
+    expect(res.data.ideas).toHaveLength(0);
+    expect(res.data.funnel.refused).toBe(res.data.funnel.deepAnalyzed);
+  });
+});
+
+describe("category grounding — boundary + morphology (#274 re-verify)", () => {
+  it("two-token category with only ONE literal echo still passes (live 'language learning' shape)", async () => {
+    // Live autocomplete echoes "language" but never the literal token "learning"
+    // (corpus says "learn spanish", "lessons"). Prefix morphology covers learn~learning;
+    // and even without it, 1-of-2 unechoed is exactly half → benefit of the doubt.
+    const d = deps({
+      relatedKeywords: vi.fn(async () => ["language for kids", "learn spanish", "language tutor"]),
+    });
+    const res = await getWhitespaceIdeas({ category: "language learning" }, d);
+    expect(res.status).not.toBe("insufficient");
+    expect(res.data.ideas.length).toBeGreaterThan(0);
+  });
+
+  it("junk-majority category still refused (2 of 3 tokens dead)", async () => {
+    const d = deps({
+      relatedKeywords: vi.fn(async () => ["screen widgets photo", "home screen widgets"]),
+    });
+    const res = await getWhitespaceIdeas({ category: "zzqx flurbin widgets" }, d);
+    expect(res.status).toBe("insufficient");
+    expect(res.data.funnel.refused).toBeGreaterThan(0);
+    expect(d.fetchThemes).not.toHaveBeenCalled();
   });
 });
