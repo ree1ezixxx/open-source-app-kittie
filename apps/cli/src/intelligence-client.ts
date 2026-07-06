@@ -5,9 +5,11 @@
  */
 import type {
   AppDetailIntelligenceResponse,
+  ClusterReviewsRequest,
   CompareAppRef,
   CompareAppsIntelligenceResponse,
   IntelligenceResponseEnvelope,
+  ReviewClustersIntelligenceResponse,
   TrendsResponseData,
   ValidateIdeaIntelligenceRequest,
   ValidateIdeaIntelligenceResponse,
@@ -103,6 +105,20 @@ export function validateIdea(
   // Canonical idea-validation path (#184): #180 envelope wrapped in `{ data }`.
   return request<{ data: ValidateIdeaIntelligenceResponse }>(
     `/api/v1/app-intelligence/validate-idea`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    },
+  ).then(unwrapData);
+}
+
+export function clusterReviews(
+  input: ClusterReviewsRequest,
+): Promise<ReviewClustersIntelligenceResponse> {
+  // #259 cross-app review clustering: #180 envelope wrapped in `{ data }`.
+  return request<{ data: ReviewClustersIntelligenceResponse }>(
+    `/api/v1/app-intelligence/cluster-reviews`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },

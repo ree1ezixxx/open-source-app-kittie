@@ -330,6 +330,39 @@ export const BASE_TOOLS = [
     },
   },
   {
+    name: "cluster_reviews",
+    description:
+      "Cluster user reviews ACROSS a competitor set into ranked themes — the 'what do users of the top N " +
+      "apps actually complain about / love / ask for' verb. Pass a `query` (niche, e.g. 'sleep tracking') " +
+      "to auto-resolve competitors, or an explicit `appIds` array. Each theme carries a type " +
+      "(complaint/praise/request/bug/pricing/ux), frequency, mean sentiment, per-app breakdown, evidence " +
+      "quotes (no reviewer identity), a rising/falling trend and confidence. Deterministic over stored " +
+      "review tags; theme names are sharpened by an LLM when configured, and degrade honestly (never " +
+      "fabricated) when reviews are sparse or the model is unavailable. First rung before find_feature_gaps.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Niche/description to resolve a competitor set (e.g. 'sleep tracking')." },
+        appIds: {
+          type: "array",
+          items: { type: "string" },
+          description: "Explicit competitor app ids (e.g. apple:123). Wins over query when both are given.",
+        },
+        country: { type: "string", default: "US", description: "ISO market." },
+        limitApps: { type: "number", default: 10, description: "Max apps in the set (≤25)." },
+        maxReviewsPerApp: { type: "number", default: 100, description: "Max reviews sampled per app (≤500)." },
+        since: { type: "string", description: "ISO date — only cluster reviews on/after it." },
+        themeTypes: {
+          type: "array",
+          items: { type: "string", enum: ["complaint", "praise", "request", "bug", "pricing", "ux"] },
+          description: "Restrict the returned themes to these types.",
+        },
+        minThemeFrequency: { type: "number", default: 0.02, description: "Drop themes below this share of reviews (0–1)." },
+        store: { type: "string", enum: ["apple", "google"], description: "Restrict discovery to one store (query mode)." },
+      },
+    },
+  },
+  {
     name: "clone_ios_app",
     description:
       "Generate a complete, buildable SwiftUI iOS app that clones a trending app's core UX. " +

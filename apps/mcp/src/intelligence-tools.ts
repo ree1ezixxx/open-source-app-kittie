@@ -105,6 +105,73 @@ export function validateIdeaRequest(args: { idea?: unknown; store?: unknown; lim
   return { path: VALIDATE_IDEA_PATH, body };
 }
 
+export const CLUSTER_REVIEWS_PATH = `${APP_INTELLIGENCE_BASE}/cluster-reviews`;
+
+const REVIEW_THEME_TYPE_VALUES = ["complaint", "praise", "request", "bug", "pricing", "ux"] as const;
+
+export interface ClusterReviewsRequestBody {
+  query?: string;
+  appIds?: string[];
+  country?: string;
+  limitApps?: number;
+  maxReviewsPerApp?: number;
+  since?: string;
+  themeTypes?: string[];
+  minThemeFrequency?: number;
+  store?: string;
+}
+
+export interface ClusterReviewsRequest {
+  path: string;
+  body: ClusterReviewsRequestBody;
+}
+
+/**
+ * #259 cluster_reviews. Requires a `query` (niche description) OR a non-empty
+ * `appIds` array. Bounds/validates the optional knobs so the API never sees junk.
+ */
+export function clusterReviewsRequest(args: {
+  query?: unknown;
+  appIds?: unknown;
+  country?: unknown;
+  limitApps?: unknown;
+  maxReviewsPerApp?: unknown;
+  since?: unknown;
+  themeTypes?: unknown;
+  minThemeFrequency?: unknown;
+  store?: unknown;
+}): ClusterReviewsRequest {
+  const query = typeof args.query === "string" ? args.query.trim() : "";
+  const appIds = Array.isArray(args.appIds)
+    ? args.appIds.filter((v): v is string => typeof v === "string" && v.trim().length > 0).map((v) => v.trim())
+    : [];
+  if (query.length === 0 && appIds.length === 0) {
+    throw new Error("cluster_reviews needs a query (niche description) or a non-empty appIds array");
+  }
+  const body: ClusterReviewsRequestBody = {};
+  if (query.length > 0) body.query = query;
+  if (appIds.length > 0) body.appIds = appIds;
+  if (typeof args.country === "string" && args.country.trim().length > 0) body.country = args.country.trim();
+  if (typeof args.limitApps === "number" && Number.isFinite(args.limitApps)) {
+    body.limitApps = Math.min(Math.max(Math.trunc(args.limitApps), 1), 25);
+  }
+  if (typeof args.maxReviewsPerApp === "number" && Number.isFinite(args.maxReviewsPerApp)) {
+    body.maxReviewsPerApp = Math.min(Math.max(Math.trunc(args.maxReviewsPerApp), 1), 500);
+  }
+  if (typeof args.since === "string" && args.since.trim().length > 0) body.since = args.since.trim();
+  if (Array.isArray(args.themeTypes)) {
+    const types = args.themeTypes.filter(
+      (v): v is string => typeof v === "string" && (REVIEW_THEME_TYPE_VALUES as readonly string[]).includes(v),
+    );
+    if (types.length > 0) body.themeTypes = types;
+  }
+  if (typeof args.minThemeFrequency === "number" && Number.isFinite(args.minThemeFrequency)) {
+    body.minThemeFrequency = Math.min(Math.max(args.minThemeFrequency, 0), 1);
+  }
+  if (args.store === "apple" || args.store === "google") body.store = args.store;
+  return { path: CLUSTER_REVIEWS_PATH, body };
+}
+
 export type ReportTemplateName = "app_teardown" | "category_pulse" | "build_brief";
 export type ReportRenderFormat = "json" | "markdown" | "html";
 

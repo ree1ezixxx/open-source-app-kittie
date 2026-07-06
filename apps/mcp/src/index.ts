@@ -11,6 +11,7 @@ import { synthesizeOpportunity, type MarketApp } from "@kittie/intelligence";
 import { listTools } from "./tools.js";
 import {
   appDetailIntelligencePath,
+  clusterReviewsRequest,
   compareAppsRequest,
   findTrendingAppsPath,
   resolveReportRequest,
@@ -146,6 +147,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "validate_app_idea": {
         // #184 canonical validate-idea intelligence (`/validate-idea`).
         const { path, body } = validateIdeaRequest((args ?? {}) as { idea?: unknown; store?: unknown; limit?: unknown });
+        result = await apiPost(path, body);
+        break;
+      }
+      case "cluster_reviews": {
+        // #259 cross-app review-theme clustering (query or explicit appIds).
+        const { path, body } = clusterReviewsRequest((args ?? {}) as Record<string, unknown>);
         result = await apiPost(path, body);
         break;
       }

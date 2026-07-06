@@ -94,6 +94,18 @@ export {
   deriveVerdict,
   type IdeaScoringInput,
 } from "./idea-validation/index.js";
+export {
+  clusterReviews,
+  clusterReviewsDeterministic,
+  buildReviewClustersResponse,
+  themeTypeForLabel,
+  CLUSTER_DEFAULTS,
+  type ClusterInputApp,
+  type ClusterInputReview,
+  type ClusterReviewsComputeInput,
+  type ClusterReviewsComputed,
+  type BuildReviewClustersInput,
+} from "./review-clusters/index.js";
 
 import type { AppListItem } from "@kittie/types";
 import { computeGrowthPct, computeGrowthScore, isFirstMover, reviewGrowth7d } from "./growth.js";

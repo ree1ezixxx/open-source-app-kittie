@@ -106,6 +106,70 @@ export async function getRecentReviewTagsForApps(
   return out;
 }
 
+/** One review row for cross-app clustering — body + rating + date + persisted tags. */
+export interface ClusterReviewRow {
+  appId: string;
+  rating: number;
+  title: string | null;
+  body: string;
+  sentiment: "positive" | "neutral" | "negative" | "mixed" | null;
+  topics: string[];
+  improvementAreas: string[];
+  /** ISO-8601 review date; null when the source row had none. */
+  reviewedAt: string | null;
+}
+
+/**
+ * Recent reviews (body + rating + date + persisted tags) for a BOUNDED set of
+ * apps, newest-first, capped at `perApp` reviews per app. The evidence-bearing
+ * counterpart to {@link getRecentReviewTagsForApps} (which returns only distinct
+ * tag sets): `cluster_reviews` (#259) needs the bodies for quotes, the ratings +
+ * dates for per-app sentiment and trend, and the tags for the deterministic
+ * theme base. Apps with no reviews are simply absent from the result. Selects
+ * only the columns clustering needs — never the reviewer `author` (PII).
+ */
+export async function getRecentReviewsForApps(
+  db: Db,
+  ids: string[],
+  perApp = 100,
+): Promise<ClusterReviewRow[]> {
+  const out: ClusterReviewRow[] = [];
+  if (ids.length === 0) return out;
+  const seen = new Map<string, number>();
+  for (let i = 0; i < ids.length; i += 500) {
+    const rows = await db
+      .select({
+        appId: reviews.appId,
+        rating: reviews.rating,
+        title: reviews.title,
+        body: reviews.body,
+        sentiment: reviews.sentiment,
+        topics: reviews.topics,
+        improvementAreas: reviews.improvementAreas,
+        reviewedAt: reviews.reviewedAt,
+      })
+      .from(reviews)
+      .where(inArray(reviews.appId, ids.slice(i, i + 500)))
+      .orderBy(desc(reviews.reviewedAt));
+    for (const r of rows) {
+      const n = seen.get(r.appId) ?? 0;
+      if (n >= perApp) continue;
+      seen.set(r.appId, n + 1);
+      out.push({
+        appId: r.appId,
+        rating: r.rating,
+        title: r.title,
+        body: r.body,
+        sentiment: r.sentiment ?? null,
+        topics: parseJsonArray(r.topics),
+        improvementAreas: parseJsonArray(r.improvementAreas),
+        reviewedAt: r.reviewedAt instanceof Date ? r.reviewedAt.toISOString() : null,
+      });
+    }
+  }
+  return out;
+}
+
 export async function loadAppRelations(db: Db, appId: string) {
   const [iapRows, metaRows, creatorRows, adRows, reviewRows] = await Promise.all([
     db.select().from(iaps).where(eq(iaps.appId, appId)),

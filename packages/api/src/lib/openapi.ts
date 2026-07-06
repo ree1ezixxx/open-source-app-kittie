@@ -348,6 +348,7 @@ export const discoveryIndex = {
     { name: "batchKeywordDifficulty", method: "POST", path: "/api/v1/keywords/difficulty", description: "ASO keyword difficulty (batch)." },
     { name: "getKeywordMarkets", method: "GET", path: "/api/v1/keywords/markets", description: "Cross-market keyword metrics." },
     { name: "getAppReviews", method: "POST", path: "/api/v1/reviews", description: "Reviews with sentiment/topics for one app." },
+    { name: "clusterReviews", method: "POST", path: "/api/v1/app-intelligence/cluster-reviews", description: "Cluster reviews across a competitor set into ranked complaint/praise/request themes with evidence." },
   ],
   mcp: {
     transport: "stdio",

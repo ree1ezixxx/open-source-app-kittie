@@ -27,6 +27,7 @@ a buildable iOS clone of an app.
 | `get_related_keywords` | Related keyword ideas for a seed (feed to `batch_keyword_difficulty`). |
 | `get_supported_countries` | ISO markets covered. |
 | `get_app_reviews` | Recent reviews with sentiment + topic / improvement-area tags. |
+| `cluster_reviews` | Cluster reviews ACROSS a competitor set (query or explicit appIds) into ranked complaint/praise/request/bug/pricing/ux themes with frequency, sentiment, per-app breakdown, evidence quotes, trend and confidence. Deterministic base; LLM-named when configured, degrades honestly. |
 | `clone_ios_app` | Generate a complete buildable SwiftUI iOS clone (xcodegen project + Swift sources). |
 
 App ids look like `apple:123456789` or `google:com.example.app`.
