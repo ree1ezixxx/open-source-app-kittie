@@ -72,6 +72,7 @@ function deps(over: Partial<ReviewClustersDeps> = {}): ReviewClustersDeps {
   return {
     findSimilarApps: vi.fn(async () => similarResult([appItem(), appItem({ id: "apple:2", title: "Pillow" })])),
     reviewCounts: vi.fn(async (ids: string[]) => Object.fromEntries(ids.map((id) => [id, 5]))),
+    recallReviewed: vi.fn(async () => []),
     resolveApps: vi.fn(async (ids: string[]) => ids.map<ClusterInputApp>((id) => ({ id, name: `App ${id}` }))),
     fetchReviews: vi.fn(async () => Array.from({ length: 8 }, (_, i) => reviewRow({ appId: i % 2 ? "apple:2" : "apple:1" }))),
     enrich: vi.fn(async () => null),
@@ -150,5 +151,20 @@ describe("query-mode review preference (#268 partial)", () => {
     expect(res.data.appIds).toEqual(["apple:yes1", "apple:yes2", "apple:no1"]);
     // over-fetch: limit passed to discovery is 4x the requested set
     expect(d.findSimilarApps).toHaveBeenCalledWith(expect.objectContaining({ limit: 12 }));
+  });
+});
+
+describe("evidence-recall merge (#268 round 2)", () => {
+  it("recalled review-bearing incumbents lead the set even when discovery misses them", async () => {
+    const d = deps({
+      findSimilarApps: vi.fn(async () => similarResult([appItem({ id: "apple:norev", title: "Budgeting App - Spend Tracker" })])),
+      reviewCounts: vi.fn(async () => ({ "apple:norev": 0, "apple:ynab": 250 })),
+      recallReviewed: vi.fn(async () => [{ id: "apple:ynab", name: "YNAB", matched: ["budgeting"] }]),
+      fetchReviews: vi.fn(async () => Array.from({ length: 6 }, () => reviewRow({ appId: "apple:ynab" }))),
+    });
+    const res = await getReviewClusters({ query: "budgeting" }, d);
+    expect(res.data.appIds[0]).toBe("apple:ynab");
+    expect(res.status).toBe("ok"); // evidence found despite discovery miss
+    expect(d.recallReviewed).toHaveBeenCalledWith("budgeting", 10);
   });
 });

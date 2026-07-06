@@ -286,3 +286,14 @@ export async function topChartedAppIds(
   }
   return out;
 }
+
+/** Identity + match text for every app holding >=1 stored review (#268 recall pass).
+    The review-bearing set is small (hundreds), so callers score it in-process. */
+export async function listReviewedApps(
+  db: Db,
+): Promise<Array<{ id: string; title: string; category: string | null; description: string | null }>> {
+  return db
+    .select({ id: apps.id, title: apps.title, category: apps.category, description: apps.description })
+    .from(apps)
+    .where(sql`${apps.id} IN (SELECT DISTINCT app_id FROM reviews)`);
+}

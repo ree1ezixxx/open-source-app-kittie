@@ -26,6 +26,7 @@ import { listAppsByIds, reviewCountsByApp } from "@kittie/db";
 import { getDb } from "../lib/db.js";
 import { cachedJson, generate, hashInput, isGeminiConfigured, GEMINI_MODEL } from "../lib/gemini.js";
 import { findSimilarApps, SimilarAppsError } from "./similar-apps-service.js";
+import { recallReviewedApps, type RecalledApp } from "./evidence-recall.js";
 import { getReviewClusters } from "./review-clusters-service.js";
 
 export class FeatureGapsError extends Error {
@@ -48,6 +49,8 @@ export interface FeatureGapsDeps {
   findSimilarApps(input: FindSimilarAppsInput): Promise<FindSimilarAppsResult>;
   /** Which of these apps hold >=1 stored review (query-mode preference, #268). */
   reviewCounts(ids: string[]): Promise<Record<string, number>>;
+  /** Recall pass over the review-bearing set (#268) — merged ahead of the pool. */
+  recallReviewed(query: string, limit: number): Promise<RecalledApp[]>;
   resolveApps(ids: string[]): Promise<FeatureInputApp[]>;
   fetchReviewThemes(
     ids: string[],
@@ -69,6 +72,7 @@ export interface FeatureGapsDeps {
 const defaultDeps: FeatureGapsDeps = {
   findSimilarApps,
   reviewCounts: (ids) => reviewCountsByApp(getDb(), ids),
+  recallReviewed: recallReviewedApps,
   resolveApps: async (ids) => {
     const rows = await listAppsByIds(getDb(), ids);
     const byId = new Map(rows.map((r) => [r.id, r]));
@@ -147,8 +151,14 @@ export async function getFeatureGaps(
       throw err;
     }
     const rankedIds = similar.similar.map((s) => s.app.id);
+    const recalled = await deps.recallReviewed(query, limitApps);
     const counts = rankedIds.length > 0 ? await deps.reviewCounts(rankedIds) : {};
-    ids = [...rankedIds.filter((i) => (counts[i] ?? 0) > 0), ...rankedIds.filter((i) => (counts[i] ?? 0) === 0)].slice(0, limitApps);
+    const orderedIds = [
+      ...recalled.map((r) => r.id),
+      ...rankedIds.filter((i) => (counts[i] ?? 0) > 0),
+      ...rankedIds.filter((i) => (counts[i] ?? 0) === 0),
+    ];
+    ids = [...new Set(orderedIds)].slice(0, limitApps);
     if (ids.length === 0) {
       throw new FeatureGapsError("no competitors matched that query — refine it or pass explicit appIds", 404);
     }

@@ -88,6 +88,7 @@ function deps(over: Partial<FeatureGapsDeps> = {}): FeatureGapsDeps {
   return {
     findSimilarApps: vi.fn(async () => similarResult([appItem(), appItem({ id: "apple:2", title: "Pillow" })])),
     reviewCounts: vi.fn(async (ids: string[]) => Object.fromEntries(ids.map((id) => [id, 5]))),
+    recallReviewed: vi.fn(async () => []),
     resolveApps: vi.fn(async () => inputApps()),
     fetchReviewThemes: vi.fn(async () => ({ themes: [offlineRequestTheme(), syncPraiseTheme()], reviewsAnalyzed: 40 })),
     enrich: vi.fn(async () => null),

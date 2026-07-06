@@ -27,6 +27,7 @@ import { getRecentReviewsForApps, listAppsByIds, reviewCountsByApp, type Cluster
 import { getDb } from "../lib/db.js";
 import { cachedJson, generate, hashInput, isGeminiConfigured, GEMINI_MODEL } from "../lib/gemini.js";
 import { findSimilarApps, SimilarAppsError } from "./similar-apps-service.js";
+import { recallReviewedApps, type RecalledApp } from "./evidence-recall.js";
 
 export class ReviewClustersError extends Error {
   constructor(
@@ -53,6 +54,8 @@ export interface ReviewClustersDeps {
   findSimilarApps(input: FindSimilarAppsInput): Promise<FindSimilarAppsResult>;
   /** Which of these apps hold >=1 stored review (query-mode preference, #268). */
   reviewCounts(ids: string[]): Promise<Record<string, number>>;
+  /** Recall pass over the review-bearing set (#268) — merged ahead of the pool. */
+  recallReviewed(query: string, limit: number): Promise<RecalledApp[]>;
   /** Resolve display names for an explicit `appIds` set (unknown ids drop out). */
   resolveApps(ids: string[]): Promise<ClusterInputApp[]>;
   fetchReviews(ids: string[], perApp: number): Promise<ClusterReviewRow[]>;
@@ -64,6 +67,7 @@ export interface ReviewClustersDeps {
 const defaultDeps: ReviewClustersDeps = {
   findSimilarApps,
   reviewCounts: (ids) => reviewCountsByApp(getDb(), ids),
+  recallReviewed: recallReviewedApps,
   resolveApps: async (ids) => {
     const rows = await listAppsByIds(getDb(), ids);
     const byId = new Map(rows.map((r) => [r.id, r.title]));
@@ -134,10 +138,21 @@ export async function getReviewClusters(
       throw err;
     }
     const ranked = similar.similar.map((s) => ({ id: s.app.id, name: s.app.title }));
+    // Recall pass (#268): catalog FTS misses review-rich incumbents whose titles
+    // lack the query token; search the review-bearing set directly and merge its
+    // hits FIRST (relevance-guarded — >=1 real token match each).
+    const recalled = await deps.recallReviewed(query, limitApps);
     const counts = ranked.length > 0 ? await deps.reviewCounts(ranked.map((a) => a.id)) : {};
     const withReviews = ranked.filter((a) => (counts[a.id] ?? 0) > 0);
     const without = ranked.filter((a) => (counts[a.id] ?? 0) === 0);
-    apps = [...withReviews, ...without].slice(0, limitApps);
+    const merged: ClusterInputApp[] = [];
+    const seenIds = new Set<string>();
+    for (const a of [...recalled.map((r) => ({ id: r.id, name: r.name })), ...withReviews, ...without]) {
+      if (seenIds.has(a.id)) continue;
+      seenIds.add(a.id);
+      merged.push(a);
+    }
+    apps = merged.slice(0, limitApps);
     if (apps.length === 0) {
       throw new ReviewClustersError("no competitors matched that query — refine it or pass explicit appIds", 404);
     }
