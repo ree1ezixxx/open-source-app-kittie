@@ -6,6 +6,7 @@
 import type {
   AppDetailIntelligenceResponse,
   CompareAppsIntelligenceResponse,
+  FeatureGapsIntelligenceResponse,
   ReviewClustersIntelligenceResponse,
   ValidateIdeaIntelligenceResponse,
 } from "@kittie/types";
@@ -127,6 +128,38 @@ export function formatReviewClusters(res: ReviewClustersIntelligenceResponse): s
       const quote = t.quotes[0];
       if (quote) lines.push(`      "${quote.text}"`);
     }
+  }
+  lines.push("");
+  lines.push(...caveatBlock(res.caveats));
+  return lines.join("\n");
+}
+
+export function formatFeatureGaps(res: FeatureGapsIntelligenceResponse): string {
+  const { data } = res;
+  const lines = [
+    `Feature gaps${data.query ? ` for "${data.query}"` : ""} — ${data.country}`,
+    `Apps: ${data.appIds.length} · Reviews analysed: ${data.reviewsAnalyzed} · Enrichment: ${data.enrichment}`,
+    `Confidence: ${res.confidence.score.toFixed(2)} (${res.confidence.label})`,
+    "",
+  ];
+  const row = (label: string, feats: typeof data.features) => {
+    if (feats.length === 0) return;
+    lines.push(`${label} (${feats.length}):`);
+    for (const f of feats) {
+      lines.push(
+        `  • ${f.feature} — coverage ${pctOr(f.coverage)} (${f.competitorCount} app(s)), ` +
+          `demand ${f.demand}, quality ${f.quality}, conf ${f.confidence.toFixed(2)}`,
+      );
+      if (f.gap || label.startsWith("Gap")) lines.push(`      ${f.gapReason}`);
+    }
+  };
+  if (data.features.length === 0) {
+    lines.push("No features matched the competitor set — listings and reviews may be sparse.");
+  } else {
+    row("Gaps", data.gaps);
+    row("Table stakes", data.tableStakes);
+    const other = data.features.filter((f) => !f.gap && !f.tableStakes);
+    row("Other", other);
   }
   lines.push("");
   lines.push(...caveatBlock(res.caveats));

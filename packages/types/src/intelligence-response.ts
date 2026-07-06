@@ -17,6 +17,7 @@ export type IntelligenceResponseType =
   | "teardown"
   | "similar"
   | "review_clusters"
+  | "feature_gaps"
   | "report";
 
 export type IntelligenceStatus = "ok" | "partial" | "insufficient";

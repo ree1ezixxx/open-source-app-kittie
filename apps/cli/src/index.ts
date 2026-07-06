@@ -5,6 +5,8 @@ import type {
   AppListItem,
   ClusterReviewsRequest,
   CompareAppRef,
+  FeatureLevel,
+  FindFeatureGapsRequest,
   ReviewThemeType,
   ValidateIdeaIntelligenceRequest,
 } from "@kittie/types";
@@ -22,6 +24,7 @@ import { parseFlags } from "./args.js";
 import {
   clusterReviews,
   compareApps,
+  findFeatureGaps,
   getAppIntelligence,
   getTrending,
   validateIdea,
@@ -30,6 +33,7 @@ import {
 import {
   formatAppIntelligence,
   formatCompare,
+  formatFeatureGaps,
   formatReviewClusters,
   formatTrending,
   formatValidate,
@@ -246,6 +250,32 @@ async function cmdClusterReviews(args: string[], mode: OutputMode) {
   console.log(formatOutput(mode, res, () => formatReviewClusters(res)));
 }
 
+async function cmdFeatureGaps(args: string[], mode: OutputMode) {
+  const { positionals, flags } = parseFlags(args);
+  const input: FindFeatureGapsRequest = {};
+  const ids = positionals.filter((t) => t.includes(":"));
+  const queryTokens = positionals.filter((t) => !t.includes(":"));
+  if (ids.length > 0) input.appIds = ids;
+  if (queryTokens.length > 0) input.query = queryTokens.join(" ");
+  if (flags.query) input.query = flags.query;
+  if (!input.query && !input.appIds) {
+    console.error('Usage: pluto feature-gaps <niche…> | <appId…> [--country US] [--limit-apps 10] [--min-demand high] [--no-reviews]');
+    process.exit(1);
+  }
+  if (flags.country) input.country = flags.country;
+  if (flags["limit-apps"]) {
+    const n = Number(flags["limit-apps"]);
+    if (Number.isFinite(n) && n > 0) input.limitApps = Math.trunc(n);
+  }
+  const demand = flags["min-demand"];
+  if (demand === "low" || demand === "medium" || demand === "high") input.minDemand = demand as Exclude<FeatureLevel, "unknown">;
+  if (flags["no-reviews"] === "true") input.includeReviewSignals = false;
+  if (flags["no-descriptions"] === "true") input.includeDescriptionSignals = false;
+  if (flags.store === "apple" || flags.store === "google") input.store = flags.store;
+  const res = await findFeatureGaps(input);
+  console.log(formatOutput(mode, res, () => formatFeatureGaps(res)));
+}
+
 function printHeader() {
   console.log(
     ["Title".padEnd(22), "Store".padEnd(6), "Reviews".padStart(6), "Growth".padStart(6), "Revenue".padStart(8)].join(
@@ -288,6 +318,9 @@ async function main() {
         break;
       case "cluster-reviews":
         await cmdClusterReviews(args, mode);
+        break;
+      case "feature-gaps":
+        await cmdFeatureGaps(args, mode);
         break;
       case "search":
         await cmdSearch(args);

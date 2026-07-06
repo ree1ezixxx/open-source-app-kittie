@@ -28,6 +28,7 @@ a buildable iOS clone of an app.
 | `get_supported_countries` | ISO markets covered. |
 | `get_app_reviews` | Recent reviews with sentiment + topic / improvement-area tags. |
 | `cluster_reviews` | Cluster reviews ACROSS a competitor set (query or explicit appIds) into ranked complaint/praise/request/bug/pricing/ux themes with frequency, sentiment, per-app breakdown, evidence quotes, trend and confidence. Deterministic base; LLM-named when configured, degrades honestly. |
+| `find_feature_gaps` | Feature × competitor matrix for a niche — what the field OFFERS (listings) vs what users DEMAND (review themes), separating table-stakes from whitespace gaps. Each feature carries coverage, demand + quality tiers, a cited gap flag and evidence. Composes `cluster_reviews`; degrades to listing-only coverage. |
 | `clone_ios_app` | Generate a complete buildable SwiftUI iOS clone (xcodegen project + Swift sources). |
 
 App ids look like `apple:123456789` or `google:com.example.app`.

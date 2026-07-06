@@ -13,6 +13,7 @@ import {
   appDetailIntelligencePath,
   clusterReviewsRequest,
   compareAppsRequest,
+  featureGapsRequest,
   findTrendingAppsPath,
   resolveReportRequest,
   toAgentSafeError,
@@ -153,6 +154,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "cluster_reviews": {
         // #259 cross-app review-theme clustering (query or explicit appIds).
         const { path, body } = clusterReviewsRequest((args ?? {}) as Record<string, unknown>);
+        result = await apiPost(path, body);
+        break;
+      }
+      case "find_feature_gaps": {
+        // #260 feature × competitor matrix (composes cluster_reviews for demand).
+        const { path, body } = featureGapsRequest((args ?? {}) as Record<string, unknown>);
         result = await apiPost(path, body);
         break;
       }

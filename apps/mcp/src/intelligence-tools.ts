@@ -172,6 +172,63 @@ export function clusterReviewsRequest(args: {
   return { path: CLUSTER_REVIEWS_PATH, body };
 }
 
+export const FEATURE_GAPS_PATH = `${APP_INTELLIGENCE_BASE}/feature-gaps`;
+
+const DEMAND_LEVELS = ["low", "medium", "high"] as const;
+
+export interface FeatureGapsRequestBody {
+  query?: string;
+  appIds?: string[];
+  country?: string;
+  limitApps?: number;
+  includeReviewSignals?: boolean;
+  includeDescriptionSignals?: boolean;
+  minDemand?: string;
+  store?: string;
+}
+
+export interface FeatureGapsRequest {
+  path: string;
+  body: FeatureGapsRequestBody;
+}
+
+/**
+ * #260 find_feature_gaps. Requires a `query` (niche description) OR a non-empty
+ * `appIds` array. Bounds/validates the optional knobs so the API never sees junk.
+ */
+export function featureGapsRequest(args: {
+  query?: unknown;
+  appIds?: unknown;
+  country?: unknown;
+  limitApps?: unknown;
+  includeReviewSignals?: unknown;
+  includeDescriptionSignals?: unknown;
+  minDemand?: unknown;
+  store?: unknown;
+}): FeatureGapsRequest {
+  const query = typeof args.query === "string" ? args.query.trim() : "";
+  const appIds = Array.isArray(args.appIds)
+    ? args.appIds.filter((v): v is string => typeof v === "string" && v.trim().length > 0).map((v) => v.trim())
+    : [];
+  if (query.length === 0 && appIds.length === 0) {
+    throw new Error("find_feature_gaps needs a query (niche description) or a non-empty appIds array");
+  }
+  const body: FeatureGapsRequestBody = {};
+  if (query.length > 0) body.query = query;
+  if (appIds.length > 0) body.appIds = appIds;
+  if (typeof args.country === "string" && args.country.trim().length > 0) body.country = args.country.trim();
+  if (typeof args.limitApps === "number" && Number.isFinite(args.limitApps)) {
+    body.limitApps = Math.min(Math.max(Math.trunc(args.limitApps), 1), 25);
+  }
+  if (typeof args.includeReviewSignals === "boolean") body.includeReviewSignals = args.includeReviewSignals;
+  if (typeof args.includeDescriptionSignals === "boolean") body.includeDescriptionSignals = args.includeDescriptionSignals;
+  if (typeof args.minDemand === "string" && (DEMAND_LEVELS as readonly string[]).includes(args.minDemand)) {
+    body.minDemand = args.minDemand;
+  }
+  if (args.store === "apple" || args.store === "google") body.store = args.store;
+  return { path: FEATURE_GAPS_PATH, body };
+}
+
 export type ReportTemplateName = "app_teardown" | "category_pulse" | "build_brief";
 export type ReportRenderFormat = "json" | "markdown" | "html";
 
