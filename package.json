@@ -18,7 +18,8 @@
     "ingest:score": "pnpm --filter @kittie/ingest score",
     "ingest:reviews": "pnpm --filter @kittie/ingest reviews",
     "ingest:keywords": "pnpm --filter @kittie/ingest keywords",
-    "ingest:retag": "pnpm --filter @kittie/ingest retag"
+    "ingest:retag": "pnpm --filter @kittie/ingest retag",
+    "ingest:seed-reviews": "pnpm --filter @kittie/ingest seed-reviews"
   },
   "engines": {
     "node": ">=20"

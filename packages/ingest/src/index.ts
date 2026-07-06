@@ -2,6 +2,7 @@ export { fetchAppleCharts, type AppleChartEntry } from "./apple/charts.js";
 export { lookupAppleApp, lookupAppleApps, type AppleLookupResult } from "./apple/lookup.js";
 export { fetchGoogleAppMetadata, fetchGoogleAppsMetadata, fetchGoogleCharts } from "./google/metadata.js";
 export { syncGoogleReviews } from "./google/reviews.js";
+export { seedCategoryReviews, storeAppIdOf, DEFAULT_SEED_CATEGORIES, type SeedDeps, type SeedOptions, type SeedReport } from "./db/seed-reviews.js";
 export { syncAppleReviews, type SyncOpts } from "./apple/reviews.js";
 export { runSeed } from "./jobs/seed.js";
 export { runSnapshot } from "./jobs/snapshot.js";
