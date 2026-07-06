@@ -71,6 +71,7 @@ function reviewRow(overrides: Partial<ClusterReviewRow> = {}): ClusterReviewRow 
 function deps(over: Partial<ReviewClustersDeps> = {}): ReviewClustersDeps {
   return {
     findSimilarApps: vi.fn(async () => similarResult([appItem(), appItem({ id: "apple:2", title: "Pillow" })])),
+    reviewCounts: vi.fn(async (ids: string[]) => Object.fromEntries(ids.map((id) => [id, 5]))),
     resolveApps: vi.fn(async (ids: string[]) => ids.map<ClusterInputApp>((id) => ({ id, name: `App ${id}` }))),
     fetchReviews: vi.fn(async () => Array.from({ length: 8 }, (_, i) => reviewRow({ appId: i % 2 ? "apple:2" : "apple:1" }))),
     enrich: vi.fn(async () => null),
@@ -128,6 +129,26 @@ describe("getReviewClusters", () => {
   it("clamps limitApps to the max and forwards it to discovery", async () => {
     const d = deps();
     await getReviewClusters({ query: "sleep", limitApps: 999 }, d);
-    expect(d.findSimilarApps).toHaveBeenCalledWith(expect.objectContaining({ limit: 25 }));
+    expect(d.findSimilarApps).toHaveBeenCalledWith(expect.objectContaining({ limit: 50 })); // 25 clamped × 4 over-fetch, capped at 50 (#268)
+  });
+});
+
+describe("query-mode review preference (#268 partial)", () => {
+  it("prefers review-bearing competitors, keeps relevance order within groups, never filters", async () => {
+    const ranked = [
+      appItem({ id: "apple:no1", title: "NoRev1" }),
+      appItem({ id: "apple:yes1", title: "HasRev1" }),
+      appItem({ id: "apple:no2", title: "NoRev2" }),
+      appItem({ id: "apple:yes2", title: "HasRev2" }),
+    ];
+    const d = deps({
+      findSimilarApps: vi.fn(async () => similarResult(ranked)),
+      reviewCounts: vi.fn(async () => ({ "apple:yes1": 10, "apple:yes2": 3, "apple:no1": 0, "apple:no2": 0 })),
+    });
+    const res = await getReviewClusters({ query: "sleep", limitApps: 3 }, d);
+    // review-bearing first (relevance order kept), review-less fill the remainder
+    expect(res.data.appIds).toEqual(["apple:yes1", "apple:yes2", "apple:no1"]);
+    // over-fetch: limit passed to discovery is 4x the requested set
+    expect(d.findSimilarApps).toHaveBeenCalledWith(expect.objectContaining({ limit: 12 }));
   });
 });

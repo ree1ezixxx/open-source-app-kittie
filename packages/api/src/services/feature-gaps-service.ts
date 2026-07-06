@@ -22,7 +22,7 @@ import {
   FEATURE_GAP_DEFAULTS,
   type FeatureInputApp,
 } from "@kittie/intelligence";
-import { listAppsByIds } from "@kittie/db";
+import { listAppsByIds, reviewCountsByApp } from "@kittie/db";
 import { getDb } from "../lib/db.js";
 import { cachedJson, generate, hashInput, isGeminiConfigured, GEMINI_MODEL } from "../lib/gemini.js";
 import { findSimilarApps, SimilarAppsError } from "./similar-apps-service.js";
@@ -46,6 +46,8 @@ export interface FeatureGapsEnrichment {
 
 export interface FeatureGapsDeps {
   findSimilarApps(input: FindSimilarAppsInput): Promise<FindSimilarAppsResult>;
+  /** Which of these apps hold >=1 stored review (query-mode preference, #268). */
+  reviewCounts(ids: string[]): Promise<Record<string, number>>;
   resolveApps(ids: string[]): Promise<FeatureInputApp[]>;
   fetchReviewThemes(
     ids: string[],
@@ -66,6 +68,7 @@ export interface FeatureGapsDeps {
 
 const defaultDeps: FeatureGapsDeps = {
   findSimilarApps,
+  reviewCounts: (ids) => reviewCountsByApp(getDb(), ids),
   resolveApps: async (ids) => {
     const rows = await listAppsByIds(getDb(), ids);
     const byId = new Map(rows.map((r) => [r.id, r]));
@@ -132,12 +135,20 @@ export async function getFeatureGaps(
   } else {
     let similar: FindSimilarAppsResult;
     try {
-      similar = await deps.findSimilarApps({ query, store: normaliseStore(input.store), limit: limitApps });
+      // Over-fetch + prefer review-bearing competitors (#268) — demand/quality
+      // come from review evidence; preference not filter, coverage stays honest.
+      similar = await deps.findSimilarApps({
+        query,
+        store: normaliseStore(input.store),
+        limit: Math.min(limitApps * 4, 50),
+      });
     } catch (err) {
       if (err instanceof SimilarAppsError) throw new FeatureGapsError(err.message, err.status);
       throw err;
     }
-    ids = similar.similar.slice(0, limitApps).map((s) => s.app.id);
+    const rankedIds = similar.similar.map((s) => s.app.id);
+    const counts = rankedIds.length > 0 ? await deps.reviewCounts(rankedIds) : {};
+    ids = [...rankedIds.filter((i) => (counts[i] ?? 0) > 0), ...rankedIds.filter((i) => (counts[i] ?? 0) === 0)].slice(0, limitApps);
     if (ids.length === 0) {
       throw new FeatureGapsError("no competitors matched that query — refine it or pass explicit appIds", 404);
     }

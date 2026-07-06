@@ -87,6 +87,7 @@ function syncPraiseTheme(): ReviewTheme {
 function deps(over: Partial<FeatureGapsDeps> = {}): FeatureGapsDeps {
   return {
     findSimilarApps: vi.fn(async () => similarResult([appItem(), appItem({ id: "apple:2", title: "Pillow" })])),
+    reviewCounts: vi.fn(async (ids: string[]) => Object.fromEntries(ids.map((id) => [id, 5]))),
     resolveApps: vi.fn(async () => inputApps()),
     fetchReviewThemes: vi.fn(async () => ({ themes: [offlineRequestTheme(), syncPraiseTheme()], reviewsAnalyzed: 40 })),
     enrich: vi.fn(async () => null),
@@ -150,6 +151,6 @@ describe("getFeatureGaps", () => {
   it("clamps limitApps to the max and forwards it to discovery", async () => {
     const d = deps();
     await getFeatureGaps({ query: "sleep", limitApps: 999 }, d);
-    expect(d.findSimilarApps).toHaveBeenCalledWith(expect.objectContaining({ limit: 25 }));
+    expect(d.findSimilarApps).toHaveBeenCalledWith(expect.objectContaining({ limit: 50 })); // 25 clamped × 4 over-fetch, capped at 50 (#268)
   });
 });
