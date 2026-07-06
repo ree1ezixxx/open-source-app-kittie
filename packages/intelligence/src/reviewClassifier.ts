@@ -90,7 +90,7 @@ interface CompiledCategory {
 }
 
 const compileCategories = (cats: Category[]): CompiledCategory[] =>
-  cats.map((c) => ({ label: c.label, patterns: c.keywords.map(compileKeyword) }));
+  cats.map((c) => ({ label: c.label, patterns: c.keywords.map((k) => compileKeyword(k)) }));
 
 const TOPIC_PATTERNS = compileCategories(TOPICS);
 const IMPROVEMENT_PATTERNS = compileCategories(IMPROVEMENT_AREAS);
