@@ -23,7 +23,9 @@ score = min(0.90, 0.35                    base — the primitive ran on real evi
               + 0.05 · diversity          sourceTypesPresent / sourceTypesConsulted
               + 0.05 · llm                enrichment seam succeeded)
         − 0.10 · localeMismatch           requested market absent from localesSeen
-rounded to 3 dp, floored at 0.05 when any evidence exists.
+rounded to 3 dp, floored at 0.05 when any evidence exists. (With the current
+weights the worst evidence-bearing case is 0.35 − 0.10 = 0.25, so the floor is a
+defensive bound, not a live path.)
 ```
 
 Labels keep the #180 thresholds: **high ≥ 0.75 · medium ≥ 0.6 · low > 0 ·
@@ -48,7 +50,8 @@ insufficient = 0**.
    never lowers it; a locale mismatch never raises it.
 3. **Ceiling 0.9** — a heuristic pipeline is never certain.
 4. **Auditability:** every non-zero factor lands in `reasons` with its inputs;
-   score is reproducible from `sourceCoverage`.
+   the score is reproducible from `sourceCoverage` alone — including
+   `recentFraction`, which is exposed on the block for exactly this reason.
 5. **`missing_source` caps still apply** — `buildIntelligenceResponse` caps the
    score (≤0.59 one missing source, ≤0.49 several) AFTER calibration. This
    model feeds that gate; it does not replace it.
@@ -79,7 +82,10 @@ insufficient = 0**.
   signals are on; sources consulted = reviews + listings, present counts each
   one that contributed. A reviews-off run stands on the listing corpus instead:
   units = apps with descriptions, target = apps resolved — and `reasons` says
-  so explicitly ("standing on listings only").
+  so explicitly ("standing on listings only"). Note: in that mode the review
+  note reads `missing` while the caveat is `partial_source` (reviews were
+  skipped, not blocked), so the missing-source cap deliberately does not fire —
+  listings ARE the declared primary evidence there.
 - **rank_whitespace_ideas** — response-level: the primary evidence is the
   deep-analysed competitor set (units = distinct competitors, target 8);
   review grounding enters as spread (`appsWithReviews / appsResolved`) and

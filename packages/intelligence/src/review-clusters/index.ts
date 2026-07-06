@@ -468,6 +468,7 @@ export function buildReviewClustersResponse(
       appsWithDescriptions: null, // listings are not an input to this primitive
       reviewsAnalyzed: input.totalReviewsAnalyzed,
       reviewDateRange: input.reviewDateRange ?? null,
+      recentFraction: input.recentFraction ?? null,
       localesSeen: input.localesSeen ?? [],
       notes: [
         {

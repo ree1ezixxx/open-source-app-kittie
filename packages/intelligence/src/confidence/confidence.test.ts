@@ -101,3 +101,57 @@ describe("isLocaleMismatch", () => {
     expect(isLocaleMismatch("GB", ["US"])).toBe(true);
   });
 });
+
+describe("auditability + envelope interaction (#273 rework)", () => {
+  it("cluster response exposes recentFraction — score reproducible from sourceCoverage alone", async () => {
+    const { clusterReviews } = await import("../review-clusters/index.js");
+    const NOW = Date.parse("2026-07-06T00:00:00.000Z");
+    const day = 86_400_000;
+    const mk = (appId: string, daysAgo: number) => ({
+      appId, country: "US", rating: 2, title: null, body: "too many ads in this thing",
+      sentiment: "negative" as const, topics: ["Ads & Interruptions"], improvementAreas: [],
+      reviewedAt: new Date(NOW - daysAgo * day).toISOString(),
+    });
+    const res = clusterReviews(
+      { apps: [{ id: "apple:1", name: "A" }, { id: "apple:2", name: "B" }],
+        reviews: [mk("apple:1", 10), mk("apple:1", 400), mk("apple:2", 20), mk("apple:2", 500)],
+        params: { country: "US" }, nowMs: NOW },
+      new Date(NOW).toISOString(),
+    );
+    const sc = res.data.sourceCoverage;
+    expect(sc.recentFraction).toBe(0.5); // 2 of 4 within 180d — exposed, not hidden in reasons
+    // Recompute from the response's OWN block: must equal the served score.
+    const recomputed = calibrateConfidence({
+      evidenceUnits: sc.reviewsAnalyzed,
+      evidenceTarget: 100,
+      appsContributing: sc.appsWithReviews,
+      appsResolved: sc.appsResolved,
+      recentFraction: sc.recentFraction,
+      sourceTypesPresent: sc.notes.filter((n) => n.status !== "missing").length,
+      sourceTypesConsulted: sc.notes.length,
+      llmEnriched: res.data.enrichment === "llm",
+      requestedLocale: res.data.country,
+      localesSeen: sc.localesSeen,
+    });
+    expect(recomputed.score).toBe(res.confidence.score);
+  });
+
+  it("adding missing sources never raises envelope confidence (property)", async () => {
+    const { buildIntelligenceResponse } = await import("../intelligence-response.js");
+    const mkEnvelope = (missing: number) =>
+      buildIntelligenceResponse({
+        responseType: "review_clusters",
+        data: {},
+        evidence: [{ id: "e1", claim: "c", source: { type: "review", id: "r" as string, url: null }, valueKind: "derived" as const, sourceStatus: "ok" as const, freshness: "fresh" as const, observedAt: null, metric: null }],
+        confidence: calibrateConfidence(base()),
+        missingSources: Array.from({ length: missing }, (_, i) => ({ sourceType: "review" as const, message: `missing ${i}` })),
+        metadata: { generatedAt: "2026-07-06T00:00:00.000Z", sourceQuery: {}, snapshotId: null, chartCountry: null, growthPeriod: null, modelVersion: null },
+      }).confidence.score;
+    let prev = Infinity;
+    for (const n of [0, 1, 2, 3]) {
+      const s = mkEnvelope(n);
+      expect(s).toBeLessThanOrEqual(prev);
+      prev = s;
+    }
+  });
+});

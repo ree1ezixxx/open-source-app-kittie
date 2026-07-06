@@ -269,6 +269,7 @@ export interface BuildFeatureGapsInput {
   reviewsAnalyzed: number;
   /** Propagated from the composed cluster_reviews response (#271); null/[] when reviews were skipped. */
   reviewDateRange?: { oldest: string; newest: string } | null;
+  recentFraction?: number | null;
   localesSeen?: string[];
   /** Apps that contributed >=1 analyzed review (from the cluster service); null when unknown. */
   appsWithReviews?: number | null;
@@ -313,7 +314,7 @@ function overallConfidence(input: BuildFeatureGapsInput): IntelligenceConfidence
     evidenceTarget,
     appsContributing,
     appsResolved: input.apps.length,
-    recentFraction: null, // gaps sees the composed date range, not per-review dates
+    recentFraction: input.recentFraction ?? null, // propagated from the composed cluster response
     sourceTypesPresent: (reviewsOn ? 1 : 0) + (withDesc > 0 ? 1 : 0),
     sourceTypesConsulted: 2, // reviews + listings
     llmEnriched: input.enrichment === "llm",
@@ -376,6 +377,7 @@ export function buildFeatureGapsResponse(input: BuildFeatureGapsInput): FeatureG
       appsWithDescriptions: withDescriptions,
       reviewsAnalyzed: input.reviewsAnalyzed,
       reviewDateRange: input.reviewDateRange ?? null,
+      recentFraction: input.recentFraction ?? null,
       localesSeen: input.localesSeen ?? [],
       notes: [
         {

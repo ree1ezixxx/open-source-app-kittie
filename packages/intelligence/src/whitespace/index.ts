@@ -338,6 +338,7 @@ export function buildWhitespaceIdeasResponse(input: BuildWhitespaceInput): White
       appsWithDescriptions: null, // listings enter via the composed feature-gaps pass, per idea
       reviewsAnalyzed: sc.reviewsAnalyzed,
       reviewDateRange: sc.reviewDateRange,
+      recentFraction: null, // not aggregable across niches without per-app dates — honest null
       localesSeen: sc.localesSeen,
       notes: [
         { sourceType: "review", status: sc.reviewsAnalyzed === 0 ? "missing" : sc.appsWithReviews < sc.appsResolved ? "partial" : "ok" },
