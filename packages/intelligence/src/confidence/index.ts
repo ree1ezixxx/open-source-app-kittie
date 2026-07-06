@@ -91,7 +91,10 @@ export function calibrateConfidence(input: CalibrationInput): IntelligenceConfid
   const M = CONFIDENCE_MODEL;
   const volume = clamp01(input.evidenceUnits / Math.max(input.evidenceTarget, 1));
   const spread = clamp01(input.appsContributing / Math.max(input.appsResolved, 1));
-  const recency = input.recentFraction == null ? 0 : clamp01(input.recentFraction);
+  // Recency scales with volume (recentUnits/target, not a bare fraction) — the
+  // golden honesty suite proved the bare fraction rewards DISCARDING old
+  // evidence (cap the corpus to its newest rows → fraction 1.0 → score up).
+  const recency = input.recentFraction == null ? 0 : clamp01(input.recentFraction) * volume;
   const diversity = clamp01(input.sourceTypesPresent / Math.max(input.sourceTypesConsulted, 1));
   const llm = input.llmEnriched ? 1 : 0;
   const mismatch = isLocaleMismatch(input.requestedLocale, input.localesSeen);
