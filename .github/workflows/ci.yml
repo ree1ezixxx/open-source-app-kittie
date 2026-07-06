@@ -37,3 +37,9 @@ jobs:
         # Full recursive suite. Do NOT narrow this filter — #214 silently scoped it
         # to @kittie/cli and every PR after went green on 41/403 tests (audit finding).
         run: pnpm -r test
+
+      - name: Packaged MCP startup (#267)
+        # Proves the DOCUMENTED invocation — plain `node apps/mcp/dist/index.js`,
+        # no tsx — answers tools/list. Exports-to-src regressions are invisible
+        # to vitest; only this catches them.
+        run: node scripts/check-mcp-packaged.mjs
