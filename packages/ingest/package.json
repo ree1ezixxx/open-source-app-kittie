@@ -25,7 +25,8 @@
     "discover:apple": "tsx src/jobs/apple-discover.ts",
     "score": "tsx src/jobs/score.ts",
     "keywords": "tsx src/jobs/keyword-sync.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "retag": "tsx src/jobs/retag-reviews.ts"
   },
   "dependencies": {
     "@kittie/core": "workspace:*",

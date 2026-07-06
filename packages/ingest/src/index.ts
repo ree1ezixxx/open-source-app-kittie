@@ -16,7 +16,7 @@ export { enrichAndPersistAppleApps, type EnrichResult } from "./apple/ingest-app
 export { runGoogleExpand, GOOGLE_TARGET_TOTAL } from "./jobs/google-expand.js";
 export { runScore } from "./jobs/score.js";
 export { upsertApp, upsertSnapshot, listTrackedApps } from "./db/apps.js";
-export { upsertReviews, backfillReviewTags, type ReviewUpsertInput } from "./db/reviews.js";
+export { upsertReviews, backfillReviewTags, retagAllReviews, tagDistribution, type ReviewUpsertInput, type TagDistribution } from "./db/reviews.js";
 export { searchAppleKeyword, type StoreSearchResult } from "./apple/search.js";
 export { searchGoogleKeyword } from "./google/search.js";
 export { suggestRelatedKeywords } from "./keyword-suggest.js";
