@@ -58,6 +58,9 @@ export function stem(t: string): string {
 
 const stems = (text: string): Set<string> => new Set(tokenize(text).map(stem));
 
+/** A stem is DISCRIMINATIVE when it appears in ≤ this share of the reviewed set. */
+const DISCRIMINATIVE_DF = 0.25;
+
 /** Pure scorer — exported for tests. */
 export function scoreReviewedApps(
   query: string,
@@ -68,19 +71,43 @@ export function scoreReviewedApps(
   if (qTokens.length === 0) return [];
   const qStems = qTokens.map((t) => ({ token: t, stem: stem(t) }));
 
+  // Per-row stem sets + document frequency over the reviewed set (#268 round 4:
+  // "tracker"/"planning" are corpus-common; "sleep"/"meditation" are rare —
+  // rarity is the only deterministic relevance signal keyword recall has).
+  const rowStems = rows.map((r) => ({
+    r,
+    titleCat: stems(`${r.title} ${r.category ?? ""}`),
+    desc: stems(r.description ?? ""),
+  }));
+  const df = new Map<string, number>();
+  for (const q of qStems) {
+    let n = 0;
+    for (const rs of rowStems) if (rs.titleCat.has(q.stem) || rs.desc.has(q.stem)) n += 1;
+    df.set(q.stem, n);
+  }
+  const total = Math.max(rows.length, 1);
+  const isDiscriminative = (st: string): boolean => (df.get(st) ?? 0) / total <= DISCRIMINATIVE_DF;
+  const queryHasDiscriminative = qStems.some((q) => isDiscriminative(q.stem));
+  // idf-ish weight: rare tokens dominate ordering; common ones barely count.
+  const weight = (st: string): number => Math.log(1 + total / (1 + (df.get(st) ?? 0)));
+
   const scored: Array<RecalledApp & { score: number }> = [];
-  for (const r of rows) {
-    const titleCat = stems(`${r.title} ${r.category ?? ""}`);
-    const desc = stems(r.description ?? "");
-    const titleHits = qStems.filter((q) => titleCat.has(q.stem));
-    const descHits = qStems.filter((q) => desc.has(q.stem));
-    // Description-only recall needs corroboration: 2 distinct query tokens for
-    // multi-token queries, 1 for single-token (where 2 is impossible — the
-    // YNAB/"budgeting" case). The Bose/"media" class is dead regardless via
-    // stem EQUALITY (stem("media") ≠ stem("meditation")).
-    if (titleHits.length === 0 && descHits.length < Math.min(2, qStems.length)) continue;
+  for (const rs of rowStems) {
+    const titleHits = qStems.filter((q) => rs.titleCat.has(q.stem));
+    const descHits = qStems.filter((q) => rs.desc.has(q.stem));
+    const hitStems = new Set([...titleHits, ...descHits].map((q) => q.stem));
+    // Gate 1: multi-token queries need ≥2 distinct token hits (lone generic
+    // title hit dies — golf "Tracker" for "sleep tracking"); single-token
+    // queries need 1 (YNAB/"budgeting").
+    if (hitStems.size < Math.min(2, qStems.length)) continue;
+    // Gate 2: when the query HAS a discriminative token, a hit on one is
+    // mandatory — matching only corpus-common words ("habit"+"tracker" both
+    // ubiquitous in wellness/finance blurbs) is not evidence of the niche.
+    if (queryHasDiscriminative && ![...hitStems].some(isDiscriminative)) continue;
     const matched = [...new Set([...titleHits, ...descHits].map((q) => q.token))];
-    scored.push({ id: r.id, name: r.title, matched, score: titleHits.length * 3 + descHits.length });
+    const score =
+      titleHits.reduce((a, q) => a + 3 * weight(q.stem), 0) + descHits.reduce((a, q) => a + weight(q.stem), 0);
+    scored.push({ id: rs.r.id, name: rs.r.title, matched, score });
   }
   return scored
     .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name))

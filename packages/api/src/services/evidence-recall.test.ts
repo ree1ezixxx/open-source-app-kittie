@@ -46,6 +46,16 @@ describe("scoreReviewedApps (#268 round 3)", () => {
     expect(scoreReviewedApps("budgeting", rows, 5).map((h) => h.id)).toEqual(["a", "b"]);
   });
 
+  it("generic-token title hit alone never recalls for multi-token queries (golf-Tracker class, round 4)", () => {
+    const rows = [
+      { id: "apple:golf", title: "18Birdies Golf GPS Tracker", category: "Sports", description: "Golf scorecard and GPS rangefinder." },
+      { id: "apple:wine", title: "CellarTracker", category: "Food & Drink", description: "Wine cellar management and reviews." },
+      { id: "apple:head", title: "Headspace: Sleep & Meditation", category: "Health & Fitness", description: "Sleep sounds and sleep tracking meditations." },
+    ];
+    const hits = scoreReviewedApps("sleep tracking", rows, 5);
+    expect(hits.map((h) => h.id)).toEqual(["apple:head"]); // [sleep, tracking] survives; lone [tracking] dies
+  });
+
   it("garbage query recalls nothing", () => {
     expect(scoreReviewedApps("zzqx flurbin", ROWS, 5)).toEqual([]);
   });
