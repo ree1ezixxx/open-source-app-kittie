@@ -289,6 +289,8 @@ export interface BuildWhitespaceInput {
   enrichment: WhitespaceEnrichment;
   generatedAt: string;
   modelVersion?: string | null;
+  /** Category content-tokens with NO echo in market evidence (#274 grounding gate). */
+  ungroundedCategoryTokens?: string[];
 }
 
 function ideaEvidence(ideas: WhitespaceIdea[]): IntelligenceEvidence[] {
@@ -346,7 +348,12 @@ export function buildWhitespaceIdeasResponse(input: BuildWhitespaceInput): White
   const missingSources: MissingIntelligenceSource[] = [];
 
   const scoredIdeas = input.ideas.filter((i) => i.gateRung !== "needs_more_sources");
-  if (input.ideas.length === 0) {
+  if (input.ungroundedCategoryTokens && input.ungroundedCategoryTokens.length > 0) {
+    missingSources.push({
+      sourceType: "model",
+      message: `DO NOT build from this response: the category itself is not grounded in market evidence — no signal for "${input.ungroundedCategoryTokens.join('", "')}". Rephrase the category or supply seedIdeas.`,
+    });
+  } else if (input.ideas.length === 0) {
     missingSources.push({
       sourceType: "model",
       message: "No candidate sub-niche resolved competitors with usable evidence — broaden the category or supply seedIdeas.",

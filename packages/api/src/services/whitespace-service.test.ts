@@ -176,9 +176,9 @@ describe("sourceCoverage aggregation (#271 cold-verify)", () => {
   it("dedups overlapping niche competitor sets — appsWithReviews never exceeds appsResolved, partial not masked", async () => {
     // Two candidates whose sets overlap on apple:A. A has reviews everywhere; B never does.
     const d = deps({
-      relatedKeywords: vi.fn(async () => ["niche one", "niche two"]),
+      relatedKeywords: vi.fn(async () => ["sleep niche one", "sleep niche two"]),
       findSimilarApps: vi.fn(async (input) =>
-        input.query === "niche one"
+        input.query === "sleep niche one"
           ? similarResult([app({ id: "apple:A" })])
           : similarResult([app({ id: "apple:A" }), app({ id: "apple:B", title: "NoReviews" })]),
       ),
@@ -202,11 +202,11 @@ describe("sourceCoverage aggregation (#271 cold-verify)", () => {
 
 describe("candidate coherence gate (#274)", () => {
   it("refuses incoherent autocomplete noise and counts it in the funnel", async () => {
-    const d = deps({ relatedKeywords: vi.fn(async () => ["zzqx flurbin widgets", "sleep for kids", "grumbulon vortex"]) });
+    const d = deps({ relatedKeywords: vi.fn(async () => ["zzqx flurbin widgets", "sleep tracking for kids", "grumbulon vortex"]) });
     const res = await getWhitespaceIdeas({ category: "sleep tracking" }, d);
     expect(res.data.funnel.refused).toBe(2);
     const queried = (d.findSimilarApps as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0].query);
-    expect(queried).toContain("sleep for kids");
+    expect(queried).toContain("sleep tracking for kids");
     expect(queried).not.toContain("zzqx flurbin widgets");
   });
 
@@ -216,5 +216,48 @@ describe("candidate coherence gate (#274)", () => {
     expect(res.data.funnel.refused).toBe(0);
     const queried = (d.findSimilarApps as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0].query);
     expect(queried).toContain("grumbulon vortex");
+  });
+});
+
+describe("category grounding gate (#274 cold-verify BLOCKER)", () => {
+  it("nonsense category with ONE real token → insufficient, everything refused, dead tokens named", async () => {
+    // Faithful to the live failure: autocomplete echoes only the real token,
+    // never the junk — so per-candidate coherence alone would pass everything.
+    const d = deps({
+      relatedKeywords: vi.fn(async () => ["screen widgets photo", "home screen widgets", "widgets icon"]),
+    });
+    const res = await getWhitespaceIdeas({ category: "zzqx flurbin widgets" }, d);
+    expect(res.status).toBe("insufficient");
+    expect(res.data.ideas).toHaveLength(0);
+    expect(res.data.funnel.deepAnalyzed).toBe(0);
+    expect(res.data.funnel.refused).toBeGreaterThan(0);
+    expect(res.caveats.some((c) => c.message.includes('"zzqx"') && c.message.includes('"flurbin"'))).toBe(true);
+    // no deep spend on garbage
+    expect(d.fetchThemes).not.toHaveBeenCalled();
+  });
+
+  it("real multi-token category passes grounding (majority echoed)", async () => {
+    const d = deps({
+      relatedKeywords: vi.fn(async () => ["language learning for kids", "learning games", "language tutor"]),
+    });
+    const res = await getWhitespaceIdeas({ category: "language learning" }, d);
+    expect(res.status).not.toBe("insufficient");
+    expect(res.data.ideas.length).toBeGreaterThan(0);
+  });
+
+  it("seeds bypass the grounding gate (caller intent)", async () => {
+    const d = deps({
+      relatedKeywords: vi.fn(async () => ["screen widgets photo"]),
+    });
+    const res = await getWhitespaceIdeas({ category: "zzqx flurbin widgets", seedIdeas: ["habit tracker"] }, d);
+    // seeded intent proceeds to evidence rungs instead of a blanket refusal
+    expect(res.data.funnel.deepAnalyzed).toBeGreaterThan(0);
+  });
+
+  it("minConfidence drops are counted in funnel.refused, never silent", async () => {
+    const d = deps();
+    const res = await getWhitespaceIdeas({ category: "sleep", minConfidence: 0.99 }, d);
+    expect(res.data.ideas).toHaveLength(0);
+    expect(res.data.funnel.refused).toBe(res.data.funnel.deepAnalyzed);
   });
 });

@@ -171,6 +171,35 @@ export async function getWhitespaceIdeas(
   // The category itself is always a candidate of last resort.
   if (candidates.length === 0) candidates.push(normaliseCandidate(category));
 
+  // ── category grounding (#274 cold-verify BLOCKER) ────────────────────────
+  // The per-candidate coherence check is CIRCULAR against a nonsense category:
+  // autocomplete mines the corpus BY the category's real tokens, so a single
+  // real word ("widgets") in "zzqx flurbin widgets" made every candidate
+  // self-coherent and the response ranked garbage. Ground the CATEGORY itself:
+  // the majority of its content tokens must be echoed by market evidence
+  // (autocomplete keywords). Ungrounded → refuse the whole funnel before any
+  // deep spend; the response is insufficient with the dead tokens named.
+  const keywordHay = keywords.map((k) => normaliseCandidate(k)).join(" ");
+  const keywordTokens = new Set(keywordHay.split(" ").filter((t) => t.length > 2));
+  const catTokens = [...categoryTokens];
+  const ungroundedTokens = catTokens.filter((t) => !keywordTokens.has(t));
+  const categoryGrounded =
+    seeds.length > 0 || // caller-supplied seeds encode intent — never funnel-refused
+    keywords.length === 0 || // no autocomplete signal → the zero-competitor path judges it
+    catTokens.length === 0 ||
+    ungroundedTokens.length / catTokens.length < 0.5;
+  if (!categoryGrounded) {
+    return buildWhitespaceIdeasResponse({
+      ideas: [],
+      funnel: { candidates: candidates.length, prefiltered: 0, deepAnalyzed: 0, refused: refused + candidates.length },
+      params: { category, country, limit },
+      enrichment: "deterministic",
+      generatedAt: deps.now().toISOString(),
+      modelVersion: null,
+      ungroundedCategoryTokens: ungroundedTokens,
+    });
+  }
+
   // ── 2. pre-filter (DB-only retrieval + cheap prior) ─────────────────────
   const prefiltered: Array<{ niche: string; competitors: SimilarApp[]; prior: number }> = [];
   for (const niche of candidates) {
@@ -219,6 +248,7 @@ export async function getWhitespaceIdeas(
     ideas.push(scoreWhitespaceIdea({ niche: s.niche, competitors: s.competitors, themes, features, reviewsAnalyzed }));
   }
   const minConfidence = typeof input.minConfidence === "number" ? Math.min(Math.max(input.minConfidence, 0), 1) : 0;
+  const beforeConfidenceFilter = ideas.length;
   ideas = ideas
     .filter((i) => i.confidence >= minConfidence)
     // Scored rungs first (by score), then needs_more_sources (unranked) at the end.
@@ -230,12 +260,18 @@ export async function getWhitespaceIdeas(
   // ── 4. optional LLM phrasing (labels/angles only; numbers untouched) ─────
   let enrichment: "llm" | "deterministic" = "deterministic";
   let modelVersion: string | null = null;
-  if (ideas.length > 0) {
-    const phrased = await deps.phrase(category, ideas);
+  const phrasable = ideas.filter((i) => i.gateRung !== "needs_more_sources");
+  if (phrasable.length > 0) {
+    const phrased = await deps.phrase(category, phrasable);
     if (phrased && phrased.map.size > 0) {
-      ideas = ideas.map((idea, i) => {
+      const phrasedByNiche = new Map<string, { niche?: string; angle?: string }>();
+      phrasable.forEach((idea, i) => {
         const p = phrased.map.get(i);
-        if (!p) return idea;
+        if (p) phrasedByNiche.set(idea.niche, p);
+      });
+      ideas = ideas.map((idea) => {
+        const p = phrasedByNiche.get(idea.niche);
+        if (!p || idea.gateRung === "needs_more_sources") return idea;
         return { ...idea, niche: p.niche?.trim() || idea.niche, suggestedBuildAngle: p.angle?.trim() || idea.suggestedBuildAngle };
       });
       enrichment = "llm";
@@ -245,7 +281,13 @@ export async function getWhitespaceIdeas(
 
   return buildWhitespaceIdeasResponse({
     ideas,
-    funnel: { candidates: candidates.length, prefiltered: prefiltered.length, deepAnalyzed: survivors.length, refused },
+    funnel: {
+      candidates: candidates.length,
+      prefiltered: prefiltered.length,
+      deepAnalyzed: survivors.length,
+      // minConfidence drops are refusals too — nothing vanishes silently.
+      refused: refused + (beforeConfidenceFilter - ideas.length),
+    },
     sourceCoverage: {
       appsResolved: deepAppIds.size,
       appsWithReviews: [...reviewsByApp.values()].filter((n) => n > 0).length,
