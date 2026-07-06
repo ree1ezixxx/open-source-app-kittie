@@ -102,7 +102,7 @@ describe("scoreWhitespaceIdea", () => {
   it("produces a 0–100 score matching the weighted breakdown (difficulty excluded)", () => {
     const idea = scoreWhitespaceIdea(deep());
     const W = WHITESPACE_DEFAULTS.weights;
-    const b = idea.scoreBreakdown;
+    const b = idea.scoreBreakdown!;
     const expected = Math.round(
       b.demandVelocity * W.demandVelocity +
         b.incumbentWeakness * W.incumbentWeakness +
@@ -164,12 +164,12 @@ describe("scoreWhitespaceIdea", () => {
     expect(heavy.buildDifficulty).toBe("high");
     expect(light.buildDifficulty).toBe("low");
     // identical non-feature inputs → difficulty never moves the composite via weights
-    expect(Object.keys(heavy.scoreBreakdown)).not.toContain("buildDifficulty");
+    expect(Object.keys(heavy.scoreBreakdown!)).not.toContain("buildDifficulty");
   });
 });
 
 describe("buildWhitespaceIdeasResponse", () => {
-  const funnel = { candidates: 12, prefiltered: 8, deepAnalyzed: 3 };
+  const funnel = { candidates: 12, prefiltered: 8, deepAnalyzed: 3, refused: 0 };
 
   it("wraps ranked ideas with funnel counts in an ok envelope", () => {
     const ideas = [scoreWhitespaceIdea(deep()), scoreWhitespaceIdea(deep({ niche: "sleep for shift workers" }))];
@@ -191,7 +191,7 @@ describe("buildWhitespaceIdeasResponse", () => {
   it("degrades to insufficient when the funnel produced nothing", () => {
     const res = buildWhitespaceIdeasResponse({
       ideas: [],
-      funnel: { candidates: 4, prefiltered: 0, deepAnalyzed: 0 },
+      funnel: { candidates: 4, prefiltered: 0, deepAnalyzed: 0, refused: 0 },
       params: { category: "underwater basket weaving" },
       enrichment: "deterministic",
       generatedAt: "2026-07-06T00:00:00.000Z",
@@ -216,7 +216,7 @@ describe("buildWhitespaceIdeasResponse", () => {
 });
 
 describe("sourceCoverage (#271)", () => {
-  const funnel2 = { candidates: 5, prefiltered: 4, deepAnalyzed: 2 };
+  const funnel2 = { candidates: 5, prefiltered: 4, deepAnalyzed: 2, refused: 0 };
   it("carries the aggregated deep-set coverage", () => {
     const res = buildWhitespaceIdeasResponse({
       ideas: [scoreWhitespaceIdea(deep())],
@@ -239,7 +239,7 @@ describe("sourceCoverage (#271)", () => {
 
   it("defaults to honest zeros/nulls when nothing was deep-analysed", () => {
     const res = buildWhitespaceIdeasResponse({
-      ideas: [], funnel: { candidates: 2, prefiltered: 0, deepAnalyzed: 0 },
+      ideas: [], funnel: { candidates: 2, prefiltered: 0, deepAnalyzed: 0, refused: 0 },
       params: { category: "x" }, enrichment: "deterministic", generatedAt: "2026-07-06T00:00:00.000Z",
     });
     const sc = res.data.sourceCoverage;
@@ -248,5 +248,66 @@ describe("sourceCoverage (#271)", () => {
       { sourceType: "review", status: "missing" },
       { sourceType: "model", status: "missing" },
     ]);
+  });
+});
+
+describe("evidence gates (#274)", () => {
+  it("full evidence clears ranked with score + cited reason", () => {
+    const idea = scoreWhitespaceIdea(
+      deep({
+        competitors: [
+          similar(app()),
+          similar(app({ id: "apple:2", title: "Pillow" })),
+          similar(app({ id: "apple:3", title: "ShutEye" })),
+        ],
+      }),
+    );
+    expect(idea.gateRung).toBe("ranked");
+    expect(idea.score).not.toBeNull();
+    expect(idea.gateReason).toMatch(/^ranked: 3 competitors/);
+  });
+
+  it("zero grounded signals → needs_more_sources with NO score", () => {
+    const bare = deep({
+      themes: [],
+      features: [],
+      reviewsAnalyzed: 0,
+      competitors: [similar(app({ revenueEstimate30d: null, growthScore: null }))],
+    });
+    const idea = scoreWhitespaceIdea(bare);
+    expect(idea.gateRung).toBe("needs_more_sources");
+    expect(idea.score).toBeNull();
+    expect(idea.scoreBreakdown).toBeNull();
+    expect(idea.gateReason).toMatch(/needs_more_sources/);
+  });
+
+  it("thin-but-real evidence lands low_confidence, scored and flagged", () => {
+    const thin = deep({
+      themes: [],
+      reviewsAnalyzed: 0,
+      competitors: [
+        similar(app({ growthScore: 50 })),
+        similar(app({ id: "apple:2", title: "B", growthScore: 40 })),
+      ],
+    });
+    const idea = scoreWhitespaceIdea(thin);
+    expect(idea.gateRung).toBe("low_confidence");
+    expect(idea.score).not.toBeNull();
+  });
+
+  it("response-level gate: only unscored ideas → insufficient + do-not-build caveat", () => {
+    const bare = scoreWhitespaceIdea(
+      deep({ themes: [], features: [], reviewsAnalyzed: 0, competitors: [similar(app({ revenueEstimate30d: null, growthScore: null }))] }),
+    );
+    const res = buildWhitespaceIdeasResponse({
+      ideas: [bare],
+      funnel: { candidates: 3, prefiltered: 1, deepAnalyzed: 1, refused: 2 },
+      params: { category: "x" },
+      enrichment: "deterministic",
+      generatedAt: "2026-07-06T00:00:00.000Z",
+    });
+    expect(res.status).toBe("insufficient");
+    expect(res.confidence.score).toBe(0);
+    expect(res.caveats.some((c) => c.message.includes("DO NOT build"))).toBe(true);
   });
 });

@@ -45,6 +45,19 @@ export const WHITESPACE_DEFAULTS = {
   competitorsPerNiche: 8,
   maxEvidencePerIdea: 5,
   weights: { demandVelocity: 0.3, incumbentWeakness: 0.2, sentimentGap: 0.2, featureGap: 0.2, monetization: 0.1 },
+  /** Evidence gates (#274) — expressed in the calibration vocabulary. */
+  gates: {
+    /** Minimum competitors for any scored rung. */
+    scoredMinCompetitors: 2,
+    /** ranked additionally needs this many competitors… */
+    rankedMinCompetitors: 3,
+    /** …and this many grounded signal families (reviews/features/monetization/growth). */
+    rankedMinSignals: 2,
+    rankedMinConfidence: 0.45,
+    lowConfidenceMinSignals: 1,
+    /** Minimum content-token overlap for a non-seed candidate to enter the funnel. */
+    coherenceMinOverlap: 1,
+  },
 } as const;
 
 const clamp01 = (n: number): number => (Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0);
@@ -143,6 +156,16 @@ function buildDifficultyTier(features: FeatureGap[]): WhitespaceTier {
   return stakes >= 6 ? "high" : stakes >= 3 ? "medium" : "low";
 }
 
+/** Grounded signal families present for a niche — the gate's evidence unit (#274). */
+export function groundedSignals(input: WhitespaceDeepInput): { count: number; present: string[] } {
+  const present: string[] = [];
+  if (input.reviewsAnalyzed > 0 && input.themes.length > 0) present.push("reviews");
+  if (input.features.length > 0) present.push("features");
+  if (input.competitors.some((c) => c.app.revenueEstimate30d != null && c.app.revenueEstimate30d > 0)) present.push("monetization");
+  if (input.competitors.some((c) => c.app.growthScore != null)) present.push("growth");
+  return { count: present.length, present };
+}
+
 /** Score one deep-analysed niche. Pure and total; numbers never LLM-touched. */
 export function scoreWhitespaceIdea(input: WhitespaceDeepInput): WhitespaceIdea {
   const { niche, competitors, themes, features } = input;
@@ -208,10 +231,33 @@ export function scoreWhitespaceIdea(input: WhitespaceDeepInput): WhitespaceIdea 
   if (demand.tier === "falling") avoidBecause.push("Demand momentum is falling across the competitor set.");
   if (input.reviewsAnalyzed === 0) avoidBecause.push("No local reviews for this niche — pain/gap signals are ungrounded.");
 
+  // ── evidence gate (#274): weakness gates STRUCTURE, not just the float ──
+  const G = WHITESPACE_DEFAULTS.gates;
+  const signals = groundedSignals(input);
+  let gateRung: WhitespaceIdea["gateRung"];
+  let gateReason: string;
+  if (
+    competitors.length >= G.rankedMinCompetitors &&
+    signals.count >= G.rankedMinSignals &&
+    confidence >= G.rankedMinConfidence
+  ) {
+    gateRung = "ranked";
+    gateReason = `ranked: ${competitors.length} competitors, ${signals.count} signal families (${signals.present.join(", ")}), confidence ${confidence}.`;
+  } else if (competitors.length >= G.scoredMinCompetitors && signals.count >= G.lowConfidenceMinSignals) {
+    gateRung = "low_confidence";
+    gateReason = `low_confidence: ${competitors.length} competitors, ${signals.count} signal families (${signals.present.join(", ") || "none"}), confidence ${confidence} — scored but flagged.`;
+  } else {
+    gateRung = "needs_more_sources";
+    gateReason = `needs_more_sources: ${competitors.length} competitor(s), ${signals.count} grounded signal families — a score would imply rankability the evidence cannot carry.`;
+  }
+  const scored = gateRung !== "needs_more_sources";
+
   return {
     niche,
-    score,
-    scoreBreakdown,
+    gateRung,
+    gateReason,
+    score: scored ? score : null,
+    scoreBreakdown: scored ? scoreBreakdown : null,
     demand: demand.tier,
     incumbentStrength: incumbents.tier,
     sentimentGap: TIER(sentiment.frac, sentiment.hasSignal),
@@ -248,7 +294,7 @@ export interface BuildWhitespaceInput {
 function ideaEvidence(ideas: WhitespaceIdea[]): IntelligenceEvidence[] {
   return ideas.map<IntelligenceEvidence>((idea, i) => ({
     id: `idea:${idea.niche.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "idea"}:${i}`,
-    claim: `#${i + 1} "${idea.niche}" — score ${idea.score}/100 (demand ${idea.demand}, incumbents ${idea.incumbentStrength}, feature gap ${idea.featureGap}), confidence ${idea.confidence}`,
+    claim: `#${i + 1} "${idea.niche}" — ${idea.score != null ? `score ${idea.score}/100` : `unscored (${idea.gateRung})`} (demand ${idea.demand}, incumbents ${idea.incumbentStrength}, feature gap ${idea.featureGap}), confidence ${idea.confidence}`,
     source: { type: "model", id: `idea:${i}`, url: null },
     valueKind: "derived",
     sourceStatus: "ok",
@@ -266,6 +312,9 @@ function overallConfidence(
 ): IntelligenceConfidence {
   if (ideas.length === 0) {
     return { score: 0, label: "insufficient", reasons: ["No candidate niche survived the evidence funnel."] };
+  }
+  if (ideas.every((i) => i.gateRung === "needs_more_sources")) {
+    return { score: 0, label: "insufficient", reasons: ["No idea cleared a scored evidence rung (#274 gate)."] };
   }
   const avgIdea = ideas.reduce((s, i) => s + i.confidence, 0) / ideas.length;
   // Diversity is auditable from the ideas' own evidence sources (reviews/features/charts/metadata).
@@ -296,10 +345,19 @@ export function buildWhitespaceIdeasResponse(input: BuildWhitespaceInput): White
   const caveats: IntelligenceCaveat[] = [];
   const missingSources: MissingIntelligenceSource[] = [];
 
+  const scoredIdeas = input.ideas.filter((i) => i.gateRung !== "needs_more_sources");
   if (input.ideas.length === 0) {
     missingSources.push({
       sourceType: "model",
       message: "No candidate sub-niche resolved competitors with usable evidence — broaden the category or supply seedIdeas.",
+    });
+  } else if (scoredIdeas.length === 0) {
+    // Response-level gate (#274): nothing cleared a scored rung → the answer is
+    // structurally insufficient, never an ok-list of ungrounded ideas.
+    missingSources.push({
+      sourceType: "model",
+      message:
+        "DO NOT build from this response: no idea cleared a scored evidence rung — every candidate needs more sources.",
     });
   } else {
     const ungrounded = input.ideas.filter((i) => i.evidence.every((e) => e.source !== "reviews"));

@@ -400,7 +400,10 @@ export const BASE_TOOLS = [
       "Each idea carries a 0–100 score with full component breakdown (demand velocity, incumbent weakness, " +
       "sentiment gap, feature gap, monetization — buildDifficulty reported but never scored), tiers, evidence, " +
       "a suggested build angle, avoidBecause warnings, confidence, and the competitor ids analysed. Funnel " +
-      "counts are reported — nothing truncates silently. Final rung after cluster_reviews and find_feature_gaps.",
+      "counts are reported — nothing truncates silently. EVIDENCE GATES (#274): each idea carries a gateRung " +
+      "(ranked | low_confidence | needs_more_sources); ideas below the scored rungs return score:null, and when " +
+      "NOTHING clears a scored rung the response is status:insufficient with an explicit do-not-build caveat — " +
+      "branch on gateRung/status, never on score magnitude alone. Final rung after cluster_reviews and find_feature_gaps.",
     inputSchema: {
       type: "object",
       properties: {

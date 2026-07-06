@@ -100,11 +100,11 @@ describe("getWhitespaceIdeas", () => {
     expect(res.responseType).toBe("whitespace_ideas");
     expect(res.status).toBe("ok");
     // 3 keyword candidates → all prefiltered → capped at limit for deep analysis
-    expect(res.data.funnel).toEqual({ candidates: 3, prefiltered: 3, deepAnalyzed: 2 });
+    expect(res.data.funnel).toEqual({ candidates: 3, prefiltered: 3, deepAnalyzed: 2, refused: 0 });
     expect(res.data.ideas).toHaveLength(2);
     // ranked best-first with full breakdowns
-    expect(res.data.ideas[0]!.score).toBeGreaterThanOrEqual(res.data.ideas[1]!.score);
-    expect(Object.keys(res.data.ideas[0]!.scoreBreakdown).sort()).toEqual([
+    expect(res.data.ideas[0]!.score!).toBeGreaterThanOrEqual(res.data.ideas[1]!.score!);
+    expect(Object.keys(res.data.ideas[0]!.scoreBreakdown!).sort()).toEqual([
       "demandVelocity",
       "featureGap",
       "incumbentWeakness",
@@ -165,7 +165,7 @@ describe("getWhitespaceIdeas", () => {
   });
 
   it("clamps limit to the max deep-analysis budget", async () => {
-    const many = Array.from({ length: 24 }, (_, i) => `niche ${i}`);
+    const many = Array.from({ length: 24 }, (_, i) => `sleep niche ${i}`);
     const d = deps({ relatedKeywords: vi.fn(async () => many) });
     const res = await getWhitespaceIdeas({ category: "sleep", limit: 999 }, d);
     expect(res.data.funnel.deepAnalyzed).toBe(10); // maxLimit
@@ -197,5 +197,24 @@ describe("sourceCoverage aggregation (#271 cold-verify)", () => {
     expect(sc.appsWithReviews).toBeLessThanOrEqual(sc.appsResolved);
     expect(sc.reviewsAnalyzed).toBe(100); // A's capped rows counted once, not twice
     expect(sc.notes[0]).toEqual({ sourceType: "review", status: "partial" }); // B's silence not masked
+  });
+});
+
+describe("candidate coherence gate (#274)", () => {
+  it("refuses incoherent autocomplete noise and counts it in the funnel", async () => {
+    const d = deps({ relatedKeywords: vi.fn(async () => ["zzqx flurbin widgets", "sleep for kids", "grumbulon vortex"]) });
+    const res = await getWhitespaceIdeas({ category: "sleep tracking" }, d);
+    expect(res.data.funnel.refused).toBe(2);
+    const queried = (d.findSimilarApps as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0].query);
+    expect(queried).toContain("sleep for kids");
+    expect(queried).not.toContain("zzqx flurbin widgets");
+  });
+
+  it("seeds are never coherence-refused (caller intent)", async () => {
+    const d = deps({ relatedKeywords: vi.fn(async () => []) });
+    const res = await getWhitespaceIdeas({ category: "sleep", seedIdeas: ["grumbulon vortex"] }, d);
+    expect(res.data.funnel.refused).toBe(0);
+    const queried = (d.findSimilarApps as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0].query);
+    expect(queried).toContain("grumbulon vortex");
   });
 });

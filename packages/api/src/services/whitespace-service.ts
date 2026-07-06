@@ -145,10 +145,26 @@ export async function getWhitespaceIdeas(
   const keywords = await deps.relatedKeywords(category, country, store, WHITESPACE_DEFAULTS.maxCandidates);
   const seen = new Set<string>();
   const candidates: string[] = [];
+  const seedSet = new Set(seeds.map((x) => normaliseCandidate(x)));
+  let refused = 0;
+  // Coherence gate (#274): a NON-SEED candidate must share content tokens with
+  // the requested category, else autocomplete noise walks straight into the
+  // funnel (the "zzqx flurbin widgets → ok ideas" smoke failure). Seeds encode
+  // caller intent and are never coherence-refused (evidence rungs still apply).
+  const categoryTokens = new Set(normaliseCandidate(category).split(" ").filter((t) => t.length > 2));
+  const isCoherent = (c: string): boolean => {
+    if (seedSet.has(c)) return true;
+    const overlap = c.split(" ").filter((t) => t.length > 2 && categoryTokens.has(t)).length;
+    return overlap >= WHITESPACE_DEFAULTS.gates.coherenceMinOverlap;
+  };
   for (const raw of [...seeds, ...keywords]) {
     const c = normaliseCandidate(raw);
     if (!c || c === normaliseCandidate(category) || seen.has(c)) continue;
     seen.add(c);
+    if (!isCoherent(c)) {
+      refused += 1;
+      continue;
+    }
     candidates.push(c);
     if (candidates.length >= WHITESPACE_DEFAULTS.maxCandidates) break;
   }
@@ -205,7 +221,11 @@ export async function getWhitespaceIdeas(
   const minConfidence = typeof input.minConfidence === "number" ? Math.min(Math.max(input.minConfidence, 0), 1) : 0;
   ideas = ideas
     .filter((i) => i.confidence >= minConfidence)
-    .sort((a, b) => b.score - a.score || b.confidence - a.confidence || a.niche.localeCompare(b.niche));
+    // Scored rungs first (by score), then needs_more_sources (unranked) at the end.
+    .sort(
+      (a, b) =>
+        (b.score ?? -1) - (a.score ?? -1) || b.confidence - a.confidence || a.niche.localeCompare(b.niche),
+    );
 
   // ── 4. optional LLM phrasing (labels/angles only; numbers untouched) ─────
   let enrichment: "llm" | "deterministic" = "deterministic";
@@ -225,7 +245,7 @@ export async function getWhitespaceIdeas(
 
   return buildWhitespaceIdeasResponse({
     ideas,
-    funnel: { candidates: candidates.length, prefiltered: prefiltered.length, deepAnalyzed: survivors.length },
+    funnel: { candidates: candidates.length, prefiltered: prefiltered.length, deepAnalyzed: survivors.length, refused },
     sourceCoverage: {
       appsResolved: deepAppIds.size,
       appsWithReviews: [...reviewsByApp.values()].filter((n) => n > 0).length,
@@ -257,7 +277,7 @@ async function geminiPhraseIdeas(
   const facts = ideas.map((idea, id) => ({
     id,
     niche: idea.niche,
-    score: idea.score,
+    score: idea.score ?? null,
     demand: idea.demand,
     incumbents: idea.incumbentStrength,
     evidence: idea.evidence.map((e) => e.text).slice(0, 3),

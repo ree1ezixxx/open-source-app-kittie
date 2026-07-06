@@ -43,13 +43,28 @@ export interface WhitespaceScoreBreakdown {
   monetization: number;
 }
 
-/** One ranked opportunity niche. */
+/**
+ * Evidence gate rung (#274). Weakness gates STRUCTURE, not just a float —
+ * agents branch on this, never on score magnitude alone:
+ * - `ranked`            — full evidence; score + breakdown present.
+ * - `low_confidence`    — kept and scored, but explicitly flagged.
+ * - `needs_more_sources`— returned WITHOUT a score (score implies rankability).
+ * A fourth outcome — refused — never appears as an idea; it is counted in
+ * `funnel.refused` (candidate incoherent with the category, or zero evidence).
+ */
+export type WhitespaceGateRung = "ranked" | "low_confidence" | "needs_more_sources";
+
+/** One opportunity niche. Scored only at the `ranked`/`low_confidence` rungs. */
 export interface WhitespaceIdea {
   /** Plain-language niche (LLM-labelled when enriched; the candidate phrase otherwise). */
   niche: string;
-  /** 0–100 composite from `scoreBreakdown` (weights above). */
-  score: number;
-  scoreBreakdown: WhitespaceScoreBreakdown;
+  /** Which evidence rung this idea cleared (#274). */
+  gateRung: WhitespaceGateRung;
+  /** Why this rung — cites the evidence thresholds that fired/failed. */
+  gateReason: string;
+  /** 0–100 composite from `scoreBreakdown`; NULL below the scored rungs. */
+  score: number | null;
+  scoreBreakdown: WhitespaceScoreBreakdown | null;
   demand: WhitespaceDemand;
   incumbentStrength: IncumbentStrength;
   sentimentGap: WhitespaceTier;
@@ -74,6 +89,8 @@ export interface WhitespaceFunnel {
   prefiltered: number;
   /** Candidates deep-analysed through cluster_reviews + find_feature_gaps. */
   deepAnalyzed: number;
+  /** Candidates/ideas refused outright (#274): incoherent with the category or zero evidence. */
+  refused: number;
 }
 
 export type WhitespaceEnrichment = "llm" | "deterministic";
