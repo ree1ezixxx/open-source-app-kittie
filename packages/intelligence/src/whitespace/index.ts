@@ -230,6 +230,14 @@ export function scoreWhitespaceIdea(input: WhitespaceDeepInput): WhitespaceIdea 
 export interface BuildWhitespaceInput {
   ideas: WhitespaceIdea[];
   funnel: WhitespaceFunnel;
+  /** Aggregated across the deep-analysed niches (#271); zeros/null/[] when none. */
+  sourceCoverage?: {
+    appsResolved: number;
+    appsWithReviews: number;
+    reviewsAnalyzed: number;
+    reviewDateRange: { oldest: string; newest: string } | null;
+    localesSeen: string[];
+  };
   params: RankWhitespaceIdeasRequest;
   enrichment: WhitespaceEnrichment;
   generatedAt: string;
@@ -293,12 +301,31 @@ export function buildWhitespaceIdeasResponse(input: BuildWhitespaceInput): White
     }
   }
 
+  const sc = input.sourceCoverage ?? {
+    appsResolved: 0,
+    appsWithReviews: 0,
+    reviewsAnalyzed: 0,
+    reviewDateRange: null,
+    localesSeen: [],
+  };
   const data: WhitespaceIdeasData = {
     category: input.params.category.trim(),
     country: input.params.country?.trim() || "US",
     funnel: input.funnel,
     ideas: input.ideas,
     enrichment: input.enrichment,
+    sourceCoverage: {
+      appsResolved: sc.appsResolved,
+      appsWithReviews: sc.appsWithReviews,
+      appsWithDescriptions: null, // listings enter via the composed feature-gaps pass, per idea
+      reviewsAnalyzed: sc.reviewsAnalyzed,
+      reviewDateRange: sc.reviewDateRange,
+      localesSeen: sc.localesSeen,
+      notes: [
+        { sourceType: "review", status: sc.reviewsAnalyzed === 0 ? "missing" : sc.appsWithReviews < sc.appsResolved ? "partial" : "ok" },
+        { sourceType: "model", status: input.ideas.length === 0 ? "missing" : "ok" },
+      ],
+    },
   };
 
   return buildIntelligenceResponse<WhitespaceIdeasData, "whitespace_ideas">({

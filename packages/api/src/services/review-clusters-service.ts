@@ -131,6 +131,7 @@ export async function getReviewClusters(
   const rows = await deps.fetchReviews(apps.map((a) => a.id), maxReviewsPerApp);
   const reviews: ClusterInputReview[] = rows.map((r) => ({
     appId: r.appId,
+    country: r.country,
     rating: r.rating,
     title: r.title,
     body: r.body,
@@ -172,6 +173,8 @@ export async function getReviewClusters(
     themes,
     coverage: base.coverage,
     totalReviewsAnalyzed: base.totalReviewsAnalyzed,
+    reviewDateRange: base.reviewDateRange,
+    localesSeen: base.localesSeen,
     apps,
     params,
     enrichment,

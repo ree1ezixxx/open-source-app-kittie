@@ -12,7 +12,7 @@
  * responseType `"whitespace_ideas"`; the funnel counts are reported so silent
  * truncation cannot masquerade as full coverage.
  */
-import type { IntelligenceResponseEnvelope } from "./intelligence-response.js";
+import type { IntelligenceResponseEnvelope, SourceCoverage } from "./intelligence-response.js";
 import type { Store } from "./index.js";
 
 /** Coarse tiers so agents can branch without parsing raw scores. */
@@ -86,6 +86,8 @@ export interface WhitespaceIdeasData {
   /** Ranked opportunities, best first. */
   ideas: WhitespaceIdea[];
   enrichment: WhitespaceEnrichment;
+  /** What this answer is standing on (#271). */
+  sourceCoverage: SourceCoverage;
 }
 
 /** Request body for `rank_whitespace_ideas`. */

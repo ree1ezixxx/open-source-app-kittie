@@ -214,3 +214,39 @@ describe("buildWhitespaceIdeasResponse", () => {
     expect(res.metadata.modelVersion).toBe("gemini-2.5-flash");
   });
 });
+
+describe("sourceCoverage (#271)", () => {
+  const funnel2 = { candidates: 5, prefiltered: 4, deepAnalyzed: 2 };
+  it("carries the aggregated deep-set coverage", () => {
+    const res = buildWhitespaceIdeasResponse({
+      ideas: [scoreWhitespaceIdea(deep())],
+      funnel: funnel2,
+      sourceCoverage: {
+        appsResolved: 6, appsWithReviews: 4, reviewsAnalyzed: 120,
+        reviewDateRange: { oldest: "2026-05-01T00:00:00.000Z", newest: "2026-07-01T00:00:00.000Z" },
+        localesSeen: ["GB", "US"],
+      },
+      params: { category: "health" },
+      enrichment: "deterministic",
+      generatedAt: "2026-07-06T00:00:00.000Z",
+    });
+    const sc = res.data.sourceCoverage;
+    expect(sc.appsResolved).toBe(6);
+    expect(sc.localesSeen).toEqual(["GB", "US"]);
+    expect(sc.appsWithDescriptions).toBeNull();
+    expect(sc.notes[0]).toEqual({ sourceType: "review", status: "partial" });
+  });
+
+  it("defaults to honest zeros/nulls when nothing was deep-analysed", () => {
+    const res = buildWhitespaceIdeasResponse({
+      ideas: [], funnel: { candidates: 2, prefiltered: 0, deepAnalyzed: 0 },
+      params: { category: "x" }, enrichment: "deterministic", generatedAt: "2026-07-06T00:00:00.000Z",
+    });
+    const sc = res.data.sourceCoverage;
+    expect(sc).toMatchObject({ appsResolved: 0, reviewsAnalyzed: 0, reviewDateRange: null, localesSeen: [] });
+    expect(sc.notes).toEqual([
+      { sourceType: "review", status: "missing" },
+      { sourceType: "model", status: "missing" },
+    ]);
+  });
+});

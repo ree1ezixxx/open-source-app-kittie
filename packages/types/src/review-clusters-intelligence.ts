@@ -13,6 +13,7 @@
  */
 import type {
   IntelligenceResponseEnvelope,
+  SourceCoverage,
 } from "./intelligence-response.js";
 import type { Store } from "./index.js";
 
@@ -105,6 +106,8 @@ export interface ReviewClustersData {
   themes: ReviewTheme[];
   /** Whether themes were LLM-named or come straight from the deterministic tag base. */
   enrichment: ReviewClusterEnrichment;
+  /** What this answer is standing on (#271). */
+  sourceCoverage: SourceCoverage;
 }
 
 /**

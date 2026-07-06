@@ -54,6 +54,8 @@ export const CLUSTER_DEFAULTS = {
 /** A review normalised for clustering — no reviewer identity ever enters here. */
 export interface ClusterInputReview {
   appId: string;
+  /** Storefront locale the review came from (feeds sourceCoverage.localesSeen). */
+  country?: string | null;
   rating: number;
   title?: string | null;
   body: string;
@@ -81,6 +83,10 @@ export interface ClusterReviewsComputed {
   themes: ReviewTheme[];
   coverage: ReviewClusterAppCoverage[];
   totalReviewsAnalyzed: number;
+  /** Real date span of the analyzed reviews; null when none are dated. */
+  reviewDateRange: { oldest: string; newest: string } | null;
+  /** Distinct storefront locales observed on analyzed reviews. */
+  localesSeen: string[];
 }
 
 /* ---- deterministic label → theme-type taxonomy --------------------------- */
@@ -269,6 +275,21 @@ export function clusterReviewsDeterministic(input: ClusterReviewsComputeInput): 
   }
   const totalReviewsAnalyzed = scoped.length;
 
+  // sourceCoverage inputs (#271): real date span + distinct locales of the
+  // analyzed set — computed from actual rows, never inferred.
+  let oldest: string | null = null;
+  let newest: string | null = null;
+  const locales = new Set<string>();
+  for (const r of scoped) {
+    if (r.country) locales.add(r.country.toUpperCase());
+    if (r.reviewedAt && !Number.isNaN(Date.parse(r.reviewedAt))) {
+      if (oldest === null || r.reviewedAt < oldest) oldest = r.reviewedAt;
+      if (newest === null || r.reviewedAt > newest) newest = r.reviewedAt;
+    }
+  }
+  const reviewDateRange = oldest && newest ? { oldest, newest } : null;
+  const localesSeen = [...locales].sort();
+
   // Group reviews by canonical label (topics ∪ improvementAreas). A review with
   // no tags joins no group — its weight lives only in the analyzed total.
   const byLabel = new Map<string, ClusterInputReview[]>();
@@ -336,7 +357,7 @@ export function clusterReviewsDeterministic(input: ClusterReviewsComputeInput): 
     (a, b) => b.mentionCount - a.mentionCount || b.confidence - a.confidence || a.theme.localeCompare(b.theme),
   );
 
-  return { themes, coverage, totalReviewsAnalyzed };
+  return { themes, coverage, totalReviewsAnalyzed, reviewDateRange, localesSeen };
 }
 
 /* ---- envelope builder ---------------------------------------------------- */
@@ -345,6 +366,9 @@ export interface BuildReviewClustersInput {
   themes: ReviewTheme[];
   coverage: ReviewClusterAppCoverage[];
   totalReviewsAnalyzed: number;
+  /** From ClusterReviewsComputed; null/[] when unavailable (#271). */
+  reviewDateRange?: { oldest: string; newest: string } | null;
+  localesSeen?: string[];
   apps: ClusterInputApp[];
   params: ClusterReviewsRequest;
   enrichment: ReviewClusterEnrichment;
@@ -418,6 +442,7 @@ export function buildReviewClustersResponse(
     });
   }
 
+  const appsWithReviews = input.coverage.filter((c) => c.reviewsAnalyzed > 0).length;
   const data: ReviewClustersData = {
     query: typeof input.params.query === "string" && input.params.query.trim() ? input.params.query.trim() : null,
     country: input.params.country?.trim() || "US",
@@ -426,6 +451,25 @@ export function buildReviewClustersResponse(
     coverage: input.coverage,
     themes: input.themes,
     enrichment: input.enrichment,
+    sourceCoverage: {
+      appsResolved: input.apps.length,
+      appsWithReviews,
+      appsWithDescriptions: null, // listings are not an input to this primitive
+      reviewsAnalyzed: input.totalReviewsAnalyzed,
+      reviewDateRange: input.reviewDateRange ?? null,
+      localesSeen: input.localesSeen ?? [],
+      notes: [
+        {
+          sourceType: "review",
+          status:
+            input.totalReviewsAnalyzed === 0
+              ? "missing"
+              : appsWithReviews < input.apps.length
+                ? "partial"
+                : "ok",
+        },
+      ],
+    },
   };
 
   return buildIntelligenceResponse<ReviewClustersData, "review_clusters">({
@@ -457,11 +501,13 @@ export function buildReviewClustersResponse(
 
 /** Convenience: deterministic clustering + envelope in one call (the no-LLM path). */
 export function clusterReviews(input: ClusterReviewsComputeInput, generatedAt: string): ReviewClustersIntelligenceResponse {
-  const { themes, coverage, totalReviewsAnalyzed } = clusterReviewsDeterministic(input);
+  const { themes, coverage, totalReviewsAnalyzed, reviewDateRange, localesSeen } = clusterReviewsDeterministic(input);
   return buildReviewClustersResponse({
     themes,
     coverage,
     totalReviewsAnalyzed,
+    reviewDateRange,
+    localesSeen,
     apps: input.apps,
     params: input.params,
     enrichment: "deterministic",

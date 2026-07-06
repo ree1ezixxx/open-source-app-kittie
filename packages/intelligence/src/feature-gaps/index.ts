@@ -266,6 +266,11 @@ export interface BuildFeatureGapsInput {
   features: FeatureGap[];
   coverage: FeatureGapAppCoverage[];
   reviewsAnalyzed: number;
+  /** Propagated from the composed cluster_reviews response (#271); null/[] when reviews were skipped. */
+  reviewDateRange?: { oldest: string; newest: string } | null;
+  localesSeen?: string[];
+  /** Apps that contributed >=1 analyzed review (from the cluster service); null when unknown. */
+  appsWithReviews?: number | null;
   apps: FeatureInputApp[];
   params: FindFeatureGapsRequest;
   enrichment: FeatureGapEnrichment;
@@ -345,6 +350,7 @@ export function buildFeatureGapsResponse(input: BuildFeatureGapsInput): FeatureG
     });
   }
 
+  const withDescriptions = input.coverage.filter((c) => c.hasDescription).length;
   const data: FeatureGapsData = {
     query: typeof input.params.query === "string" && input.params.query.trim() ? input.params.query.trim() : null,
     country: input.params.country?.trim() || "US",
@@ -355,6 +361,25 @@ export function buildFeatureGapsResponse(input: BuildFeatureGapsInput): FeatureG
     gaps: input.features.filter((f) => f.gap),
     tableStakes: input.features.filter((f) => f.tableStakes),
     enrichment: input.enrichment,
+    sourceCoverage: {
+      appsResolved: input.apps.length,
+      appsWithReviews: input.appsWithReviews ?? 0,
+      appsWithDescriptions: withDescriptions,
+      reviewsAnalyzed: input.reviewsAnalyzed,
+      reviewDateRange: input.reviewDateRange ?? null,
+      localesSeen: input.localesSeen ?? [],
+      notes: [
+        {
+          sourceType: "review",
+          status: input.reviewsAnalyzed === 0 ? "missing" : "ok",
+        },
+        {
+          sourceType: "app_store",
+          status:
+            withDescriptions === 0 ? "missing" : withDescriptions < input.apps.length ? "partial" : "ok",
+        },
+      ],
+    },
   };
 
   return buildIntelligenceResponse<FeatureGapsData, "feature_gaps">({

@@ -206,3 +206,30 @@ describe("CLUSTER_DEFAULTS", () => {
     expect(CLUSTER_DEFAULTS.maxLimitApps).toBe(25);
   });
 });
+
+describe("sourceCoverage (#271)", () => {
+  it("reports real date range, locales and per-source status", () => {
+    const reviews = [
+      review({ appId: "apple:1", country: "US", reviewedAt: daysAgo(10) }),
+      review({ appId: "apple:2", country: "GB", reviewedAt: daysAgo(2) }),
+    ];
+    const res = clusterReviews({ apps: APPS, reviews, params: {}, nowMs: NOW }, new Date(NOW).toISOString());
+    const sc = res.data.sourceCoverage;
+    expect(sc.appsResolved).toBe(3);
+    expect(sc.appsWithReviews).toBe(2);
+    expect(sc.appsWithDescriptions).toBeNull(); // listings are not an input here
+    expect(sc.reviewsAnalyzed).toBe(2);
+    expect(sc.reviewDateRange).toEqual({ oldest: daysAgo(10), newest: daysAgo(2) });
+    expect(sc.localesSeen).toEqual(["GB", "US"]);
+    expect(sc.notes).toEqual([{ sourceType: "review", status: "partial" }]); // 2 of 3 apps contributed
+  });
+
+  it("empty corpus → nulls and missing status, never invented values", () => {
+    const res = clusterReviews({ apps: APPS, reviews: [], params: {}, nowMs: NOW }, new Date(NOW).toISOString());
+    const sc = res.data.sourceCoverage;
+    expect(sc.reviewsAnalyzed).toBe(0);
+    expect(sc.reviewDateRange).toBeNull();
+    expect(sc.localesSeen).toEqual([]);
+    expect(sc.notes[0]).toEqual({ sourceType: "review", status: "missing" });
+  });
+});

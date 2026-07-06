@@ -76,3 +76,16 @@ Typed fixtures live in
 - `reportResponseExample`
 
 Runtime invariants live in `packages/intelligence/src/intelligence-response.ts`.
+
+## Source coverage (#271)
+
+Every decision-ladder payload (`review_clusters`, `feature_gaps`,
+`whitespace_ideas`) carries a uniform `data.sourceCoverage` block: what the
+answer is standing on. Fields: `appsResolved`, `appsWithReviews`,
+`appsWithDescriptions` (null when listings are not an input), `reviewsAnalyzed`,
+`reviewDateRange` (real span of analyzed reviews; null when none are dated),
+`localesSeen` (distinct storefronts observed on analyzed reviews), and
+`notes[]` (`{sourceType, status: ok|partial|missing}`). Counts reflect what was
+actually analyzed — null means "no data", never zero-as-guess. Agents should
+calibrate trust from this block plus `confidence.reasons` rather than
+reverse-engineering per-primitive fields.

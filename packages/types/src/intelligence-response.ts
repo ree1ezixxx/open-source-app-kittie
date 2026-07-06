@@ -161,3 +161,34 @@ export interface IntelligenceReportContract<TOutput = unknown> {
     expiresAt: string | null;
   };
 }
+
+/* ─────────────────────── source coverage (#271) ─────────────────────── */
+
+/** Status of one consulted source for a response — mirrors the caveat vocabulary. */
+export interface SourceCoverageNote {
+  sourceType: IntelligenceSourceType;
+  status: "ok" | "partial" | "missing";
+}
+
+/**
+ * What a ladder answer is standing on (#271) — one uniform block on every
+ * decision-ladder `data` payload so agents can calibrate trust without
+ * reverse-engineering per-primitive fields. Counts reflect what was actually
+ * analyzed; nulls mean "no data", never zero-as-guess.
+ */
+export interface SourceCoverage {
+  /** Apps in the resolved competitor/analysis set. */
+  appsResolved: number;
+  /** Of those, apps that contributed ≥1 analyzed review. */
+  appsWithReviews: number;
+  /** Apps with a usable listing description; null when listings weren't an input. */
+  appsWithDescriptions: number | null;
+  /** Reviews that fed the answer (post scoping/caps). */
+  reviewsAnalyzed: number;
+  /** Real review-date span of the analyzed set; null when no dated reviews. */
+  reviewDateRange: { oldest: string; newest: string } | null;
+  /** Distinct storefront locales observed on analyzed reviews (e.g. ["US","GB"]). */
+  localesSeen: string[];
+  /** Per-source status notes for the sources this primitive consulted. */
+  notes: SourceCoverageNote[];
+}
