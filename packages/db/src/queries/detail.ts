@@ -2,6 +2,7 @@ import { desc, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "../client.js";
 import {
   appleSearchAds,
+  chartRankings,
   apps,
   creators,
   iaps,
@@ -248,4 +249,36 @@ export async function appsWithCreatorsForIds(db: Db, ids: string[]): Promise<Set
     .from(creators)
     .where(inArray(creators.appId, ids));
   return new Set(rows.map((r) => r.appId));
+}
+
+/**
+ * Top charting app ids for one category on the latest chart snapshot —
+ * the corpus-seeding target set (#270). Unions the free + grossing charts
+ * (`top-free:<cat>` / `top-grossing:<cat>`) so paid-heavy categories aren't
+ * missed, deduped, capped at `topN` by best (lowest) rank.
+ */
+export async function topChartedAppIds(
+  db: Db,
+  opts: { category: string; country?: string; store?: "apple" | "google"; topN?: number },
+): Promise<string[]> {
+  const country = opts.country ?? "US";
+  const store = opts.store ?? "apple";
+  const topN = opts.topN ?? 25;
+  const charts = [`top-free:${opts.category}`, `top-grossing:${opts.category}`];
+  const rows = await db
+    .select({ appId: chartRankings.appId, rank: chartRankings.rank })
+    .from(chartRankings)
+    .where(
+      sql`${chartRankings.store} = ${store} AND ${chartRankings.country} = ${country} AND ${chartRankings.chartCategory} IN (${sql.join(charts.map((c) => sql`${c}`), sql`, `)}) AND ${chartRankings.snapshotDate} = (SELECT max(snapshot_date) FROM chart_rankings WHERE store = ${store} AND country = ${country} AND chart_category IN (${sql.join(charts.map((c) => sql`${c}`), sql`, `)}))`,
+    )
+    .orderBy(chartRankings.rank);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const r of rows) {
+    if (seen.has(r.appId)) continue;
+    seen.add(r.appId);
+    out.push(r.appId);
+    if (out.length >= topN) break;
+  }
+  return out;
 }
