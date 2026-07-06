@@ -6,6 +6,7 @@ export * from "./intelligence-response.fixtures.js";
 export * from "./app-detail-intelligence.js";
 export * from "./compare-apps-intelligence.js";
 export * from "./validate-idea-intelligence.js";
+export * from "./review-clusters-intelligence.js";
 
 // `export *` re-exports but creates no local binding — import the name explicitly
 // so `AppDetail.decisionPacket` can reference it as a type within this module.

@@ -1,7 +1,13 @@
 #!/usr/bin/env node
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import type { AppListItem, CompareAppRef, ValidateIdeaIntelligenceRequest } from "@kittie/types";
+import type {
+  AppListItem,
+  ClusterReviewsRequest,
+  CompareAppRef,
+  ReviewThemeType,
+  ValidateIdeaIntelligenceRequest,
+} from "@kittie/types";
 import { cloneIos, getAppDetail, searchApps } from "./client.js";
 import {
   configPath,
@@ -14,6 +20,7 @@ import { formatDoctorHuman, runDoctor } from "./doctor.js";
 import { buildUsage } from "./help.js";
 import { parseFlags } from "./args.js";
 import {
+  clusterReviews,
   compareApps,
   getAppIntelligence,
   getTrending,
@@ -23,9 +30,12 @@ import {
 import {
   formatAppIntelligence,
   formatCompare,
+  formatReviewClusters,
   formatTrending,
   formatValidate,
 } from "./format-intelligence.js";
+
+const REVIEW_THEME_TYPES: readonly ReviewThemeType[] = ["complaint", "praise", "request", "bug", "pricing", "ux"];
 
 function formatMoney(n: number | null): string {
   if (n == null) return "—";
@@ -201,6 +211,41 @@ async function cmdValidate(args: string[], mode: OutputMode) {
   console.log(formatOutput(mode, res, () => formatValidate(res)));
 }
 
+async function cmdClusterReviews(args: string[], mode: OutputMode) {
+  const { positionals, flags } = parseFlags(args);
+  const input: ClusterReviewsRequest = {};
+  // Positional tokens: app ids (contain ":") form the explicit set; the rest is the query.
+  const ids = positionals.filter((t) => t.includes(":"));
+  const queryTokens = positionals.filter((t) => !t.includes(":"));
+  if (ids.length > 0) input.appIds = ids;
+  if (queryTokens.length > 0) input.query = queryTokens.join(" ");
+  if (flags.query) input.query = flags.query;
+  if (!input.query && !input.appIds) {
+    console.error('Usage: pluto cluster-reviews <niche…> | <appId…> [--country US] [--limit-apps 10] [--types bug,pricing] [--since 2026-01-01]');
+    process.exit(1);
+  }
+  if (flags.country) input.country = flags.country;
+  if (flags["limit-apps"]) {
+    const n = Number(flags["limit-apps"]);
+    if (Number.isFinite(n) && n > 0) input.limitApps = Math.trunc(n);
+  }
+  if (flags["max-reviews"]) {
+    const n = Number(flags["max-reviews"]);
+    if (Number.isFinite(n) && n > 0) input.maxReviewsPerApp = Math.trunc(n);
+  }
+  if (flags.since) input.since = flags.since;
+  if (flags.store === "apple" || flags.store === "google") input.store = flags.store;
+  if (flags.types) {
+    const types = flags.types
+      .split(",")
+      .map((t) => t.trim())
+      .filter((t): t is ReviewThemeType => (REVIEW_THEME_TYPES as readonly string[]).includes(t));
+    if (types.length > 0) input.themeTypes = types;
+  }
+  const res = await clusterReviews(input);
+  console.log(formatOutput(mode, res, () => formatReviewClusters(res)));
+}
+
 function printHeader() {
   console.log(
     ["Title".padEnd(22), "Store".padEnd(6), "Reviews".padStart(6), "Growth".padStart(6), "Revenue".padStart(8)].join(
@@ -240,6 +285,9 @@ async function main() {
         break;
       case "validate":
         await cmdValidate(args, mode);
+        break;
+      case "cluster-reviews":
+        await cmdClusterReviews(args, mode);
         break;
       case "search":
         await cmdSearch(args);

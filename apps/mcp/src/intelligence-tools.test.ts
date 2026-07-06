@@ -7,8 +7,10 @@ import { describe, expect, it } from "vitest";
 import { KITTIE_TOOL_NAMES, listTools } from "./tools.js";
 import {
   appDetailIntelligencePath,
+  clusterReviewsRequest,
   findTrendingAppsPath,
   toAgentSafeError,
+  CLUSTER_REVIEWS_PATH,
 } from "./intelligence-tools.js";
 
 const INVERSION_TOOLS = ["get_app_detail", "find_trending_apps"] as const;
@@ -61,6 +63,44 @@ describe("inversion tool registry", () => {
     const tool = listTools().find((t) => t.name === "find_trending_apps");
     const props = (tool?.inputSchema as { properties?: Record<string, unknown> }).properties ?? {};
     expect(Object.keys(props).sort()).toEqual(["category", "country", "limit", "period"]);
+  });
+});
+
+describe("cluster_reviews registry + request builder (#259)", () => {
+  it("registers cluster_reviews as a read-only object-schema tool", () => {
+    expect(KITTIE_TOOL_NAMES).toContain("cluster_reviews");
+    const tool = listTools().find((t) => t.name === "cluster_reviews");
+    expect(tool?.inputSchema.type).toBe("object");
+    expect(tool?.annotations?.readOnlyHint).toBe(true);
+  });
+
+  it("requires a query or a non-empty appIds array", () => {
+    expect(() => clusterReviewsRequest({})).toThrow(/query .* appIds/i);
+    expect(() => clusterReviewsRequest({ appIds: [] })).toThrow();
+    expect(() => clusterReviewsRequest({ appIds: ["  "] })).toThrow();
+  });
+
+  it("builds a POST body from a query and bounds the knobs", () => {
+    const { path, body } = clusterReviewsRequest({
+      query: "  sleep tracking ",
+      limitApps: 999,
+      maxReviewsPerApp: 9999,
+      minThemeFrequency: 5,
+      themeTypes: ["bug", "nonsense", "pricing"],
+      store: "apple",
+    });
+    expect(path).toBe(CLUSTER_REVIEWS_PATH);
+    expect(body.query).toBe("sleep tracking");
+    expect(body.limitApps).toBe(25);
+    expect(body.maxReviewsPerApp).toBe(500);
+    expect(body.minThemeFrequency).toBe(1);
+    expect(body.themeTypes).toEqual(["bug", "pricing"]);
+    expect(body.store).toBe("apple");
+  });
+
+  it("passes explicit appIds through, trimmed", () => {
+    const { body } = clusterReviewsRequest({ appIds: ["apple:1", " apple:2 ", 3 as unknown as string] });
+    expect(body.appIds).toEqual(["apple:1", "apple:2"]);
   });
 });
 

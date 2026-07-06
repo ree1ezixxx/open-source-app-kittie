@@ -16,6 +16,7 @@ export type IntelligenceResponseType =
   | "idea_validation"
   | "teardown"
   | "similar"
+  | "review_clusters"
   | "report";
 
 export type IntelligenceStatus = "ok" | "partial" | "insufficient";

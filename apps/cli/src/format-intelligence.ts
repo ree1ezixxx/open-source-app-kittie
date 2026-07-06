@@ -6,6 +6,7 @@
 import type {
   AppDetailIntelligenceResponse,
   CompareAppsIntelligenceResponse,
+  ReviewClustersIntelligenceResponse,
   ValidateIdeaIntelligenceResponse,
 } from "@kittie/types";
 import { renderTable } from "./output.js";
@@ -99,5 +100,35 @@ export function formatValidate(res: ValidateIdeaIntelligenceResponse): string {
   lines.push(`Evidence: ${res.evidence.length} item(s)`);
   lines.push(...caveatBlock(res.caveats));
   lines.push("", data.verdictReason);
+  return lines.join("\n");
+}
+
+function pctOr(n: number): string {
+  return `${(n * 100).toFixed(0)}%`;
+}
+
+export function formatReviewClusters(res: ReviewClustersIntelligenceResponse): string {
+  const { data } = res;
+  const lines = [
+    `Review clusters${data.query ? ` for "${data.query}"` : ""} — ${data.country}`,
+    `Apps: ${data.appIds.length} · Reviews analysed: ${data.totalReviewsAnalyzed} · Enrichment: ${data.enrichment}`,
+    `Confidence: ${res.confidence.score.toFixed(2)} (${res.confidence.label})`,
+    "",
+  ];
+  if (data.themes.length === 0) {
+    lines.push("No themes above the frequency floor — reviews may be sparse or untagged.");
+  } else {
+    lines.push(`Themes (${data.themes.length}):`);
+    for (const t of data.themes) {
+      lines.push(
+        `  • ${t.theme} [${t.type}] — ${t.mentionCount} mentions (${pctOr(t.freq)}), ` +
+          `sentiment ${t.sentiment.toFixed(2)}, ${t.apps.length} app(s), trend ${t.trend}, conf ${t.confidence.toFixed(2)}`,
+      );
+      const quote = t.quotes[0];
+      if (quote) lines.push(`      "${quote.text}"`);
+    }
+  }
+  lines.push("");
+  lines.push(...caveatBlock(res.caveats));
   return lines.join("\n");
 }

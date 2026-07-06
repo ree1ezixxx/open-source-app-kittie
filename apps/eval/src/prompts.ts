@@ -146,7 +146,7 @@ export const GOLDEN_PROMPTS: GoldenPrompt[] = [
     decision: {
       id: "next-feature",
       label: "What to build next, backed by incumbent review gaps?",
-      accepts: acceptsFromTools("get_app_reviews"),
+      accepts: acceptsFromTools("cluster_reviews", "get_app_reviews"),
     },
     run: async (h, s, ctx) => {
       const recs: ToolCallRecord[] = [];
@@ -156,6 +156,8 @@ export const GOLDEN_PROMPTS: GoldenPrompt[] = [
         await fire(h, recs, D, "get_app_detail", { id: ctx.topAppId }, `Feature surface of ${ctx.topAppTitle}`);
         await fire(h, recs, D, "get_app_reviews", { appId: ctx.topAppId, country: s.country, limit: 50 }, `What do users of ${ctx.topAppTitle} ask for?`);
       }
+      // Cross-competitor complaint/request themes — the sharper "what to build next" signal.
+      await fire(h, recs, D, "cluster_reviews", { query: s.seedKeyword, country: s.country, store: s.store, limitApps: 8, themeTypes: ["complaint", "request", "bug"] }, `Shared unmet needs across the ${s.seedKeyword} field`);
       return recs;
     },
   },

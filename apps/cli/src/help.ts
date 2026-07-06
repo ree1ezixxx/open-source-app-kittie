@@ -22,6 +22,9 @@ Intelligence:
   pluto compare <a> <b> [more…]    Compare 2+ apps (ids or queries)
   pluto validate <idea…> [--store apple|google]
                                    Validate an app idea (verdict + evidence)
+  pluto cluster-reviews <niche… | appId…> [--country US] [--limit-apps 10]
+        [--types bug,pricing] [--since 2026-01-01] [--max-reviews 100]
+                                   Cluster competitor reviews into ranked themes
 
 Apps (legacy):
   pluto search [query]             Search apps
