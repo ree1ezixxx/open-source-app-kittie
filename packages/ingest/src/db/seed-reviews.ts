@@ -99,9 +99,10 @@ export async function seedCategoryReviews(deps: SeedDeps, opts: SeedOptions): Pr
         const added = await deps.syncReviews(storeAppIdOf(appId), country, maxReviews);
         report.seeded += 1;
         report.newReviews += added;
-      } catch {
+      } catch (err) {
         // Per-app failure never kills the run — count it honestly and move on.
         report.failed += 1;
+        console.warn(`seed-reviews: ${appId} failed: ${err instanceof Error ? err.message : err}`);
       }
       if (gapMs > 0) await sleep(gapMs);
     }
