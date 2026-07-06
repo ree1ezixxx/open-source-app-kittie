@@ -205,6 +205,7 @@ export async function getReviewClusters(
     coverage: base.coverage,
     totalReviewsAnalyzed: base.totalReviewsAnalyzed,
     reviewDateRange: base.reviewDateRange,
+    recentFraction: base.recentFraction,
     localesSeen: base.localesSeen,
     apps,
     params,
