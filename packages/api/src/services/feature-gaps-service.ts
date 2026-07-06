@@ -47,7 +47,18 @@ export interface FeatureGapsEnrichment {
 export interface FeatureGapsDeps {
   findSimilarApps(input: FindSimilarAppsInput): Promise<FindSimilarAppsResult>;
   resolveApps(ids: string[]): Promise<FeatureInputApp[]>;
-  fetchReviewThemes(ids: string[], country: string, limitApps: number): Promise<{ themes: ReviewTheme[]; reviewsAnalyzed: number }>;
+  fetchReviewThemes(
+    ids: string[],
+    country: string,
+    limitApps: number,
+  ): Promise<{
+    themes: ReviewTheme[];
+    reviewsAnalyzed: number;
+    /** Propagated cluster sourceCoverage bits (#271); absent on degrade. */
+    reviewDateRange?: { oldest: string; newest: string } | null;
+    localesSeen?: string[];
+    appsWithReviews?: number;
+  }>;
   enrich(apps: FeatureInputApp[], features: FeatureGap[]): Promise<FeatureGapsEnrichment | null>;
   now(): Date;
 }
@@ -68,7 +79,14 @@ const defaultDeps: FeatureGapsDeps = {
     // Compose #259 — its own cache + honest degradation apply. Never re-cluster here.
     try {
       const res = await getReviewClusters({ appIds: ids, country, limitApps, maxReviewsPerApp: 100 });
-      return { themes: res.data.themes, reviewsAnalyzed: res.data.totalReviewsAnalyzed };
+      const sc = res.data.sourceCoverage;
+      return {
+        themes: res.data.themes,
+        reviewsAnalyzed: res.data.totalReviewsAnalyzed,
+        reviewDateRange: sc.reviewDateRange,
+        localesSeen: sc.localesSeen,
+        appsWithReviews: sc.appsWithReviews,
+      };
     } catch {
       // Review path unavailable → feature gaps still work on listing coverage alone.
       return { themes: [], reviewsAnalyzed: 0 };
@@ -130,9 +148,10 @@ export async function getFeatureGaps(
 
   // ── demand from #259 (unless the caller opted out) ──────────────────────
   const useReviews = input.includeReviewSignals !== false;
-  const { themes, reviewsAnalyzed } = useReviews
+  const reviewMeta = useReviews
     ? await deps.fetchReviewThemes(apps.map((a) => a.id), country, limitApps)
     : { themes: [] as ReviewTheme[], reviewsAnalyzed: 0 };
+  const { themes, reviewsAnalyzed } = reviewMeta;
 
   const params: FindFeatureGapsRequest = {
     query: query || undefined,
@@ -165,6 +184,9 @@ export async function getFeatureGaps(
     features,
     coverage: base.coverage,
     reviewsAnalyzed,
+    reviewDateRange: reviewMeta.reviewDateRange ?? null,
+    localesSeen: reviewMeta.localesSeen ?? [],
+    appsWithReviews: reviewMeta.appsWithReviews ?? 0,
     apps,
     params,
     enrichment,

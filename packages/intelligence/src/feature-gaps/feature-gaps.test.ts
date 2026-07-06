@@ -141,3 +141,40 @@ describe("FEATURE_GAP_DEFAULTS", () => {
     expect(FEATURE_GAP_DEFAULTS.tableStakesCoverageFloor).toBe(0.7);
   });
 });
+
+describe("sourceCoverage (#271)", () => {
+  it("counts listing descriptions and propagates review meta", () => {
+    const { features, coverage } = compute(APPS, [theme()]);
+    const res = buildFeatureGapsResponse({
+      features,
+      coverage,
+      reviewsAnalyzed: 40,
+      reviewDateRange: { oldest: "2026-06-01T00:00:00.000Z", newest: "2026-07-01T00:00:00.000Z" },
+      localesSeen: ["US"],
+      appsWithReviews: 2,
+      apps: APPS,
+      params: {},
+      enrichment: "deterministic",
+      generatedAt: "2026-07-06T00:00:00.000Z",
+    });
+    const sc = res.data.sourceCoverage;
+    expect(sc.appsResolved).toBe(3);
+    expect(sc.appsWithDescriptions).toBe(3);
+    expect(sc.appsWithReviews).toBe(2);
+    expect(sc.reviewDateRange?.oldest).toBe("2026-06-01T00:00:00.000Z");
+    expect(sc.notes).toEqual([
+      { sourceType: "review", status: "ok" },
+      { sourceType: "app_store", status: "ok" },
+    ]);
+  });
+
+  it("marks reviews missing when the demand path was empty", () => {
+    const { features, coverage } = compute(APPS, []);
+    const res = buildFeatureGapsResponse({
+      features, coverage, reviewsAnalyzed: 0, apps: APPS, params: {},
+      enrichment: "deterministic", generatedAt: "2026-07-06T00:00:00.000Z",
+    });
+    expect(res.data.sourceCoverage.notes[0]).toEqual({ sourceType: "review", status: "missing" });
+    expect(res.data.sourceCoverage.reviewDateRange).toBeNull();
+  });
+});

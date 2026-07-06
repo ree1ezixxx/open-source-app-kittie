@@ -59,7 +59,17 @@ export interface WhitespaceDeps {
   relatedKeywords(seed: string, country: string, store: Store, limit: number): Promise<string[]>;
   findSimilarApps(input: FindSimilarAppsInput): Promise<FindSimilarAppsResult>;
   /** #259 themes for an explicit competitor set (cached service). */
-  fetchThemes(appIds: string[], country: string): Promise<{ themes: ReviewTheme[]; reviewsAnalyzed: number }>;
+  fetchThemes(
+    appIds: string[],
+    country: string,
+  ): Promise<{
+    themes: ReviewTheme[];
+    reviewsAnalyzed: number;
+    /** Propagated cluster sourceCoverage bits (#271); absent on degrade. */
+    appsWithReviews?: number;
+    reviewDateRange?: { oldest: string; newest: string } | null;
+    localesSeen?: string[];
+  }>;
   /** #260 features for the same set (cached service). */
   fetchFeatures(appIds: string[], country: string): Promise<FeatureGap[]>;
   /** Optional LLM phrasing; null → deterministic templates. */
@@ -79,7 +89,14 @@ const defaultDeps: WhitespaceDeps = {
   fetchThemes: async (appIds, country) => {
     try {
       const res = await getReviewClusters({ appIds, country, maxReviewsPerApp: 100 });
-      return { themes: res.data.themes, reviewsAnalyzed: res.data.totalReviewsAnalyzed };
+      const sc = res.data.sourceCoverage;
+      return {
+        themes: res.data.themes,
+        reviewsAnalyzed: res.data.totalReviewsAnalyzed,
+        appsWithReviews: sc.appsWithReviews,
+        reviewDateRange: sc.reviewDateRange,
+        localesSeen: sc.localesSeen,
+      };
     } catch {
       return { themes: [], reviewsAnalyzed: 0 };
     }
@@ -156,12 +173,28 @@ export async function getWhitespaceIdeas(
   // ── 3. deep cascade on the top-K only ────────────────────────────────────
   const survivors = prefiltered.slice(0, limit);
   let ideas: WhitespaceIdea[] = [];
+  // Aggregated sourceCoverage across the deep-analysed set (#271).
+  const deepAppIds = new Set<string>();
+  let aggAppsWithReviews = 0;
+  let aggReviews = 0;
+  let aggOldest: string | null = null;
+  let aggNewest: string | null = null;
+  const aggLocales = new Set<string>();
   for (const s of survivors) {
     const appIds = s.competitors.map((c) => c.app.id);
-    const [{ themes, reviewsAnalyzed }, features] = [
+    const [meta, features] = [
       await deps.fetchThemes(appIds, country),
       await deps.fetchFeatures(appIds, country),
     ];
+    const { themes, reviewsAnalyzed } = meta;
+    for (const id of appIds) deepAppIds.add(id);
+    aggAppsWithReviews += meta.appsWithReviews ?? 0;
+    aggReviews += reviewsAnalyzed;
+    if (meta.reviewDateRange) {
+      if (aggOldest === null || meta.reviewDateRange.oldest < aggOldest) aggOldest = meta.reviewDateRange.oldest;
+      if (aggNewest === null || meta.reviewDateRange.newest > aggNewest) aggNewest = meta.reviewDateRange.newest;
+    }
+    for (const l of meta.localesSeen ?? []) aggLocales.add(l);
     ideas.push(scoreWhitespaceIdea({ niche: s.niche, competitors: s.competitors, themes, features, reviewsAnalyzed }));
   }
   const minConfidence = typeof input.minConfidence === "number" ? Math.min(Math.max(input.minConfidence, 0), 1) : 0;
@@ -188,6 +221,13 @@ export async function getWhitespaceIdeas(
   return buildWhitespaceIdeasResponse({
     ideas,
     funnel: { candidates: candidates.length, prefiltered: prefiltered.length, deepAnalyzed: survivors.length },
+    sourceCoverage: {
+      appsResolved: deepAppIds.size,
+      appsWithReviews: aggAppsWithReviews,
+      reviewsAnalyzed: aggReviews,
+      reviewDateRange: aggOldest && aggNewest ? { oldest: aggOldest, newest: aggNewest } : null,
+      localesSeen: [...aggLocales].sort(),
+    },
     params: { category, country, limit, seedIdeas: seeds.length > 0 ? seeds : undefined },
     enrichment,
     generatedAt: deps.now().toISOString(),

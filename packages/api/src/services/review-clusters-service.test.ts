@@ -55,6 +55,7 @@ function similarResult(apps: AppListItem[]): FindSimilarAppsResult {
 function reviewRow(overrides: Partial<ClusterReviewRow> = {}): ClusterReviewRow {
   return {
     appId: "apple:1",
+    country: "US",
     rating: 2,
     title: null,
     body: "Sleep staging is wildly inaccurate, says deep sleep when I was awake.",

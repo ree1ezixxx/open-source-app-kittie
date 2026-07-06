@@ -10,7 +10,7 @@
  * demand/quality come from the review-cluster service; the LLM seam only sharpens
  * feature names when configured, and everything degrades honestly.
  */
-import type { IntelligenceResponseEnvelope } from "./intelligence-response.js";
+import type { IntelligenceResponseEnvelope, SourceCoverage } from "./intelligence-response.js";
 import type { Store } from "./index.js";
 
 /** Coarse tiers so agents can branch without parsing raw scores. */
@@ -77,6 +77,8 @@ export interface FeatureGapsData {
   gaps: FeatureGap[];
   tableStakes: FeatureGap[];
   enrichment: FeatureGapEnrichment;
+  /** What this answer is standing on (#271). */
+  sourceCoverage: SourceCoverage;
 }
 
 /** Request body for `find_feature_gaps`. Provide `query` OR `appIds`. */

@@ -109,6 +109,8 @@ export async function getRecentReviewTagsForApps(
 /** One review row for cross-app clustering — body + rating + date + persisted tags. */
 export interface ClusterReviewRow {
   appId: string;
+  /** Storefront the review was collected from (e.g. "US") — feeds localesSeen (#271). */
+  country: string;
   rating: number;
   title: string | null;
   body: string;
@@ -140,6 +142,7 @@ export async function getRecentReviewsForApps(
     const rows = await db
       .select({
         appId: reviews.appId,
+        country: reviews.country,
         rating: reviews.rating,
         title: reviews.title,
         body: reviews.body,
@@ -157,6 +160,7 @@ export async function getRecentReviewsForApps(
       seen.set(r.appId, n + 1);
       out.push({
         appId: r.appId,
+        country: r.country,
         rating: r.rating,
         title: r.title,
         body: r.body,
