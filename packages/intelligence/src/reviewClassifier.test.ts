@@ -59,6 +59,8 @@ describe("classifyReview — word-boundary matching (#266)", () => {
   it("sentiment words are boundary-safe too", () => {
     // 'best' must not fire inside 'bestow'; rating 2 + no negative word => negative (not mixed)
     expect(classifyReview(review("they bestowed nothing on us", 2)).sentiment).toBe("negative");
+    // cold-verify F2: sentiment words take NO free plural — 'goods' must not fire 'good'
+    expect(classifyReview(review("the goods never arrived", 2)).sentiment).toBe("negative");
     // genuine positive word on a low rating => mixed
     expect(classifyReview(review("great idea, broken execution", 2)).sentiment).toBe("mixed");
     expect(classifyReview(review("I'd recommend it to anyone", 5)).sentiment).toBe("positive");

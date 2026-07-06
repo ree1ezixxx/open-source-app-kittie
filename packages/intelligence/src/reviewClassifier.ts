@@ -76,10 +76,12 @@ const NEGATIVE_WORDS = ["hate", "hated", "terrible", "awful", "worst", "useless"
 
 const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-function compileKeyword(k: string): RegExp {
+function compileKeyword(k: string, freePlural = true): RegExp {
   // Boundary = start/end of text or any non-alphanumeric. `\b` alone fails on
   // keywords that end in punctuation-adjacent positions and on unicode text.
-  return new RegExp(`(?:^|[^a-z0-9])${escapeRe(k)}s?(?:$|[^a-z0-9])`);
+  // `freePlural` lets singular category keywords catch plurals; sentiment words
+  // opt out (cold-verify finding: "goods" must not fire positive "good").
+  return new RegExp(`(?:^|[^a-z0-9])${escapeRe(k)}${freePlural ? "s?" : ""}(?:$|[^a-z0-9])`);
 }
 
 interface CompiledCategory {
@@ -92,8 +94,8 @@ const compileCategories = (cats: Category[]): CompiledCategory[] =>
 
 const TOPIC_PATTERNS = compileCategories(TOPICS);
 const IMPROVEMENT_PATTERNS = compileCategories(IMPROVEMENT_AREAS);
-const POSITIVE_PATTERNS = POSITIVE_WORDS.map(compileKeyword);
-const NEGATIVE_PATTERNS = NEGATIVE_WORDS.map(compileKeyword);
+const POSITIVE_PATTERNS = POSITIVE_WORDS.map((w) => compileKeyword(w, false));
+const NEGATIVE_PATTERNS = NEGATIVE_WORDS.map((w) => compileKeyword(w, false));
 
 function matchCategories(text: string, cats: CompiledCategory[]): string[] {
   const hits: string[] = [];
