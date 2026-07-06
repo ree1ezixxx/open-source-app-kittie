@@ -27,7 +27,7 @@ import { getRecentReviewsForApps, listAppsByIds, reviewCountsByApp, type Cluster
 import { getDb } from "../lib/db.js";
 import { cachedJson, generate, hashInput, isGeminiConfigured, GEMINI_MODEL } from "../lib/gemini.js";
 import { findSimilarApps, SimilarAppsError } from "./similar-apps-service.js";
-import { recallReviewedApps, type RecalledApp } from "./evidence-recall.js";
+import { recallReviewedApps, RECALL_SHARE, type RecalledApp } from "./evidence-recall.js";
 
 export class ReviewClustersError extends Error {
   constructor(
@@ -141,7 +141,7 @@ export async function getReviewClusters(
     // Recall pass (#268): catalog FTS misses review-rich incumbents whose titles
     // lack the query token; search the review-bearing set directly and merge its
     // hits FIRST (relevance-guarded — >=1 real token match each).
-    const recalled = await deps.recallReviewed(query, limitApps);
+    const recalled = (await deps.recallReviewed(query, limitApps)).slice(0, Math.max(1, Math.ceil(limitApps * RECALL_SHARE)));
     const counts = ranked.length > 0 ? await deps.reviewCounts(ranked.map((a) => a.id)) : {};
     const withReviews = ranked.filter((a) => (counts[a.id] ?? 0) > 0);
     const without = ranked.filter((a) => (counts[a.id] ?? 0) === 0);

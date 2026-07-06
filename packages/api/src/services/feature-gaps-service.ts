@@ -26,7 +26,7 @@ import { listAppsByIds, reviewCountsByApp } from "@kittie/db";
 import { getDb } from "../lib/db.js";
 import { cachedJson, generate, hashInput, isGeminiConfigured, GEMINI_MODEL } from "../lib/gemini.js";
 import { findSimilarApps, SimilarAppsError } from "./similar-apps-service.js";
-import { recallReviewedApps, type RecalledApp } from "./evidence-recall.js";
+import { recallReviewedApps, RECALL_SHARE, type RecalledApp } from "./evidence-recall.js";
 import { getReviewClusters } from "./review-clusters-service.js";
 
 export class FeatureGapsError extends Error {
@@ -151,7 +151,7 @@ export async function getFeatureGaps(
       throw err;
     }
     const rankedIds = similar.similar.map((s) => s.app.id);
-    const recalled = await deps.recallReviewed(query, limitApps);
+    const recalled = (await deps.recallReviewed(query, limitApps)).slice(0, Math.max(1, Math.ceil(limitApps * RECALL_SHARE)));
     const counts = rankedIds.length > 0 ? await deps.reviewCounts(rankedIds) : {};
     const orderedIds = [
       ...recalled.map((r) => r.id),

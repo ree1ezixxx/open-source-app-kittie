@@ -2,17 +2,21 @@
  * Evidence-recall pass (#268 partial, epic #269 criterion 3) — query-mode
  * retrieval over the REVIEW-BEARING app set.
  *
- * Cold-verify proved reorder-only fails: catalog FTS ranks exact-token title
- * matches ("Budgeting App - Spend Tracker", zero reviews) over the famous
- * incumbents whose titles lack the token ("YNAB" ∌ "budgeting"), so review-rich
- * apps never enter discovery's pool and no preference can inject them. This
- * pass searches ONLY the apps that hold reviews (hundreds of rows — scored
- * in-process, DB-only, no LLM) and its hits are merged AHEAD of the catalog
- * pool for the evidence-seeking primitives.
+ * Cold-verify history shaped this hard:
+ * - Round 1: reorder-only failed — catalog FTS never surfaces review-rich
+ *   incumbents whose titles lack the query token (YNAB vs "budgeting").
+ * - Round 2: a bare 4-char-prefix guard over descriptions recalled Bose for
+ *   "meditation" (desc contains "media") and flooded every set with
+ *   alphabetical score-1 ties — confident nonsense. Hence the rules below.
  *
- * Relevance guard: an app is recalled only when it matches ≥1 real query token
- * (≥3 chars, shared ≥4-char prefix counts — budgeting~budget) against its
- * title/category/description. Random review-rich apps never ride along.
+ * Matching rules (deterministic, DB-only, no LLM):
+ * - Tokens compare by STEM EQUALITY (tiny suffix-stripper: budgeting→budget,
+ *   learning→learn, planning→plan) — never bare prefixes ("medi" ∌ "media").
+ * - Title/category hits are the real signal (weight 3). Description-only recall
+ *   needs min(2, queryTokens) distinct token hits — one stray description word
+ *   never recalls an app for a multi-token query.
+ * - Callers cap how many recalled slots may lead the merged set, so catalog
+ *   relevance always keeps slots (RECALL_SHARE).
  */
 import { listReviewedApps } from "@kittie/db";
 import { getDb } from "../lib/db.js";
@@ -24,19 +28,35 @@ export interface RecalledApp {
   matched: string[];
 }
 
+/** Recalled hits may take at most this share of the requested set. */
+export const RECALL_SHARE = 0.5;
+
 const tokenize = (s: string): string[] =>
   s
     .toLowerCase()
-    .replace(/[‘’ʼ]/g, "'")
-    .split(/[^a-z0-9']+/)
+    .replace(/[\u2018\u2019\u02bc]/g, "'")
+    .replace(/'s\b/g, "")
+    .split(/[^a-z0-9]+/)
     .filter((t) => t.length > 2);
 
-const prefixMatch = (a: string, b: string): boolean => {
-  if (a === b) return true;
-  if (a.length < 4 || b.length < 4) return false;
-  const n = 4;
-  return a.slice(0, n) === b.slice(0, n);
-};
+/** Tiny deterministic stemmer — enough for query↔listing morphology. */
+export function stem(t: string): string {
+  let s = t;
+  for (const suf of ["ings", "ing", "ers", "er", "ies", "es", "s", "ed"]) {
+    if (s.length - suf.length >= 3 && s.endsWith(suf)) {
+      s = s.slice(0, -suf.length);
+      if (suf === "ies") s += "y";
+      break;
+    }
+  }
+  // drop a doubled trailing consonant left by -ing/-ed strips (plann→plan, runn→run)
+  if (s.length >= 4 && s[s.length - 1] === s[s.length - 2] && !"aeiou".includes(s[s.length - 1]!)) {
+    s = s.slice(0, -1);
+  }
+  return s;
+}
+
+const stems = (text: string): Set<string> => new Set(tokenize(text).map(stem));
 
 /** Pure scorer — exported for tests. */
 export function scoreReviewedApps(
@@ -46,12 +66,21 @@ export function scoreReviewedApps(
 ): RecalledApp[] {
   const qTokens = [...new Set(tokenize(query))];
   if (qTokens.length === 0) return [];
+  const qStems = qTokens.map((t) => ({ token: t, stem: stem(t) }));
+
   const scored: Array<RecalledApp & { score: number }> = [];
   for (const r of rows) {
-    const hay = [...new Set(tokenize(`${r.title} ${r.category ?? ""} ${r.description ?? ""}`))];
-    const matched = qTokens.filter((q) => hay.some((h) => prefixMatch(q, h)));
-    if (matched.length === 0) continue;
-    scored.push({ id: r.id, name: r.title, matched, score: matched.length });
+    const titleCat = stems(`${r.title} ${r.category ?? ""}`);
+    const desc = stems(r.description ?? "");
+    const titleHits = qStems.filter((q) => titleCat.has(q.stem));
+    const descHits = qStems.filter((q) => desc.has(q.stem));
+    // Description-only recall needs corroboration: 2 distinct query tokens for
+    // multi-token queries, 1 for single-token (where 2 is impossible — the
+    // YNAB/"budgeting" case). The Bose/"media" class is dead regardless via
+    // stem EQUALITY (stem("media") ≠ stem("meditation")).
+    if (titleHits.length === 0 && descHits.length < Math.min(2, qStems.length)) continue;
+    const matched = [...new Set([...titleHits, ...descHits].map((q) => q.token))];
+    scored.push({ id: r.id, name: r.title, matched, score: titleHits.length * 3 + descHits.length });
   }
   return scored
     .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name))
