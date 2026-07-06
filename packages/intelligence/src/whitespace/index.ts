@@ -34,6 +34,7 @@ import {
   type WhitespaceEnrichment,
 } from "@kittie/types";
 import { buildIntelligenceResponse, type MissingIntelligenceSource } from "../intelligence-response.js";
+import { calibrateConfidence } from "../confidence/index.js";
 
 export const WHITESPACE_DEFAULTS = {
   limit: 5,
@@ -257,20 +258,37 @@ function ideaEvidence(ideas: WhitespaceIdea[]): IntelligenceEvidence[] {
   }));
 }
 
-function overallConfidence(ideas: WhitespaceIdea[], funnel: WhitespaceFunnel): IntelligenceConfidence {
+/** Calibrated per docs/contracts/confidence-calibration.md (#273); response-level. */
+function overallConfidence(
+  ideas: WhitespaceIdea[],
+  funnel: WhitespaceFunnel,
+  sc: NonNullable<BuildWhitespaceInput["sourceCoverage"]> | undefined,
+): IntelligenceConfidence {
   if (ideas.length === 0) {
     return { score: 0, label: "insufficient", reasons: ["No candidate niche survived the evidence funnel."] };
   }
   const avgIdea = ideas.reduce((s, i) => s + i.confidence, 0) / ideas.length;
-  const score = round(clamp01(Math.min(0.9, avgIdea * 0.8 + Math.min(funnel.deepAnalyzed / 5, 1) * 0.1)));
-  return {
-    score,
-    label: score >= 0.75 ? "high" : score >= 0.6 ? "medium" : "low",
-    reasons: [
+  // Diversity is auditable from the ideas' own evidence sources (reviews/features/charts/metadata).
+  const sourcesPresent = new Set(ideas.flatMap((i) => i.evidence.map((e) => e.source))).size;
+  // Primary evidence = the deep-analysed competitor set (spec §per-primitive);
+  // review grounding enters as spread. Derive from the ideas themselves when a
+  // caller omits sourceCoverage — still auditable, never invented.
+  const appsResolved = sc?.appsResolved ?? new Set(ideas.flatMap((i) => i.competitorAppIds)).size;
+  return calibrateConfidence({
+    evidenceUnits: appsResolved,
+    evidenceTarget: 8,
+    appsContributing: sc?.appsWithReviews ?? 0,
+    appsResolved,
+    recentFraction: null,
+    sourceTypesPresent: sourcesPresent,
+    sourceTypesConsulted: 4,
+    llmEnriched: false, // phrasing polish never lifts response confidence
+    localesSeen: sc?.localesSeen ?? [],
+    extraReasons: [
       `${funnel.candidates} candidates → ${funnel.prefiltered} pre-filtered → ${funnel.deepAnalyzed} deep-analysed`,
       `mean per-idea confidence ${round(avgIdea, 2)}`,
     ],
-  };
+  });
 }
 
 /** Wrap ranked ideas into the canonical envelope, funnel counts included. */
@@ -332,7 +350,7 @@ export function buildWhitespaceIdeasResponse(input: BuildWhitespaceInput): White
     responseType: "whitespace_ideas",
     data,
     evidence: ideaEvidence(input.ideas),
-    confidence: overallConfidence(input.ideas, input.funnel),
+    confidence: overallConfidence(input.ideas, input.funnel, input.sourceCoverage),
     caveats,
     missingSources,
     metadata: {

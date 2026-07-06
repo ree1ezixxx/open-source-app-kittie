@@ -30,6 +30,7 @@ import {
   type ReviewTheme,
 } from "@kittie/types";
 import { buildIntelligenceResponse, type MissingIntelligenceSource } from "../intelligence-response.js";
+import { calibrateConfidence } from "../confidence/index.js";
 
 export const FEATURE_GAP_DEFAULTS = {
   limitApps: 10,
@@ -291,9 +292,9 @@ function featureEvidence(features: FeatureGap[]): IntelligenceEvidence[] {
   }));
 }
 
+/** Calibrated per docs/contracts/confidence-calibration.md (#273). */
 function overallConfidence(input: BuildFeatureGapsInput): IntelligenceConfidence {
   const withDesc = input.coverage.filter((c) => c.hasDescription).length;
-  const totalApps = Math.max(input.apps.length, 1);
   if (input.features.length === 0) {
     return {
       score: 0,
@@ -301,20 +302,28 @@ function overallConfidence(input: BuildFeatureGapsInput): IntelligenceConfidence
       reasons: ["No listing features or review demand signals for the competitor set."],
     };
   }
-  const descFrac = withDesc / totalApps;
-  const reviewVol = Math.min(input.reviewsAnalyzed / 100, 1);
-  const score = clamp01(Math.min(0.9, 0.35 + descFrac * 0.3 + reviewVol * 0.25 + (input.enrichment === "llm" ? 0.05 : 0)));
-  return {
-    score: round(score, 3),
-    label: score >= 0.75 ? "high" : score >= 0.6 ? "medium" : "low",
-    reasons: [
-      `${input.features.length} features across ${totalApps} apps (${withDesc} with listings)`,
-      input.reviewsAnalyzed > 0
-        ? `${input.reviewsAnalyzed} reviews fed the demand signal`
-        : "no review demand signal (demand/quality unknown)",
-      input.enrichment === "llm" ? "features named by LLM enrichment" : "lexicon feature names (LLM naming unavailable)",
+  const reviewsOn = input.reviewsAnalyzed > 0;
+  // Reviews are the demand EVIDENCE; a reviews-off run stands on listings only,
+  // so volume comes from the listing corpus and says so (spec §per-primitive).
+  const evidenceUnits = reviewsOn ? input.reviewsAnalyzed : withDesc;
+  const evidenceTarget = reviewsOn ? 100 : Math.max(input.apps.length, 1);
+  const appsContributing = reviewsOn ? (input.appsWithReviews ?? 0) : withDesc;
+  return calibrateConfidence({
+    evidenceUnits,
+    evidenceTarget,
+    appsContributing,
+    appsResolved: input.apps.length,
+    recentFraction: null, // gaps sees the composed date range, not per-review dates
+    sourceTypesPresent: (reviewsOn ? 1 : 0) + (withDesc > 0 ? 1 : 0),
+    sourceTypesConsulted: 2, // reviews + listings
+    llmEnriched: input.enrichment === "llm",
+    requestedLocale: input.params.country?.trim() || "US",
+    localesSeen: input.localesSeen ?? [],
+    extraReasons: [
+      `${input.features.length} features across ${input.apps.length} apps (${withDesc} with listings)`,
+      reviewsOn ? `${input.reviewsAnalyzed} reviews fed the demand signal` : "no review demand signal — standing on listings only",
     ],
-  };
+  });
 }
 
 /** Wrap a final feature list (deterministic OR LLM-enriched) into the envelope. */
