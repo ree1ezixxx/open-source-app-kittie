@@ -91,8 +91,26 @@ insufficient = 0**.
   review grounding enters as spread (`appsWithReviews / appsResolved`) and
   diversity comes from the ideas' own evidence sources (reviews / features /
   charts / metadata, of 4). Ungrounded-but-real ideas therefore read LOW, not
-  insufficient — refusal semantics belong to the gates ticket (#274). Per-idea
-  `confidence` keeps its own idea-local formula and is out of scope here.
+  insufficient. Per-idea `confidence` keeps its own idea-local formula and is
+  out of scope here.
+
+## Evidence gates (rank_whitespace_ideas, #274)
+
+Weakness gates STRUCTURE, not just the confidence float — agents branch on
+`gateRung`/`status`, never score magnitude. Thresholds (code:
+`WHITESPACE_DEFAULTS.gates`), expressed in this spec's vocabulary:
+
+| Rung | Requires | Effect |
+|---|---|---|
+| `ranked` | ≥3 competitors AND ≥2 grounded signal families (reviews/features/monetization/growth) AND idea confidence ≥0.45 | scored + breakdown |
+| `low_confidence` | ≥2 competitors AND ≥1 signal family | scored, flagged |
+| `needs_more_sources` | below the scored rungs | returned WITHOUT score/breakdown |
+| refused | non-seed candidate incoherent with the category, OR the category itself ungrounded (majority of its content tokens have no echo in market evidence), OR dropped by `minConfidence` | never returned; counted in `funnel.refused` |
+
+Response-level: zero scored ideas — or an ungrounded category — → status
+`insufficient`, confidence 0, explicit "DO NOT build from this response"
+caveat (with dead category tokens named). Seeds encode caller intent: never
+coherence/grounding-refused, but the evidence rungs still apply.
 
 ## Changing the model
 
