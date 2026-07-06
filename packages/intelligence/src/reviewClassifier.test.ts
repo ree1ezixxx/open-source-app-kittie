@@ -47,6 +47,14 @@ describe("classifyReview — word-boundary matching (#266, v2 labels)", () => {
     expect(classifyReview(review("I'd recommend it to anyone", 5)).sentiment).toBe("positive");
   });
 
+  it("Accuracy Failure requires accuracy phrasing, not bare wrong/false (#282 rework)", () => {
+    expect(classifyReview(review("nothing wrong with this app", 5)).improvementAreas).not.toContain("Accuracy Failure");
+    expect(classifyReview(review("false advertising by the devs", 1)).improvementAreas).not.toContain("Accuracy Failure");
+    expect(classifyReview(review("if you get a question wrong you lose a heart", 2)).improvementAreas).not.toContain("Accuracy Failure");
+    expect(classifyReview(review("my correct answer was marked wrong", 1)).improvementAreas).toContain("Accuracy Failure");
+    expect(classifyReview(review("the step data is wrong every morning", 1)).improvementAreas).toContain("Accuracy Failure");
+  });
+
   it("normalizes curly apostrophes before matching (#272)", () => {
     expect(classifyReview(review("app won’t load since the update")).topics).toContain("Stability & Performance");
     expect(classifyReview(review("I can’t cancel my plan", 1)).improvementAreas).toContain("Trial & Billing Deception");
@@ -69,7 +77,7 @@ describe("taxonomy v2 — improvement-area fixtures (2 per decision label)", () 
     ["support denied my refund, no refund after a week", ["Refund Friction"]],
     ["impossible to get my money back", ["Refund Friction"]],
     ["the step counter is wildly inaccurate", ["Accuracy Failure"]],
-    ["translations are just wrong half the time", ["Accuracy Failure"]],
+    ["wrong translations all through the lessons", ["Accuracy Failure"]],
     ["update wiped my data, lost my progress entirely", ["Crash & Data Loss"]],
     ["crashes on launch and corrupted my save", ["Crash & Data Loss"]],
     ["takes forever to load each page", ["Performance Drag"]],
@@ -92,6 +100,23 @@ describe("taxonomy v2 — improvement-area fixtures (2 per decision label)", () 
     ["so repetitive after the first month", ["Content Gaps"]],
     ["locked out and the recovery email never arrives", ["Account Recovery Trouble"]],
     ["lost my account and reset password doesn't work", ["Account Recovery Trouble"]],
+    // third fixture per decision label (#272 acceptance: >=3 each)
+    ["an ad every thirty seconds ruins the flow", ["Ad Intrusiveness"]],
+    ["core features locked behind a monthly fee", ["Subscription Lock-In"]],
+    ["auto renewed without any warning email", ["Trial & Billing Deception"]],
+    ["they won't refund an accidental purchase", ["Refund Friction"]],
+    ["the calorie count is wildly wrong every day", ["Accuracy Failure"]],
+    ["lost all my saved routes after the update", ["Crash & Data Loss"]],
+    ["every screen takes forever to load", ["Performance Drag"]],
+    ["setup is confusing to set up with zero guidance", ["Onboarding Confusion"]],
+    ["basic actions are buried in menus now", ["Navigation & Usability"]],
+    ["no way to turn off the daily insight notifications", ["Notification Fatigue"]],
+    ["give us a csv download of workout history", ["Missing Export & Portability"]],
+    ["watch and phone are always out of sync", ["Sync Reliability"]],
+    ["support is useless, copy paste answers only", ["Support Unresponsiveness"]],
+    ["why does a flashlight app need my contacts, creepy", ["Privacy Anxiety"]],
+    ["only ten workouts then you ran out of content? limited selection", ["Content Gaps"]],
+    ["locked out for weeks, recovery email never comes", ["Account Recovery Trouble"]],
   ];
   it.each(CASES)("%s → %j", (body, labels) => {
     const tags = classifyReview(review(body, 1));
