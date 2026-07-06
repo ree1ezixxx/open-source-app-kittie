@@ -114,7 +114,10 @@ export function calibrateConfidence(input: CalibrationInput): IntelligenceConfid
     `volume ${input.evidenceUnits}/${input.evidenceTarget} → ${round3(M.weights.volume * volume)}`,
     `spread ${input.appsContributing}/${input.appsResolved} apps → ${round3(M.weights.spread * spread)}`,
   ];
-  if (input.recentFraction != null) reasons.push(`recency ${Math.round(recency * 100)}% ≤${M.recentWindowDays}d → ${round3(M.weights.recency * recency)}`);
+  if (input.recentFraction != null)
+    reasons.push(
+      `recency ${Math.round(clamp01(input.recentFraction) * 100)}% ≤${M.recentWindowDays}d (×volume) → ${round3(M.weights.recency * recency)}`,
+    );
   else reasons.push("recency unknown → 0");
   reasons.push(`source diversity ${input.sourceTypesPresent}/${input.sourceTypesConsulted} → ${round3(M.weights.diversity * diversity)}`);
   reasons.push(input.llmEnriched ? "LLM enrichment succeeded → +0.05" : "LLM enrichment unavailable → 0");
