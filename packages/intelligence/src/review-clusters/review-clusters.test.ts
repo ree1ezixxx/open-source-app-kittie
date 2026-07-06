@@ -72,6 +72,26 @@ describe("clusterReviewsDeterministic", () => {
     expect(Object.keys(theme.quotes[0]!).sort()).toEqual(["appId", "appName", "date", "rating", "text"]);
   });
 
+  it("prefers SPECIFIC reviews for quotes over a long tag-everything review", () => {
+    const megaReview = review({
+      appId: "apple:1",
+      body: "Extremely long review mentioning absolutely everything about this app. ".repeat(10),
+      topics: ["App Performance", "Subscription Pricing", "User Interface", "Customer Support"],
+      improvementAreas: ["App Performance", "App Value", "User Interface"],
+    });
+    const focused = review({
+      appId: "apple:1",
+      body: "Crashes constantly on startup, that is the whole story.",
+      topics: ["App Performance"],
+      improvementAreas: ["App Performance"],
+    });
+    const { themes } = compute([megaReview, focused, review({ appId: "apple:2" })]);
+    const perf = themes.find((t) => t.theme === "App Performance")!;
+    // The focused review wins the apple:1 quote slot despite being far shorter.
+    const apple1Quote = perf.quotes.find((q) => q.appId === "apple:1")!;
+    expect(apple1Quote.text).toContain("Crashes constantly");
+  });
+
   it("flips a strongly-positive bucket to a praise theme", () => {
     const reviews = Array.from({ length: 5 }, (_, i) =>
       review({ appId: `apple:${(i % 3) + 1}`, rating: 5, sentiment: "positive", topics: ["User Interface"], improvementAreas: [], body: "Gorgeous, intuitive interface — a joy to use." }),
