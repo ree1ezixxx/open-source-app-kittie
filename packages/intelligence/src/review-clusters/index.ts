@@ -97,27 +97,55 @@ export interface ClusterReviewsComputed {
  * downstream. Unmapped labels fall through to `other` (honest, not forced).
  */
 const LABEL_TYPE: Record<string, ReviewThemeType> = {
-  // pricing / money
+  // taxonomy v2 (#272) — topics
+  "Ads Experience": "complaint",
+  "Pricing & Subscription": "pricing",
+  "Stability & Performance": "bug",
+  "Onboarding & Signup": "ux",
+  "Account & Login": "complaint",
+  "Billing & Refunds": "pricing",
+  "Design & Usability": "ux",
+  "Content Quality": "other",
+  "Feature Requests": "request",
+  Notifications: "complaint",
+  "Progress & Data": "bug",
+  "Privacy & Security": "complaint",
+  "Support & Service": "complaint",
+  Accessibility: "request",
+  // taxonomy v2 (#272) — improvement areas
+  "Ad Intrusiveness": "complaint",
+  "Subscription Lock-In": "pricing",
+  "Trial & Billing Deception": "pricing",
+  "Refund Friction": "pricing",
+  "Accuracy Failure": "bug",
+  "Crash & Data Loss": "bug",
+  "Performance Drag": "bug",
+  "Onboarding Confusion": "ux",
+  "Navigation & Usability": "ux",
+  "Notification Fatigue": "complaint",
+  "Missing Export & Portability": "request",
+  "Sync Reliability": "bug",
+  "Support Unresponsiveness": "complaint",
+  "Privacy Anxiety": "complaint",
+  "Content Gaps": "request",
+  "Account Recovery Trouble": "complaint",
+  // legacy v1 labels — kept so corpora tagged before the #272 re-tag sweep
+  // still type correctly (MIGRATION_MAP documents the translation).
   "Subscription Pricing": "pricing",
   "Payment Issues": "pricing",
   "Billing Accuracy": "pricing",
   "Payment Options": "pricing",
   "App Value": "pricing",
   "Free Trial Policy": "pricing",
-  // bugs / stability
   "App Performance": "bug",
-  // feature requests / gaps
   Features: "request",
   "Feature Functionality": "request",
   "Cross-Platform Sync": "request",
-  // interface
   "User Interface": "ux",
-  // support / access / noise (generic complaint surface)
   "Customer Support": "complaint",
   "Account Access": "complaint",
   "Account Recovery": "complaint",
   "Ads & Interruptions": "complaint",
-  Notifications: "complaint",
   "Push Notifications": "complaint",
   "Data Security": "complaint",
   "Content Moderation": "complaint",
