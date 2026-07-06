@@ -1,4 +1,4 @@
-import { eq, isNull } from "drizzle-orm";
+import { eq, gt, isNull } from "drizzle-orm";
 import { reviews } from "@kittie/db";
 import type { Db } from "@kittie/db";
 import type { Store } from "@kittie/types";
@@ -102,4 +102,86 @@ export async function backfillReviewTags(db: Db, batch = 1000): Promise<number> 
     total += rows.length;
   }
   return total;
+}
+
+/** Per-label tag counts across the whole corpus — the re-tag before/after report. */
+export interface TagDistribution {
+  rows: number;
+  topics: Record<string, number>;
+  improvementAreas: Record<string, number>;
+}
+
+/**
+ * FORCE re-tag — re-run the classifier over EVERY stored review and overwrite
+ * stale tags (unlike {@link backfillReviewTags}, which only fills nulls). This
+ * is how a classifier fix (e.g. the #266 word-boundary change) propagates to
+ * rows tagged under the old rules. Keyset-paginated by id so it is resumable
+ * and bounded-memory at any corpus size. Returns before/after distributions so
+ * the caller can report the shift instead of asserting it blind.
+ */
+export async function retagAllReviews(
+  db: Db,
+  batch = 1000,
+): Promise<{ retagged: number; before: TagDistribution; after: TagDistribution }> {
+  const before = await tagDistribution(db);
+  let retagged = 0;
+  let cursor = "";
+  for (;;) {
+    const rows = await db
+      .select({ id: reviews.id, rating: reviews.rating, title: reviews.title, body: reviews.body })
+      .from(reviews)
+      .where(gt(reviews.id, cursor))
+      .orderBy(reviews.id)
+      .limit(batch);
+    if (rows.length === 0) break;
+    for (const r of rows) {
+      const tags = classifyReview({ rating: r.rating, title: r.title, body: r.body });
+      await db
+        .update(reviews)
+        .set({
+          sentiment: tags.sentiment,
+          topics: JSON.stringify(tags.topics),
+          improvementAreas: JSON.stringify(tags.improvementAreas),
+        })
+        .where(eq(reviews.id, r.id));
+      retagged += 1;
+    }
+    cursor = rows[rows.length - 1]!.id;
+  }
+  const after = await tagDistribution(db);
+  return { retagged, before, after };
+}
+
+/** Count rows per tag label (reads persisted JSON arrays; log counts, not payloads). */
+export async function tagDistribution(db: Db): Promise<TagDistribution> {
+  const topics: Record<string, number> = {};
+  const improvementAreas: Record<string, number> = {};
+  let count = 0;
+  let cursor = "";
+  for (;;) {
+    const rows = await db
+      .select({ id: reviews.id, topics: reviews.topics, improvementAreas: reviews.improvementAreas })
+      .from(reviews)
+      .where(gt(reviews.id, cursor))
+      .orderBy(reviews.id)
+      .limit(2000);
+    if (rows.length === 0) break;
+    for (const r of rows) {
+      count += 1;
+      for (const t of safeTagArr(r.topics)) topics[t] = (topics[t] ?? 0) + 1;
+      for (const a of safeTagArr(r.improvementAreas)) improvementAreas[a] = (improvementAreas[a] ?? 0) + 1;
+    }
+    cursor = rows[rows.length - 1]!.id;
+  }
+  return { rows: count, topics, improvementAreas };
+}
+
+function safeTagArr(json: string | null): string[] {
+  if (!json) return [];
+  try {
+    const v = JSON.parse(json);
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
 }

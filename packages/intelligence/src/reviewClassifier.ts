@@ -34,12 +34,12 @@ interface Category {
 /** What the review is *about* — descriptive themes. Multi-label. */
 const TOPICS: Category[] = [
   { label: "Subscription Pricing", keywords: ["subscription", "premium", "price", "expensive", "overpriced", "cost", "monthly", "per month", "worth the", "too much money", "cheap"] },
-  { label: "App Performance", keywords: ["crash", "crashes", "freeze", "frozen", "lag", "laggy", "slow", "buggy", "glitch", "glitches", "broken", "won't load", "keeps closing", "force close"] },
+  { label: "App Performance", keywords: ["crash", "crashes", "crashing", "freeze", "freezes", "frozen", "freezing", "lag", "laggy", "lagging", "slow", "buggy", "glitch", "glitches", "broken", "won't load", "keeps closing", "force close"] },
   { label: "Customer Support", keywords: ["support", "customer service", "help desk", "no response", "never replied", "contact", "ticket", "unhelpful", "no one responds"] },
   { label: "Account Access", keywords: ["log in", "login", "sign in", "signin", "password", "locked out", "can't access", "account locked", "verification", "two factor", "2fa"] },
   { label: "Payment Issues", keywords: ["charged", "charge", "billing", "refund", "double charged", "payment failed", "transaction", "credit card", "money back"] },
   { label: "User Interface", keywords: ["interface", "ui", "ux", "layout", "design", "confusing", "cluttered", "hard to navigate", "clunky", "intuitive"] },
-  { label: "Ads & Interruptions", keywords: ["ad ", "ads", "advert", "advertisement", "commercial", "too many ads", "pop up", "popup"] },
+  { label: "Ads & Interruptions", keywords: ["ad", "ads", "advert", "advertisement", "advertising", "commercial", "too many ads", "pop up", "popup"] },
   { label: "Content & Library", keywords: ["content", "library", "catalog", "recommend", "recommendation", "feed", "playlist", "video", "song", "selection"] },
   { label: "Features", keywords: ["feature", "missing", "wish it had", "needs a", "add the ability", "option to", "functionality"] },
   { label: "Notifications", keywords: ["notification", "notify", "alert", "reminder", "spam notification"] },
@@ -50,7 +50,7 @@ const IMPROVEMENT_AREAS: Category[] = [
   { label: "Feature Functionality", keywords: ["feature", "doesn't work", "not working", "broken", "missing", "functionality", "bug", "glitch", "won't", "can't get it to"] },
   { label: "App Performance", keywords: ["crash", "freeze", "lag", "slow", "load", "buggy", "force close", "keeps closing"] },
   { label: "Billing Accuracy", keywords: ["charged", "billing", "double charged", "wrong charge", "overcharged", "refund", "transaction"] },
-  { label: "Cancellation Process", keywords: ["cancel", "cancellation", "unsubscribe", "can't cancel", "hard to cancel", "still charged after"] },
+  { label: "Cancellation Process", keywords: ["cancel", "canceled", "cancelled", "cancellation", "unsubscribe", "can't cancel", "hard to cancel", "still charged after"] },
   { label: "Payment Options", keywords: ["payment", "payment method", "card declined", "paypal", "apple pay", "pay with"] },
   { label: "App Value", keywords: ["not worth", "waste of money", "overpriced", "expensive", "rip off", "cash grab", "paywall"] },
   { label: "Account Recovery", keywords: ["locked out", "recover", "reset password", "can't log in", "account locked", "lost access"] },
@@ -63,13 +63,42 @@ const IMPROVEMENT_AREAS: Category[] = [
   { label: "Content Moderation", keywords: ["moderation", "report", "abuse", "spam content", "inappropriate", "banned"] },
 ];
 
-const POSITIVE_WORDS = ["love", "great", "excellent", "amazing", "perfect", "best", "awesome", "fantastic", "brilliant", "good", "useful", "indispensable", "favorite", "recommend"];
-const NEGATIVE_WORDS = ["hate", "terrible", "awful", "worst", "useless", "broken", "trash", "garbage", "disappointing", "frustrating", "annoying", "scam", "rip off", "ripoff", "waste"];
+const POSITIVE_WORDS = ["love", "loved", "great", "excellent", "amazing", "perfect", "best", "awesome", "fantastic", "brilliant", "good", "useful", "indispensable", "favorite", "recommend", "recommended"];
+const NEGATIVE_WORDS = ["hate", "hated", "terrible", "awful", "worst", "useless", "broken", "trash", "garbage", "disappointing", "frustrating", "annoying", "scam", "rip off", "ripoff", "waste"];
 
-function matchCategories(text: string, cats: Category[]): string[] {
+/* ---- boundary-safe keyword matching (#266) --------------------------------
+   `text.includes(k)` substring-matched short keywords inside longer words —
+   "ads" hit "loads"/"reads"/"salads", inflating tag buckets that every
+   downstream consumer (feeds, reviewInsights, cluster_reviews, feature-gap
+   demand) then trusted. Keywords now match only at word boundaries, with a
+   free trailing plural "s" so singular entries still catch plurals. Compiled
+   once at module load. */
+
+const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+function compileKeyword(k: string): RegExp {
+  // Boundary = start/end of text or any non-alphanumeric. `\b` alone fails on
+  // keywords that end in punctuation-adjacent positions and on unicode text.
+  return new RegExp(`(?:^|[^a-z0-9])${escapeRe(k)}s?(?:$|[^a-z0-9])`);
+}
+
+interface CompiledCategory {
+  label: string;
+  patterns: RegExp[];
+}
+
+const compileCategories = (cats: Category[]): CompiledCategory[] =>
+  cats.map((c) => ({ label: c.label, patterns: c.keywords.map(compileKeyword) }));
+
+const TOPIC_PATTERNS = compileCategories(TOPICS);
+const IMPROVEMENT_PATTERNS = compileCategories(IMPROVEMENT_AREAS);
+const POSITIVE_PATTERNS = POSITIVE_WORDS.map(compileKeyword);
+const NEGATIVE_PATTERNS = NEGATIVE_WORDS.map(compileKeyword);
+
+function matchCategories(text: string, cats: CompiledCategory[]): string[] {
   const hits: string[] = [];
   for (const c of cats) {
-    if (c.keywords.some((k) => text.includes(k))) hits.push(c.label);
+    if (c.patterns.some((p) => p.test(text))) hits.push(c.label);
   }
   return hits;
 }
@@ -83,8 +112,8 @@ function matchCategories(text: string, cats: Category[]): string[] {
 export function classifyReview(r: ClassifiableReview): ReviewTags {
   const text = `${r.title ?? ""} ${r.body}`.toLowerCase();
   const rating = Math.round(r.rating);
-  const hasPos = POSITIVE_WORDS.some((w) => text.includes(w));
-  const hasNeg = NEGATIVE_WORDS.some((w) => text.includes(w));
+  const hasPos = POSITIVE_PATTERNS.some((p) => p.test(text));
+  const hasNeg = NEGATIVE_PATTERNS.some((p) => p.test(text));
 
   let sentiment: Sentiment4;
   if (rating >= 4) sentiment = hasNeg ? "mixed" : "positive";
@@ -93,7 +122,7 @@ export function classifyReview(r: ClassifiableReview): ReviewTags {
 
   return {
     sentiment,
-    topics: matchCategories(text, TOPICS),
-    improvementAreas: matchCategories(text, IMPROVEMENT_AREAS),
+    topics: matchCategories(text, TOPIC_PATTERNS),
+    improvementAreas: matchCategories(text, IMPROVEMENT_PATTERNS),
   };
 }
