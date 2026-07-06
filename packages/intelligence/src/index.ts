@@ -12,7 +12,7 @@ export {
 export { computeKeywordDifficulty, computeOpportunityScore } from "./keyword.js";
 export { resolveKeywordPosition, type RankResolverHit } from "./keyword-rank.js";
 export { signalsFromContext } from "./signals.js";
-export { classifyReview } from "./reviewClassifier.js";
+export { classifyReview, MIGRATION_MAP } from "./reviewClassifier.js";
 export type { ClassifiableReview } from "./reviewClassifier.js";
 export type {
   AppSignals,
