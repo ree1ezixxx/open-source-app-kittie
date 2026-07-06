@@ -86,6 +86,13 @@ describe("calibrateConfidence — hard rules (property-style)", () => {
     }
   });
 
+  it("discarding old evidence never raises the score (recency scales with volume)", () => {
+    // full corpus: 6 units, half recent — vs the same corpus capped to its 3 newest
+    const full = calibrateConfidence(base({ evidenceUnits: 6, recentFraction: 0.5 }));
+    const cappedToNewest = calibrateConfidence(base({ evidenceUnits: 3, recentFraction: 1 }));
+    expect(cappedToNewest.score).toBeLessThanOrEqual(full.score);
+  });
+
   it("floor 0.05 applies only when evidence exists", () => {
     const c = calibrateConfidence(base({ evidenceUnits: 1, evidenceTarget: 10000, appsContributing: 0, appsResolved: 100, recentFraction: 0, requestedLocale: "GB", localesSeen: ["US"] }));
     expect(c.score).toBeGreaterThanOrEqual(CONFIDENCE_MODEL.floor);

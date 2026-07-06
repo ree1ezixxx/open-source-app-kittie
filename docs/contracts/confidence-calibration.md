@@ -19,7 +19,7 @@ audit it.
 score = min(0.90, 0.35                    base — the primitive ran on real evidence
               + 0.30 · volume             evidenceUnits / evidenceTarget, capped at 1
               + 0.20 · spread             appsContributing / appsResolved
-              + 0.05 · recency            fraction of evidence ≤ 180 days old (0 when dates unknown)
+              + 0.05 · recency            (fraction ≤180d old) × volume — i.e. recentUnits/target (0 when dates unknown)
               + 0.05 · diversity          sourceTypesPresent / sourceTypesConsulted
               + 0.05 · llm                enrichment seam succeeded)
         − 0.10 · localeMismatch           requested market absent from localesSeen
@@ -37,7 +37,7 @@ insufficient = 0**.
 |---|---|---|---|
 | volume | primary units analysed vs per-primitive target (reviews: 100) | more evidence → up | saturates at target |
 | spread | apps contributing ≥1 unit vs apps resolved | broader corroboration → up | 1 app of 10 = 0.02 of 0.20 |
-| recency | share of units ≤180d old | fresher → up | unknown dates → 0 (never guessed) |
+| recency | (share of units ≤180d old) × volume = recentUnits/target | fresher → up | unknown → 0; scales with volume so DISCARDING old evidence never raises the score |
 | diversity | source types that contributed vs consulted | independent sources agreeing → up | single-source answers capped lower |
 | llm | enrichment seam succeeded | labelled themes → +0.05 | failure/degrade → 0, never negative |
 | locale mismatch | requested market ∉ `localesSeen` | −0.10 flat | unknown locales ≠ mismatch (no penalty) |

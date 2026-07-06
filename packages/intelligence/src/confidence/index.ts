@@ -17,7 +17,7 @@
  *   score = min(0.9, 0.35                     — base: primitive ran on real evidence
  *                + 0.30 · volume              — evidenceUnits / evidenceTarget, capped 1
  *                + 0.20 · spread              — appsContributing / appsResolved
- *                + 0.05 · recency             — fraction of evidence ≤180d old (0 when unknown)
+ *                + 0.05 · recency             — (fraction ≤180d) × volume, i.e. recentUnits/target
  *                + 0.05 · diversity           — sourceTypesPresent / sourceTypesConsulted
  *                + 0.05 · llm                 — enrichment seam succeeded)
  *           − 0.10 · localeMismatch           — requested market absent from localesSeen
@@ -91,7 +91,10 @@ export function calibrateConfidence(input: CalibrationInput): IntelligenceConfid
   const M = CONFIDENCE_MODEL;
   const volume = clamp01(input.evidenceUnits / Math.max(input.evidenceTarget, 1));
   const spread = clamp01(input.appsContributing / Math.max(input.appsResolved, 1));
-  const recency = input.recentFraction == null ? 0 : clamp01(input.recentFraction);
+  // Recency scales with volume (recentUnits/target, not a bare fraction) — the
+  // golden honesty suite proved the bare fraction rewards DISCARDING old
+  // evidence (cap the corpus to its newest rows → fraction 1.0 → score up).
+  const recency = input.recentFraction == null ? 0 : clamp01(input.recentFraction) * volume;
   const diversity = clamp01(input.sourceTypesPresent / Math.max(input.sourceTypesConsulted, 1));
   const llm = input.llmEnriched ? 1 : 0;
   const mismatch = isLocaleMismatch(input.requestedLocale, input.localesSeen);
@@ -111,7 +114,10 @@ export function calibrateConfidence(input: CalibrationInput): IntelligenceConfid
     `volume ${input.evidenceUnits}/${input.evidenceTarget} → ${round3(M.weights.volume * volume)}`,
     `spread ${input.appsContributing}/${input.appsResolved} apps → ${round3(M.weights.spread * spread)}`,
   ];
-  if (input.recentFraction != null) reasons.push(`recency ${Math.round(recency * 100)}% ≤${M.recentWindowDays}d → ${round3(M.weights.recency * recency)}`);
+  if (input.recentFraction != null)
+    reasons.push(
+      `recency ${Math.round(clamp01(input.recentFraction) * 100)}% ≤${M.recentWindowDays}d (×volume) → ${round3(M.weights.recency * recency)}`,
+    );
   else reasons.push("recency unknown → 0");
   reasons.push(`source diversity ${input.sourceTypesPresent}/${input.sourceTypesConsulted} → ${round3(M.weights.diversity * diversity)}`);
   reasons.push(input.llmEnriched ? "LLM enrichment succeeded → +0.05" : "LLM enrichment unavailable → 0");
