@@ -25,6 +25,9 @@ Intelligence:
   pluto cluster-reviews <niche… | appId…> [--country US] [--limit-apps 10]
         [--types bug,pricing] [--since 2026-01-01] [--max-reviews 100]
                                    Cluster competitor reviews into ranked themes
+  pluto feature-gaps <niche… | appId…> [--country US] [--limit-apps 10]
+        [--min-demand high] [--no-reviews]
+                                   Feature × competitor matrix — table-stakes vs gaps
 
 Apps (legacy):
   pluto search [query]             Search apps

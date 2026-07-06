@@ -106,6 +106,17 @@ export {
   type ClusterReviewsComputed,
   type BuildReviewClustersInput,
 } from "./review-clusters/index.js";
+export {
+  findFeatureGaps,
+  findFeatureGapsDeterministic,
+  buildFeatureGapsResponse,
+  FEATURE_LEXICON,
+  FEATURE_GAP_DEFAULTS,
+  type FeatureInputApp,
+  type FeatureGapsComputeInput,
+  type FeatureGapsComputed,
+  type BuildFeatureGapsInput,
+} from "./feature-gaps/index.js";
 
 import type { AppListItem } from "@kittie/types";
 import { computeGrowthPct, computeGrowthScore, isFirstMover, reviewGrowth7d } from "./growth.js";

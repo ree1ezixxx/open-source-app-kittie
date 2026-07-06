@@ -8,6 +8,8 @@ import type {
   ClusterReviewsRequest,
   CompareAppRef,
   CompareAppsIntelligenceResponse,
+  FeatureGapsIntelligenceResponse,
+  FindFeatureGapsRequest,
   IntelligenceResponseEnvelope,
   ReviewClustersIntelligenceResponse,
   TrendsResponseData,
@@ -119,6 +121,20 @@ export function clusterReviews(
   // #259 cross-app review clustering: #180 envelope wrapped in `{ data }`.
   return request<{ data: ReviewClustersIntelligenceResponse }>(
     `/api/v1/app-intelligence/cluster-reviews`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    },
+  ).then(unwrapData);
+}
+
+export function findFeatureGaps(
+  input: FindFeatureGapsRequest,
+): Promise<FeatureGapsIntelligenceResponse> {
+  // #260 feature × competitor matrix: #180 envelope wrapped in `{ data }`.
+  return request<{ data: FeatureGapsIntelligenceResponse }>(
+    `/api/v1/app-intelligence/feature-gaps`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },

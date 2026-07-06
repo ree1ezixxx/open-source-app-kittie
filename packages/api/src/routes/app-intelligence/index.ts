@@ -6,6 +6,7 @@ import { appDetailRouter } from "./app-detail.js";
 import { compareAppsRouter } from "./compare-apps.js";
 import { validateIdeaRouter } from "./validate-idea.js";
 import { clusterReviewsRouter } from "./cluster-reviews.js";
+import { featureGapsRouter } from "./feature-gaps.js";
 
 /**
  * App-Intelligence router — mounts the per-module sub-routers under
@@ -24,5 +25,6 @@ appIntelligenceRouter.route("/compare-apps", compareAppsRouter);
 appIntelligenceRouter.route("/trends", trendsRouter);
 appIntelligenceRouter.route("/validate-idea", validateIdeaRouter);
 appIntelligenceRouter.route("/cluster-reviews", clusterReviewsRouter);
+appIntelligenceRouter.route("/feature-gaps", featureGapsRouter);
 appIntelligenceRouter.route("/", appDetailRouter);
 appIntelligenceRouter.route("/", teardownRouter);

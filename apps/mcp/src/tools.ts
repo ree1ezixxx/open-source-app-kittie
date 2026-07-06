@@ -363,6 +363,34 @@ export const BASE_TOOLS = [
     },
   },
   {
+    name: "find_feature_gaps",
+    description:
+      "Build a feature × competitor matrix for a niche: what the field OFFERS (from listings) vs what users " +
+      "DEMAND (review themes), separating table-stakes features from genuine whitespace gaps. Pass a `query` " +
+      "(e.g. 'sleep tracking') to auto-resolve competitors, or an explicit `appIds` array. Each feature carries " +
+      "coverage (share of the field that ships it), competitorCount, demand + implementation-quality tiers, a " +
+      "gap flag with a cited reason, tableStakes flag, confidence and evidence. Composes cluster_reviews for " +
+      "demand; degrades to listing-only coverage when reviews are sparse. Second rung after cluster_reviews, " +
+      "before rank_whitespace_ideas.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Niche/description to resolve a competitor set (e.g. 'sleep tracking')." },
+        appIds: {
+          type: "array",
+          items: { type: "string" },
+          description: "Explicit competitor app ids (e.g. apple:123). Wins over query when both are given.",
+        },
+        country: { type: "string", default: "US", description: "ISO market." },
+        limitApps: { type: "number", default: 10, description: "Max apps in the set (≤25)." },
+        includeReviewSignals: { type: "boolean", default: true, description: "Pull demand/quality from review themes (cluster_reviews)." },
+        includeDescriptionSignals: { type: "boolean", default: true, description: "Extract coverage from listing descriptions." },
+        minDemand: { type: "string", enum: ["low", "medium", "high"], description: "Only return features at/above this demand tier." },
+        store: { type: "string", enum: ["apple", "google"], description: "Restrict discovery to one store (query mode)." },
+      },
+    },
+  },
+  {
     name: "clone_ios_app",
     description:
       "Generate a complete, buildable SwiftUI iOS app that clones a trending app's core UX. " +

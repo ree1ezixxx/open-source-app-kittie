@@ -8,9 +8,11 @@ import { KITTIE_TOOL_NAMES, listTools } from "./tools.js";
 import {
   appDetailIntelligencePath,
   clusterReviewsRequest,
+  featureGapsRequest,
   findTrendingAppsPath,
   toAgentSafeError,
   CLUSTER_REVIEWS_PATH,
+  FEATURE_GAPS_PATH,
 } from "./intelligence-tools.js";
 
 const INVERSION_TOOLS = ["get_app_detail", "find_trending_apps"] as const;
@@ -101,6 +103,42 @@ describe("cluster_reviews registry + request builder (#259)", () => {
   it("passes explicit appIds through, trimmed", () => {
     const { body } = clusterReviewsRequest({ appIds: ["apple:1", " apple:2 ", 3 as unknown as string] });
     expect(body.appIds).toEqual(["apple:1", "apple:2"]);
+  });
+});
+
+describe("find_feature_gaps registry + request builder (#260)", () => {
+  it("registers find_feature_gaps as a read-only object-schema tool", () => {
+    expect(KITTIE_TOOL_NAMES).toContain("find_feature_gaps");
+    const tool = listTools().find((t) => t.name === "find_feature_gaps");
+    expect(tool?.inputSchema.type).toBe("object");
+    expect(tool?.annotations?.readOnlyHint).toBe(true);
+  });
+
+  it("requires a query or a non-empty appIds array", () => {
+    expect(() => featureGapsRequest({})).toThrow(/query .* appIds/i);
+    expect(() => featureGapsRequest({ appIds: [] })).toThrow();
+  });
+
+  it("builds a POST body, bounds limitApps and validates minDemand", () => {
+    const { path, body } = featureGapsRequest({
+      query: "  sleep tracking ",
+      limitApps: 999,
+      minDemand: "high",
+      includeReviewSignals: false,
+      store: "apple",
+    });
+    expect(path).toBe(FEATURE_GAPS_PATH);
+    expect(body.query).toBe("sleep tracking");
+    expect(body.limitApps).toBe(25);
+    expect(body.minDemand).toBe("high");
+    expect(body.includeReviewSignals).toBe(false);
+    expect(body.store).toBe("apple");
+  });
+
+  it("drops an invalid minDemand and passes explicit appIds trimmed", () => {
+    const { body } = featureGapsRequest({ appIds: ["apple:1", " apple:2 "], minDemand: "nonsense" });
+    expect(body.appIds).toEqual(["apple:1", "apple:2"]);
+    expect(body.minDemand).toBeUndefined();
   });
 });
 
