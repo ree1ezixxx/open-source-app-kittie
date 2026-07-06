@@ -391,6 +391,30 @@ export const BASE_TOOLS = [
     },
   },
   {
+    name: "rank_whitespace_ideas",
+    description:
+      "GENERATE and rank app opportunity sub-niches for a category — 'give me the 5 best sub-niches to build " +
+      "in health-behaviour, ranked'. Distinct from validate_app_idea (judges ONE supplied idea): this produces " +
+      "the ideas. Deterministic candidate funnel (seedIdeas + store-autocomplete keywords → cheap catalog " +
+      "pre-filter → deep analysis of only the top-K via cluster_reviews + find_feature_gaps, both cached). " +
+      "Each idea carries a 0–100 score with full component breakdown (demand velocity, incumbent weakness, " +
+      "sentiment gap, feature gap, monetization — buildDifficulty reported but never scored), tiers, evidence, " +
+      "a suggested build angle, avoidBecause warnings, confidence, and the competitor ids analysed. Funnel " +
+      "counts are reported — nothing truncates silently. Final rung after cluster_reviews and find_feature_gaps.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        category: { type: "string", description: "The space to generate sub-niches for (e.g. 'health-behaviour', 'sleep')." },
+        country: { type: "string", default: "US", description: "ISO market." },
+        limit: { type: "number", default: 5, description: "Ranked ideas to return = deep-analysis budget (≤10)." },
+        seedIdeas: { type: "array", items: { type: "string" }, description: "Optional candidate niches to merge into the funnel." },
+        minConfidence: { type: "number", description: "Drop ideas below this confidence (0–1)." },
+        store: { type: "string", enum: ["apple", "google"], description: "Restrict competitor discovery to one store." },
+      },
+      required: ["category"],
+    },
+  },
+  {
     name: "clone_ios_app",
     description:
       "Generate a complete, buildable SwiftUI iOS app that clones a trending app's core UX. " +

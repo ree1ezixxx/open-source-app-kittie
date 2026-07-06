@@ -11,10 +11,12 @@ import type {
   FeatureGapsIntelligenceResponse,
   FindFeatureGapsRequest,
   IntelligenceResponseEnvelope,
+  RankWhitespaceIdeasRequest,
   ReviewClustersIntelligenceResponse,
   TrendsResponseData,
   ValidateIdeaIntelligenceRequest,
   ValidateIdeaIntelligenceResponse,
+  WhitespaceIdeasIntelligenceResponse,
 } from "@kittie/types";
 import { loadConfig } from "./config.js";
 
@@ -135,6 +137,20 @@ export function findFeatureGaps(
   // #260 feature × competitor matrix: #180 envelope wrapped in `{ data }`.
   return request<{ data: FeatureGapsIntelligenceResponse }>(
     `/api/v1/app-intelligence/feature-gaps`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    },
+  ).then(unwrapData);
+}
+
+export function rankWhitespaceIdeas(
+  input: RankWhitespaceIdeasRequest,
+): Promise<WhitespaceIdeasIntelligenceResponse> {
+  // #261 opportunity ranking: #180 envelope wrapped in `{ data }`.
+  return request<{ data: WhitespaceIdeasIntelligenceResponse }>(
+    `/api/v1/app-intelligence/whitespace-ideas`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },

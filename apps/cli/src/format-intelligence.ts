@@ -9,6 +9,7 @@ import type {
   FeatureGapsIntelligenceResponse,
   ReviewClustersIntelligenceResponse,
   ValidateIdeaIntelligenceResponse,
+  WhitespaceIdeasIntelligenceResponse,
 } from "@kittie/types";
 import { renderTable } from "./output.js";
 import type { TrendsIntelligenceResponse } from "./intelligence-client.js";
@@ -162,6 +163,34 @@ export function formatFeatureGaps(res: FeatureGapsIntelligenceResponse): string 
     row("Other", other);
   }
   lines.push("");
+  lines.push(...caveatBlock(res.caveats));
+  return lines.join("\n");
+}
+
+export function formatWhitespaceIdeas(res: WhitespaceIdeasIntelligenceResponse): string {
+  const { data } = res;
+  const f = data.funnel;
+  const lines = [
+    `Whitespace ideas — ${data.category} (${data.country})`,
+    `Funnel: ${f.candidates} candidates → ${f.prefiltered} pre-filtered → ${f.deepAnalyzed} deep-analysed · Enrichment: ${data.enrichment}`,
+    `Confidence: ${res.confidence.score.toFixed(2)} (${res.confidence.label})`,
+    "",
+  ];
+  if (data.ideas.length === 0) {
+    lines.push("No opportunities survived the evidence funnel — broaden the category or add seed ideas.");
+  } else {
+    data.ideas.forEach((idea, i) => {
+      const b = idea.scoreBreakdown;
+      lines.push(
+        `${i + 1}. ${idea.niche} — score ${idea.score}/100 (conf ${idea.confidence.toFixed(2)})`,
+        `   demand ${idea.demand} · incumbents ${idea.incumbentStrength} · sentiment gap ${idea.sentimentGap} · feature gap ${idea.featureGap} · monetization ${idea.monetizationPotential} · difficulty ${idea.buildDifficulty}`,
+        `   breakdown: demand ${b.demandVelocity} · weakness ${b.incumbentWeakness} · sentiment ${b.sentimentGap} · features ${b.featureGap} · money ${b.monetization}`,
+        `   angle: ${idea.suggestedBuildAngle}`,
+      );
+      for (const a of idea.avoidBecause ?? []) lines.push(`   ⚠ ${a}`);
+      lines.push("");
+    });
+  }
   lines.push(...caveatBlock(res.caveats));
   return lines.join("\n");
 }

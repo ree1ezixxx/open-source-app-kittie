@@ -18,6 +18,7 @@ export type IntelligenceResponseType =
   | "similar"
   | "review_clusters"
   | "feature_gaps"
+  | "whitespace_ideas"
   | "report";
 
 export type IntelligenceStatus = "ok" | "partial" | "insufficient";

@@ -28,6 +28,8 @@ Intelligence:
   pluto feature-gaps <niche… | appId…> [--country US] [--limit-apps 10]
         [--min-demand high] [--no-reviews]
                                    Feature × competitor matrix — table-stakes vs gaps
+  pluto whitespace <category…> [--limit 5] [--seed "a,b"] [--min-confidence 0.4]
+                                   Generate + rank opportunity sub-niches (funnel over reviews/gaps)
 
 Apps (legacy):
   pluto search [query]             Search apps

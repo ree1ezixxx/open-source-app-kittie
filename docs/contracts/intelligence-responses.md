@@ -5,7 +5,7 @@ CLI, MCP, reports, and web surfaces can add response-specific `data`, but every
 intelligence response must use the same envelope:
 
 - `responseType` - `app_detail`, `compare_apps`, `trends`, `idea_validation`,
-  `teardown`, `similar`, `review_clusters`, `feature_gaps`, or `report`
+  `teardown`, `similar`, `review_clusters`, `feature_gaps`, `whitespace_ideas`, or `report`
 - `status` - `ok`, `partial`, or `insufficient`
 - `data` - response-specific payload
 - `evidence[]` - claim, source identity, observed/modelled status, freshness,
@@ -30,7 +30,7 @@ outer `data` key:
 ```
 
 `app_detail`, `compare_apps`, `idea_validation`, `teardown`, `similar`,
-`review_clusters`, and `feature_gaps` all follow this. The web client's `tryLive` strips exactly that one outer level and
+`review_clusters`, `feature_gaps`, and `whitespace_ideas` all follow this. The web client's `tryLive` strips exactly that one outer level and
 hands surfaces the full envelope; `envelope.data` is the response-specific
 payload. Wrapping helpers for non-envelope-native services (DecisionPacket
 confidence/evidence, ranked competitors, named missing inputs) live in

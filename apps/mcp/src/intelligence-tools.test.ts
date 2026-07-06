@@ -13,6 +13,8 @@ import {
   toAgentSafeError,
   CLUSTER_REVIEWS_PATH,
   FEATURE_GAPS_PATH,
+  whitespaceIdeasRequest,
+  WHITESPACE_IDEAS_PATH,
 } from "./intelligence-tools.js";
 
 const INVERSION_TOOLS = ["get_app_detail", "find_trending_apps"] as const;
@@ -139,6 +141,36 @@ describe("find_feature_gaps registry + request builder (#260)", () => {
     const { body } = featureGapsRequest({ appIds: ["apple:1", " apple:2 "], minDemand: "nonsense" });
     expect(body.appIds).toEqual(["apple:1", "apple:2"]);
     expect(body.minDemand).toBeUndefined();
+  });
+});
+
+describe("rank_whitespace_ideas registry + request builder (#261)", () => {
+  it("registers rank_whitespace_ideas as a read-only tool requiring category", () => {
+    expect(KITTIE_TOOL_NAMES).toContain("rank_whitespace_ideas");
+    const tool = listTools().find((t) => t.name === "rank_whitespace_ideas");
+    expect(tool?.annotations?.readOnlyHint).toBe(true);
+    expect((tool?.inputSchema as { required?: readonly string[] }).required).toEqual(["category"]);
+  });
+
+  it("requires a non-empty category", () => {
+    expect(() => whitespaceIdeasRequest({})).toThrow(/category/i);
+    expect(() => whitespaceIdeasRequest({ category: "  " })).toThrow(/category/i);
+  });
+
+  it("builds a POST body and bounds limit + minConfidence", () => {
+    const { path, body } = whitespaceIdeasRequest({
+      category: " health-behaviour ",
+      limit: 999,
+      minConfidence: 5,
+      seedIdeas: ["menopause sleep", "  ", 3 as unknown as string],
+      store: "apple",
+    });
+    expect(path).toBe(WHITESPACE_IDEAS_PATH);
+    expect(body.category).toBe("health-behaviour");
+    expect(body.limit).toBe(10);
+    expect(body.minConfidence).toBe(1);
+    expect(body.seedIdeas).toEqual(["menopause sleep"]);
+    expect(body.store).toBe("apple");
   });
 });
 
