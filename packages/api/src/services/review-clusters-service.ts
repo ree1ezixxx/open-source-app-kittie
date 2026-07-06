@@ -23,10 +23,11 @@ import {
   type ClusterInputApp,
   type ClusterInputReview,
 } from "@kittie/intelligence";
-import { getRecentReviewsForApps, listAppsByIds, type ClusterReviewRow } from "@kittie/db";
+import { getRecentReviewsForApps, listAppsByIds, reviewCountsByApp, type ClusterReviewRow } from "@kittie/db";
 import { getDb } from "../lib/db.js";
 import { cachedJson, generate, hashInput, isGeminiConfigured, GEMINI_MODEL } from "../lib/gemini.js";
 import { findSimilarApps, SimilarAppsError } from "./similar-apps-service.js";
+import { recallReviewedApps, RECALL_SHARE, type RecalledApp } from "./evidence-recall.js";
 
 export class ReviewClustersError extends Error {
   constructor(
@@ -51,6 +52,10 @@ export interface ReviewClustersEnrichment {
 
 export interface ReviewClustersDeps {
   findSimilarApps(input: FindSimilarAppsInput): Promise<FindSimilarAppsResult>;
+  /** Which of these apps hold >=1 stored review (query-mode preference, #268). */
+  reviewCounts(ids: string[]): Promise<Record<string, number>>;
+  /** Recall pass over the review-bearing set (#268) — merged ahead of the pool. */
+  recallReviewed(query: string, limit: number): Promise<RecalledApp[]>;
   /** Resolve display names for an explicit `appIds` set (unknown ids drop out). */
   resolveApps(ids: string[]): Promise<ClusterInputApp[]>;
   fetchReviews(ids: string[], perApp: number): Promise<ClusterReviewRow[]>;
@@ -61,6 +66,8 @@ export interface ReviewClustersDeps {
 
 const defaultDeps: ReviewClustersDeps = {
   findSimilarApps,
+  reviewCounts: (ids) => reviewCountsByApp(getDb(), ids),
+  recallReviewed: recallReviewedApps,
   resolveApps: async (ids) => {
     const rows = await listAppsByIds(getDb(), ids);
     const byId = new Map(rows.map((r) => [r.id, r.title]));
@@ -116,12 +123,36 @@ export async function getReviewClusters(
   } else {
     let similar: FindSimilarAppsResult;
     try {
-      similar = await deps.findSimilarApps({ query, store: normaliseStore(input.store), limit: limitApps });
+      // Over-fetch, then PREFER review-bearing competitors (#268): this is an
+      // evidence-seeking primitive — an agent asking "what do users complain
+      // about" wants apps that HAVE user evidence. Preference, not filter:
+      // relevance order is kept within each group, review-less apps still fill
+      // remaining slots, and sourceCoverage reports the truth either way.
+      similar = await deps.findSimilarApps({
+        query,
+        store: normaliseStore(input.store),
+        limit: Math.min(limitApps * 4, 50),
+      });
     } catch (err) {
       if (err instanceof SimilarAppsError) throw new ReviewClustersError(err.message, err.status);
       throw err;
     }
-    apps = similar.similar.slice(0, limitApps).map((s) => ({ id: s.app.id, name: s.app.title }));
+    const ranked = similar.similar.map((s) => ({ id: s.app.id, name: s.app.title }));
+    // Recall pass (#268): catalog FTS misses review-rich incumbents whose titles
+    // lack the query token; search the review-bearing set directly and merge its
+    // hits FIRST (relevance-guarded — >=1 real token match each).
+    const recalled = (await deps.recallReviewed(query, limitApps)).slice(0, Math.max(1, Math.ceil(limitApps * RECALL_SHARE)));
+    const counts = ranked.length > 0 ? await deps.reviewCounts(ranked.map((a) => a.id)) : {};
+    const withReviews = ranked.filter((a) => (counts[a.id] ?? 0) > 0);
+    const without = ranked.filter((a) => (counts[a.id] ?? 0) === 0);
+    const merged: ClusterInputApp[] = [];
+    const seenIds = new Set<string>();
+    for (const a of [...recalled.map((r) => ({ id: r.id, name: r.name })), ...withReviews, ...without]) {
+      if (seenIds.has(a.id)) continue;
+      seenIds.add(a.id);
+      merged.push(a);
+    }
+    apps = merged.slice(0, limitApps);
     if (apps.length === 0) {
       throw new ReviewClustersError("no competitors matched that query — refine it or pass explicit appIds", 404);
     }

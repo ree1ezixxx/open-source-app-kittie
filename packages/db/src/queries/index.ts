@@ -27,6 +27,7 @@ export {
   getAppIdByStoreAppId,
   getRecentReviewTagsForApps,
   topChartedAppIds,
+  listReviewedApps,
   getRecentReviewsForApps,
   type ClusterReviewRow,
   listAppIaps,
