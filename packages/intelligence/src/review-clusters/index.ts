@@ -176,16 +176,38 @@ function trimQuote(r: ClusterInputReview): string {
   return `${(lastSpace > 40 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
 }
 
-/** One representative quote per app (longest body wins), then the longest overall. */
+/** Distinct tag labels a review carries — fewer = more specific to any one theme. */
+function labelCount(r: ClusterInputReview): number {
+  return new Set([...(r.topics ?? []), ...(r.improvementAreas ?? [])]).size;
+}
+
+/**
+ * One representative quote per app, SPECIFICITY first: prefer the member review
+ * carrying the fewest distinct tag labels (a review tagged with everything is
+ * about nothing in particular — smoke-tested against real data, the longest
+ * review otherwise wins every theme and all quotes collapse to one voice),
+ * tie-break by longer body. Then order the per-app picks the same way.
+ */
 function pickQuotes(reviews: ClusterInputReview[], appName: Map<string, string>): ReviewThemeQuote[] {
+  const better = (a: ClusterInputReview, b: ClusterInputReview): boolean => {
+    const la = labelCount(a);
+    const lb = labelCount(b);
+    if (la !== lb) return la < lb;
+    return (a.body?.length ?? 0) > (b.body?.length ?? 0);
+  };
   const bestPerApp = new Map<string, ClusterInputReview>();
   for (const r of reviews) {
+    if ((r.body || r.title || "").trim().length === 0) continue;
     const cur = bestPerApp.get(r.appId);
-    if (!cur || (r.body?.length ?? 0) > (cur.body?.length ?? 0)) bestPerApp.set(r.appId, r);
+    if (!cur || better(r, cur)) bestPerApp.set(r.appId, r);
   }
   return [...bestPerApp.values()]
-    .filter((r) => (r.body || r.title || "").trim().length > 0)
-    .sort((a, b) => (b.body?.length ?? 0) - (a.body?.length ?? 0) || a.appId.localeCompare(b.appId))
+    .sort(
+      (a, b) =>
+        labelCount(a) - labelCount(b) ||
+        (b.body?.length ?? 0) - (a.body?.length ?? 0) ||
+        a.appId.localeCompare(b.appId),
+    )
     .slice(0, CLUSTER_DEFAULTS.maxQuotesPerTheme)
     .map<ReviewThemeQuote>((r) => ({
       appId: r.appId,
