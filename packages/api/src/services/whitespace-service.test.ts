@@ -171,3 +171,31 @@ describe("getWhitespaceIdeas", () => {
     expect(res.data.funnel.deepAnalyzed).toBe(10); // maxLimit
   });
 });
+
+describe("sourceCoverage aggregation (#271 cold-verify)", () => {
+  it("dedups overlapping niche competitor sets — appsWithReviews never exceeds appsResolved, partial not masked", async () => {
+    // Two candidates whose sets overlap on apple:A. A has reviews everywhere; B never does.
+    const d = deps({
+      relatedKeywords: vi.fn(async () => ["niche one", "niche two"]),
+      findSimilarApps: vi.fn(async (input) =>
+        input.query === "niche one"
+          ? similarResult([app({ id: "apple:A" })])
+          : similarResult([app({ id: "apple:A" }), app({ id: "apple:B", title: "NoReviews" })]),
+      ),
+      fetchThemes: vi.fn(async (appIds: string[]) => ({
+        themes: [painTheme()],
+        reviewsAnalyzed: appIds.length === 1 ? 100 : 100, // A capped at 100 in both niches
+        perAppReviews: appIds.map((id) => ({ appId: id, reviewsAnalyzed: id === "apple:A" ? 100 : 0 })),
+        reviewDateRange: { oldest: "2026-06-01T00:00:00.000Z", newest: "2026-07-01T00:00:00.000Z" },
+        localesSeen: ["US"],
+      })),
+    });
+    const res = await getWhitespaceIdeas({ category: "sleep", limit: 2 }, d);
+    const sc = res.data.sourceCoverage;
+    expect(sc.appsResolved).toBe(2); // A + B deduped
+    expect(sc.appsWithReviews).toBe(1); // ONLY A — was 2 under summed aggregation
+    expect(sc.appsWithReviews).toBeLessThanOrEqual(sc.appsResolved);
+    expect(sc.reviewsAnalyzed).toBe(100); // A's capped rows counted once, not twice
+    expect(sc.notes[0]).toEqual({ sourceType: "review", status: "partial" }); // B's silence not masked
+  });
+});

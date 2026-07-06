@@ -65,8 +65,9 @@ export interface WhitespaceDeps {
   ): Promise<{
     themes: ReviewTheme[];
     reviewsAnalyzed: number;
-    /** Propagated cluster sourceCoverage bits (#271); absent on degrade. */
-    appsWithReviews?: number;
+    /** Propagated cluster coverage bits (#271); absent on degrade. Per-app
+        counts (not a bare sum) so overlapping niche sets dedup exactly. */
+    perAppReviews?: Array<{ appId: string; reviewsAnalyzed: number }>;
     reviewDateRange?: { oldest: string; newest: string } | null;
     localesSeen?: string[];
   }>;
@@ -93,7 +94,7 @@ const defaultDeps: WhitespaceDeps = {
       return {
         themes: res.data.themes,
         reviewsAnalyzed: res.data.totalReviewsAnalyzed,
-        appsWithReviews: sc.appsWithReviews,
+        perAppReviews: res.data.coverage.map((c) => ({ appId: c.appId, reviewsAnalyzed: c.reviewsAnalyzed })),
         reviewDateRange: sc.reviewDateRange,
         localesSeen: sc.localesSeen,
       };
@@ -175,8 +176,11 @@ export async function getWhitespaceIdeas(
   let ideas: WhitespaceIdea[] = [];
   // Aggregated sourceCoverage across the deep-analysed set (#271).
   const deepAppIds = new Set<string>();
-  let aggAppsWithReviews = 0;
-  let aggReviews = 0;
+  // Per-app dedup (#271 cold-verify): niches' competitor sets overlap in normal
+  // operation — summing per-niche counts overstated appsWithReviews (could
+  // exceed the deduped appsResolved) and masked partial coverage. Same app
+  // across niches yields the same capped rows, so keep the max per app.
+  const reviewsByApp = new Map<string, number>();
   let aggOldest: string | null = null;
   let aggNewest: string | null = null;
   const aggLocales = new Set<string>();
@@ -188,8 +192,9 @@ export async function getWhitespaceIdeas(
     ];
     const { themes, reviewsAnalyzed } = meta;
     for (const id of appIds) deepAppIds.add(id);
-    aggAppsWithReviews += meta.appsWithReviews ?? 0;
-    aggReviews += reviewsAnalyzed;
+    for (const pa of meta.perAppReviews ?? []) {
+      reviewsByApp.set(pa.appId, Math.max(reviewsByApp.get(pa.appId) ?? 0, pa.reviewsAnalyzed));
+    }
     if (meta.reviewDateRange) {
       if (aggOldest === null || meta.reviewDateRange.oldest < aggOldest) aggOldest = meta.reviewDateRange.oldest;
       if (aggNewest === null || meta.reviewDateRange.newest > aggNewest) aggNewest = meta.reviewDateRange.newest;
@@ -223,8 +228,8 @@ export async function getWhitespaceIdeas(
     funnel: { candidates: candidates.length, prefiltered: prefiltered.length, deepAnalyzed: survivors.length },
     sourceCoverage: {
       appsResolved: deepAppIds.size,
-      appsWithReviews: aggAppsWithReviews,
-      reviewsAnalyzed: aggReviews,
+      appsWithReviews: [...reviewsByApp.values()].filter((n) => n > 0).length,
+      reviewsAnalyzed: [...reviewsByApp.values()].reduce((a, b) => a + b, 0),
       reviewDateRange: aggOldest && aggNewest ? { oldest: aggOldest, newest: aggNewest } : null,
       localesSeen: [...aggLocales].sort(),
     },
