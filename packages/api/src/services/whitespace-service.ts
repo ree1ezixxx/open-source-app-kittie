@@ -180,14 +180,25 @@ export async function getWhitespaceIdeas(
   // (autocomplete keywords). Ungrounded → refuse the whole funnel before any
   // deep spend; the response is insufficient with the dead tokens named.
   const keywordHay = keywords.map((k) => normaliseCandidate(k)).join(" ");
-  const keywordTokens = new Set(keywordHay.split(" ").filter((t) => t.length > 2));
+  const keywordTokens = [...new Set(keywordHay.split(" ").filter((t) => t.length > 2))];
   const catTokens = [...categoryTokens];
-  const ungroundedTokens = catTokens.filter((t) => !keywordTokens.has(t));
+  // Echo = literal token OR shared >=4-char prefix (cold-verify: live autocomplete
+  // says "learn spanish"/"lessons" for the category token "learning" — morphology,
+  // not absence). Deterministic, no stemmer dependency.
+  const echoed = (cat: string): boolean =>
+    keywordTokens.some((k) => {
+      if (k === cat) return true;
+      const n = Math.min(4, cat.length, k.length);
+      return cat.length >= 4 && k.length >= 4 && cat.slice(0, n) === k.slice(0, n);
+    });
+  const ungroundedTokens = catTokens.filter((t) => !echoed(t));
   const categoryGrounded =
     seeds.length > 0 || // caller-supplied seeds encode intent — never funnel-refused
     keywords.length === 0 || // no autocomplete signal → the zero-competitor path judges it
     catTokens.length === 0 ||
-    ungroundedTokens.length / catTokens.length < 0.5;
+    // Refuse only when a strict MAJORITY of category tokens have no echo —
+    // exactly half (e.g. 1 of 2) is benefit-of-the-doubt (cold-verify boundary).
+    ungroundedTokens.length / catTokens.length <= 0.5;
   if (!categoryGrounded) {
     return buildWhitespaceIdeasResponse({
       ideas: [],

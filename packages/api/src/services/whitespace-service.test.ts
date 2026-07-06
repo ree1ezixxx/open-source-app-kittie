@@ -261,3 +261,27 @@ describe("category grounding gate (#274 cold-verify BLOCKER)", () => {
     expect(res.data.funnel.refused).toBe(res.data.funnel.deepAnalyzed);
   });
 });
+
+describe("category grounding — boundary + morphology (#274 re-verify)", () => {
+  it("two-token category with only ONE literal echo still passes (live 'language learning' shape)", async () => {
+    // Live autocomplete echoes "language" but never the literal token "learning"
+    // (corpus says "learn spanish", "lessons"). Prefix morphology covers learn~learning;
+    // and even without it, 1-of-2 unechoed is exactly half → benefit of the doubt.
+    const d = deps({
+      relatedKeywords: vi.fn(async () => ["language for kids", "learn spanish", "language tutor"]),
+    });
+    const res = await getWhitespaceIdeas({ category: "language learning" }, d);
+    expect(res.status).not.toBe("insufficient");
+    expect(res.data.ideas.length).toBeGreaterThan(0);
+  });
+
+  it("junk-majority category still refused (2 of 3 tokens dead)", async () => {
+    const d = deps({
+      relatedKeywords: vi.fn(async () => ["screen widgets photo", "home screen widgets"]),
+    });
+    const res = await getWhitespaceIdeas({ category: "zzqx flurbin widgets" }, d);
+    expect(res.status).toBe("insufficient");
+    expect(res.data.funnel.refused).toBeGreaterThan(0);
+    expect(d.fetchThemes).not.toHaveBeenCalled();
+  });
+});
