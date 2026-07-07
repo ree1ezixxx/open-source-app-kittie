@@ -66,6 +66,48 @@ breaks from the #242 review are now dialect-aware:**
 (real `carryForwardSnapshots` on pglite: carry, idempotent `ON CONFLICT`,
 `timestamptz` sanity). SQLite tests unchanged.
 
+## #244 — native Postgres full-text search (tsvector/GIN, follow-up to #245)
+
+**Additive pg-only schema change** (SQLite schema untouched): `apps.search_tsv`,
+a **generated STORED `tsvector`** over `coalesce(title,'') || ' ' || coalesce(developer,'')`
+plus GIN index `apps_search_tsv_idx`. Declared in `schema.pg.ts` (drizzle
+`customType` + `.generatedAlwaysAs`), migration `drizzle/pg/0001_*.sql`.
+Generated-stored ⇒ self-syncing on insert/update — no triggers, no backfill job.
+
+**Tokenization parity (`src/fts-normalize.ts` — single source of truth).** The
+`'simple'` config alone is NOT equivalent to FTS5's unicode61: unicode61 also
+**folds diacritics** ("Pokémon" → `pokemon`) and **splits on all non-alphanumerics**
+("Node.js" → `node`,`js`, where pg's parser keeps one host-lexeme). So the document
+expression wraps the text in `translate(lower(…), FROM, TO)` with a fold map that
+(a) maps Latin diacritics — both cases, locale-independent — to their ASCII base,
+and (b) maps compound joiners (`.@/:_`) to spaces; the SAME map is applied to
+query text in `toPgTsQuery` before tokenizing. The map is pinned to FTS5's
+**observed** behaviour (probed on libsql): only canonically-decomposable chars
+fold (é, ü, ñ, İ, ž, …); non-decomposing strokes/ligatures (ø, ł, đ, ð, æ, ß, þ)
+are preserved on BOTH engines. Non-Latin case-folding of the document depends on
+the pg locale's `lower()`, as with any pg text search.
+
+**Runtime:** the #245 `LIKE` fallback is replaced. `ensureAppsFts` on pg now
+idempotently creates the column + index using the SAME shared expression (covers
+pre-#244 databases; no-op after the migration). `searchAppIds` /
+`countAppIdsByText` query `search_tsv @@ to_tsquery('simple', …)` ranked by
+`ts_rank`; the tsquery is fold+tokenize of the query text, each token a `:*`
+prefix term, `&`-combined ("candy cru" → `candy:* & cru:*`). New seam
+`appsFtsQuery(db, query)` returns dialect-appropriate `{ from, match, rank }`
+SQL fragments; `app-query.ts`'s search flow (pool, count, keyset) composes those
+instead of forcing the non-FTS branch on pg. `pg_trgm` was NOT added —
+token-prefix parity doesn't need it (FTS5 doesn't do mid-word substring either),
+and it would add an extension dependency for no behavioural gain.
+
+**Tests:** `fts-parity.test.ts` drives BOTH engines (libsql FTS5 + pglite
+tsvector) over one fixture — accented (Pokémon/Beyoncé/Café/naïve/Señor/Über),
+compound (Node.js, dev@node.io), non-folding (Søren), ASCII controls — and
+asserts identical result sets + counts per query, including post-UPDATE sync.
+`pg-dialect.test.ts` — migration creates column+GIN index; `ensureAppsFts`
+creates them on a pre-#244 db (idempotent); ts_rank ordering; empty/garbage/
+hostile queries return empty (never throw); fragment composition with joins/
+filters (the API search-flow shape). SQLite FTS5 path byte-identical, tests unchanged.
+
 **`createDb()` guard — LEFT IN PLACE (intentional).** `packages/db` has **no
 Postgres runtime driver** (`pg` / `postgres-js`); only `@electric-sql/pglite` as a
 dev-dep for tests. The query modules are now dialect-safe and pglite-proven, but

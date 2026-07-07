@@ -38,7 +38,15 @@ export {
   reviewCountsByApp,
 } from "./detail.js";
 export { enrichSnapshotScores } from "./scoring.js";
-export { countAppIdsByText, ensureAppsFts, searchAppIds, toFtsMatch } from "./fts.js";
+export {
+  appsFtsQuery,
+  countAppIdsByText,
+  ensureAppsFts,
+  searchAppIds,
+  toFtsMatch,
+  toPgTsQuery,
+  type AppsFtsQuery,
+} from "./fts.js";
 export {
   findKeyword,
   keywordRowToDifficulty,
