@@ -72,3 +72,25 @@ dev-dep for tests. The query modules are now dialect-safe and pglite-proven, but
 `createDb()` still can't open a real `postgres://` connection, so the hard-throw
 stays until a pg driver + connection wiring lands (with #244 / #238). Relaxing it
 now would let `DATABASE_URL=postgres://` fail at connect-time instead of guard-time.
+
+## #257 — widen 64-bit estimate/size columns to `bigint` (pg only)
+
+Found during the Supabase initial load (#256): SQLite `INTEGER` is 64-bit, but the
+#242 pg mirror declared `file_size_bytes`, `downloads_estimate`, `revenue_estimate`
+as `integer` (int4, max 2,147,483,647). Real values overflow it (seen: a ~2.6 GB
+`file_size_bytes`), so the loader had to NULL them — an honest-data loss.
+
+- **pg schema** (`schema.pg.ts`): the three columns are now `bigint({ mode: "number" })`
+  across all tables that carry them — `apps.file_size_bytes`,
+  `app_snapshots.{downloads_estimate,revenue_estimate}`,
+  `app_ideas.{downloads_estimate,revenue_estimate}`. `mode:"number"` keeps the JS type
+  `number` (values stay < 2^53), matching SQLite and every downstream consumer — no
+  type change for callers.
+- **Migration** `drizzle/pg/0001_slippery_santa_claus.sql`: five additive
+  `ALTER COLUMN … SET DATA TYPE bigint` — widening only, no data loss, no rename/drop.
+- **SQLite unchanged** — it already stored these as 64-bit `INTEGER`.
+- **Test**: `pg-dialect.test.ts` asserts the migrated columns are `bigint`
+  (information_schema) and round-trips values > int4 range as `number`.
+- **Loader** (`scripts/load-supabase.ts`, on the still-open **#256**): once this lands,
+  drop the `i4()` NULL-guard for these three columns so the next load pass carries the
+  real 64-bit values. That edit belongs to #256 (the file is not on `main` yet).
