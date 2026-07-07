@@ -27,6 +27,7 @@ import {
   buildSimilarAgentSummary,
   classifyReview,
   computeSimilarConfidence,
+  inferCategories,
   interpretFromApp,
   interpretFromQuery,
   rankSimilar,
@@ -90,6 +91,10 @@ export async function findSimilarApps(
   if (interpreted.keywords.length === 0) {
     missing.push("no usable keywords parsed from the idea");
   }
+  // Categories the idea ITSELF resolved — captured before `inferCategories` may
+  // inject the modal FTS-hit category below. Coherence judgements (validate_app_idea)
+  // must read these, not the possibly-injected `interpretedQuery.categories` (#246).
+  const statedCategories = [...interpreted.categories];
 
   // ── 2. FTS pass: multi-keyword OR-union ──
   const terms = interpreted.keywords.slice(0, MAX_FTS_TERMS);
@@ -167,6 +172,7 @@ export async function findSimilarApps(
   if (unionIds.length === 0) {
     return {
       interpretedQuery: interpreted,
+      statedCategories,
       similar: [],
       confidence: computeSimilarConfidence([], missing),
       missing,
@@ -199,32 +205,12 @@ export async function findSimilarApps(
   const similar = rankSimilar(candidates, interpreted, limit);
   return {
     interpretedQuery: interpreted,
+    statedCategories,
     similar,
     confidence: computeSimilarConfidence(similar, missing),
     missing,
     agentSummary: buildSimilarAgentSummary(interpreted, similar, missing),
   };
-}
-
-/** Modal category(ies) among the strongest FTS hits — deterministic category inference. */
-function inferCategories(
-  ids: string[],
-  ftsScoreOf: (id: string) => number,
-  itemById: Map<string, AppListItem>,
-  topN = 25,
-  take = 2,
-): string[] {
-  const ranked = [...ids].sort((a, b) => ftsScoreOf(b) - ftsScoreOf(a)).slice(0, topN);
-  const freq = new Map<string, number>();
-  for (const id of ranked) {
-    const cat = itemById.get(id)?.category;
-    if (cat) freq.set(cat, (freq.get(cat) ?? 0) + 1);
-  }
-  return [...freq.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, take)
-    .filter(([, n]) => n >= 2) // need a real cluster, not a single stray hit
-    .map(([c]) => c);
 }
 
 /**

@@ -83,6 +83,7 @@ export {
   interpretFromQuery,
   keywordOverlap,
   classifySimilarity,
+  inferCategories,
   scoreSimilar,
   rankSimilar,
   computeSimilarConfidence,

@@ -74,6 +74,14 @@ export interface FindSimilarAppsInput {
 export interface FindSimilarAppsResult {
   /** How the query was read (echoed so a caller can see the inference). */
   interpretedQuery: InterpretedIdea;
+  /**
+   * Categories resolved from the QUERY ITSELF, before the retrieval layer injected
+   * the modal category of the strongest FTS hits into `interpretedQuery` (when the
+   * query resolved none). Injected categories are incidental-hit provenance, not
+   * idea provenance — consumers judging idea coherence (validate_app_idea) must
+   * read these, never the possibly-injected `interpretedQuery.categories` (#246).
+   */
+  statedCategories?: string[];
   /** Ranked, deduped competitors — `direct` first, then `adjacent`, then `analogue`. */
   similar: SimilarApp[];
   /** Confidence in the result set, scaled to evidence (hit count, coverage). */

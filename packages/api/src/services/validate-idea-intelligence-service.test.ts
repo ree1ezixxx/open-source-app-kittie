@@ -128,6 +128,38 @@ describe("validate-idea intelligence service", () => {
     expect(result.caveats.some((c) => c.message.includes("ambiguous"))).toBe(true);
   });
 
+  it("#246: plumbs pre-injection statedCategories through — an inferCategories-injected category never makes nonsense coherent", async () => {
+    // What production `findSimilarApps` emits for the canonical nonsense idea: the
+    // query itself resolved NO category (statedCategories: []), but inferCategories
+    // injected the modal Finance cluster of the incidental FTS hits into
+    // interpretedQuery — under which one strong-fts hit even classified `direct`.
+    // The coherence gate must read the PRE-injection state and sink it.
+    const findSimilarApps = vi.fn().mockResolvedValue({
+      ...similarResult([
+        competitor({ id: "n_1", title: "Blockchain Wallet", category: "Finance", rating: 3.8 }),
+        { ...competitor({ id: "n_2", storeAppId: "902", title: "Blockchain Ledger Pro", category: "Finance" }), similarityClass: "adjacent" as const, similarityScore: 0.39 },
+      ]),
+      interpretedQuery: {
+        summary: "blockchain-powered app for teleporting sentient sandwiches to the moon",
+        categories: ["Finance"], // injected by inferCategories, NOT resolved from the idea
+        keywords: ["blockchain", "powered", "teleporting", "sentient", "sandwiches", "moon"],
+        kind: "inferred" as const,
+      },
+      statedCategories: [],
+    });
+    const mineReviewThemes = vi.fn().mockResolvedValue([]);
+
+    const result = await getValidateIdeaIntelligence(
+      { idea: "blockchain-powered app for teleporting sentient sandwiches to the moon" },
+      { findSimilarApps, mineReviewThemes, now },
+    );
+
+    expect(result.data.verdict).toBe("not_enough_data");
+    expect(result.data.verdict).not.toBe("has_room");
+    expect(result.confidence.score).toBeLessThanOrEqual(0.3);
+    expect(result.caveats.some((c) => c.message.includes("cohere"))).toBe(true);
+  });
+
   it("returns an honest insufficient envelope when the catalog has no competitors", async () => {
     const findSimilarApps = vi.fn().mockResolvedValue(similarResult([], ["no FTS hits"]));
     const mineReviewThemes = vi.fn().mockResolvedValue([]);
